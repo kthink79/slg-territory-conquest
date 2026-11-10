@@ -3,14 +3,35 @@ package com.game.slg.core.engine
 import com.game.slg.core.model.*
 
 /**
+ * Clean Architecture Domain Contracts
+ */
+interface CouncilEngineContract {
+    fun voteOnBill(bill: CouncilBill, lords: List<Lord>): CouncilBill
+}
+
+interface InfiltrationEngineContract {
+    fun accumulatePower(talent: Talent, recruitedTroops: Int, subvertProgress: Int)
+    fun attemptCoup(talent: Talent, employerLord: Lord): CoupResult
+}
+
+interface CombatEngineContract {
+    fun resolveSiege(
+        attackers: Int,
+        defenders: Int,
+        territory: Territory,
+        isSupplyLineCut: Boolean
+    ): SiegeResult
+}
+
+/**
  * 성주-호족 의회 및 전시 병력 차출·반란 엔진
  */
-class CouncilEngine {
+class CouncilEngine : CouncilEngineContract {
 
     /**
      * 성주가 지역 정책(병력 차출 등)을 호족 의회에 상정
      */
-    fun voteOnBill(bill: CouncilBill, lords: List<Lord>): CouncilBill {
+    override fun voteOnBill(bill: CouncilBill, lords: List<Lord>): CouncilBill {
         var favor = 0
         var against = 0
 
@@ -34,9 +55,11 @@ class CouncilEngine {
         bill.votesAgainst = against
         bill.isPassed = favor > against
 
-        // 반대표가 65% 이상일 경우 다른 호족들과 연합해 성주에 반란을 일으킬 수 있음
-        if (against.toDouble() / lords.size >= 0.65) {
+        // 반대표가 65% 이상일 경우 다른 호족들과 연합해 성주에 반란을 일으킬 수 있음 (호족이 없을 경우 방지)
+        if (lords.isNotEmpty() && (against.toDouble() / lords.size >= 0.65)) {
             bill.isRebellionTriggered = true
+        } else {
+            bill.isRebellionTriggered = false
         }
 
         return bill
@@ -46,24 +69,26 @@ class CouncilEngine {
 /**
  * 삼국지식 인재 탐색·등용 및 '재야 인재 위장 잠입 스타팅' (하극상) 엔진
  */
-class InfiltrationEngine {
+class InfiltrationEngine : InfiltrationEngineContract {
 
     /**
      * 유저가 호족이 아닌 재야 인재로 시작했을 때 조용히 사병을 모으고 암약
      */
-    fun accumulatePower(talent: Talent, recruitedTroops: Int, subvertProgress: Int) {
+    override fun accumulatePower(talent: Talent, recruitedTroops: Int, subvertProgress: Int) {
         require(talent.isPlayerHiddenTalent) { "일반 인재는 암약 시스템을 독립 실행할 수 없습니다." }
+        require(recruitedTroops >= 0) { "모병 수는 음수일 수 없습니다." }
+        require(subvertProgress >= 0) { "암약 진척도는 음수일 수 없습니다." }
         talent.privateTroops += recruitedTroops
         talent.rebellionPrestige += subvertProgress
-        // 고용주에 대한 충성도 위장 감소
-        talent.loyalty = (talent.loyalty - (subvertProgress / 2)).coerceAtLeast(0)
+        // 고용주에 대한 충성도 위장 감소 (0~100 범위 유지)
+        talent.loyalty = (talent.loyalty - (subvertProgress / 2)).coerceIn(0, 100)
     }
 
     /**
      * 고용주 호족 세력 취득 (하극상/찬탈) 결행
      * 사병 수와 지지도가 고용주의 병력을 압도할 때 성공
      */
-    fun attemptCoup(talent: Talent, employerLord: Lord): CoupResult {
+    override fun attemptCoup(talent: Talent, employerLord: Lord): CoupResult {
         if (!talent.isPlayerHiddenTalent) {
             return CoupResult(success = false, message = "위장 잠입 유저가 아닙니다.")
         }
@@ -97,14 +122,14 @@ data class CoupResult(
 /**
  * 방어 요새 수성 우위 & GIS 지형 단판 대회전 엔진
  */
-class CombatEngine {
+class CombatEngine : CombatEngineContract {
 
     /**
      * 공성전 및 요새 수성 전투 시뮬레이션
      * - 방어 시설(목책·석성·산성) 구축 시 수성군 사상자 최대 80% 격감
      * - 보급선 단절 시 공격군 사기 저하 및 무혈 항복 유도
      */
-    fun resolveSiege(
+    override fun resolveSiege(
         attackers: Int,
         defenders: Int,
         territory: Territory,
@@ -131,9 +156,15 @@ class CombatEngine {
 
         val defenderWon = effectiveDefenderPower >= effectiveAttackerPower
 
-        val rawDefenderLosses = (attackers * 0.25).toInt()
-        val actualDefenderLosses = (rawDefenderLosses * (1.0 - reductionRatio)).toInt().coerceAtMost(defenders)
-        val attackerLosses = (defenders * terrainBonus * 0.7).toInt().coerceAtMost(attackers)
+        val rawDefenderLosses = Math.round(attackers * 0.25).toInt()
+        val actualDefenderLosses = Math.round(rawDefenderLosses * (1.0 - reductionRatio)).toInt().coerceIn(0, defenders)
+        val attackerLosses = Math.round(defenders * terrainBonus * 0.7).toInt().coerceIn(0, attackers)
+
+        // 다중 턴 공성전 시 요새 내구도 감소 반영 (요새가 있고 공격자가 있을 경우)
+        if (fortress != null && fortress.durability > 0 && attackers > 0) {
+            val siegeDamage = (attackers * 0.1).toInt().coerceAtLeast(10)
+            fortress.takeDamage(siegeDamage)
+        }
 
         return SiegeResult(
             defenderWon = defenderWon,

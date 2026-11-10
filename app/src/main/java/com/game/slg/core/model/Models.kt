@@ -30,9 +30,15 @@ enum class TerrainType(val defenseBonus: Double, val mobilityPenalty: Double) {
 data class Fortress(
     val level: FortressLevel,
     var durability: Int,
-    val maxDurability: Int,
-    val garrisonTroops: Int
+    val maxDurability: Int = 1000,
+    val garrisonTroops: Int = 0
 ) {
+    init {
+        require(durability >= 0) { "Fortress durability cannot be negative" }
+        require(maxDurability > 0) { "Fortress maxDurability must be positive" }
+        require(garrisonTroops >= 0) { "Fortress garrisonTroops cannot be negative" }
+    }
+
     val casualtyReductionRatio: Double
         get() = when (level) {
             FortressLevel.WOODEN_PALISADE -> 0.40 // 40% 피해 감소
@@ -40,6 +46,14 @@ data class Fortress(
             FortressLevel.MOUNTAIN_FORTRESS -> 0.80 // 80% 극감 (수성 절대 우위)
             FortressLevel.IMPREGNABLE_GATE -> 0.85  // 85% 극감
         }
+
+    fun takeDamage(damage: Int) {
+        durability = (durability - damage).coerceIn(0, maxDurability)
+    }
+
+    fun repair(amount: Int) {
+        durability = (durability + amount).coerceIn(0, maxDurability)
+    }
 }
 
 enum class FortressLevel(val displayName: String) {
@@ -63,7 +77,13 @@ data class Lord(
     var prestige: Int,
     var isCastellan: Boolean = false,
     var allegianceLordId: String? = null // 종속된 상위 호족/성주 ID
-)
+) {
+    init {
+        require(troops >= 0) { "Lord troops cannot be negative" }
+        require(grain >= 0) { "Lord grain cannot be negative" }
+        require(gold >= 0) { "Lord gold cannot be negative" }
+    }
+}
 
 /**
  * 인재 (삼국지식 인재 탐색 및 위장 잠입 스타팅)
@@ -81,7 +101,13 @@ data class Talent(
     var loyalty: Int = 100,            // 충성도 (0~100)
     var privateTroops: Int = 0,        // 암약하며 조용히 키운 사병 수
     var rebellionPrestige: Int = 0     // 쿠데타/하극상 지지도
-)
+) {
+    init {
+        loyalty = loyalty.coerceIn(0, 100)
+        rebellionPrestige = rebellionPrestige.coerceAtLeast(0)
+        privateTroops = privateTroops.coerceAtLeast(0)
+    }
+}
 
 /**
  * 호족 의회 정책 안건
