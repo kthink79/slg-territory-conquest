@@ -1,2 +1,46 @@
-# slg-territory-conquest
-Real-world GIS Territory Strategy SLG for Android (Kotlin/Jetpack Compose)
+# 🏰 천하통일: 팔도 영지전 (SLG Territory Conquest)
+
+> **현실 지명 GIS 행정구역 기반 영지 전략 SLG 안드로이드 모바일 프로젝트**  
+> 개발 계획서 v0.3 구현 베이스라인 (Kotlin + Jetpack Compose)
+
+---
+
+## 🎯 게임 기획 및 핵심 메커니즘
+
+1. **현실 행정구역(읍·면·동) 기반 영지 시스템**
+   - 대한민국 실제 GIS 법정동/행정동 코드를 기반으로 영지를 생성합니다.
+   - 실제 인구 비례로 호족 수 상한(예: 인구 1만 명당 1명) 및 자원/병력 생산 상한을 산정합니다.
+   - 한 지역에 복수의 유저 호족이 공존하며, 과반수 연합 및 성주 쟁탈전을 벌입니다.
+
+2. **성주-호족 의회 및 전시 병력 차출·반란 메커니즘**
+   - 지역 중심 거점의 성주는 정책(세율, 병력 차출, 전쟁 선포)을 단독 결정하지 못하고 호족 의회 투표를 거칩니다.
+   - 성주가 과도한 병력을 징발하거나 독단을 부리면, 반대파 호족들이 연합하여 쿠데타(반란)를 일으킬 수 있습니다.
+
+3. **삼국지식 인재 탐색·등용 및 '재야 인재 위장 잠입 스타팅' (하극상)**
+   - 플레이어가 호족이 아닌 **일반 인재(재야/가신)** 신분으로 게임을 시작할 수 있습니다.
+   - 다른 유저는 이를 전혀 알 수 없으며, 인재로 시작한 유저는 비밀리에 사병을 육성하고 영지 내 지지도를 높여 **주군을 축출하고 세력을 찬탈(하극상)**할 수 있습니다.
+
+4. **방어 시설 구축을 통한 수성 절대 우위 & GIS 단판 대회전**
+   - 호족 장원 목책부터 석성, 산성, 관문 구축 시 수성군 사상자가 최대 80% 격감합니다.
+   - 보급선 절단 메커니즘을 적용하여 단순 소모전 없이 무혈 항복을 유도할 수 있습니다.
+   - 단순 반복 전투를 배제하고 지형·보급 중심의 단판 전략 대회전으로 승부를 결정짓습니다.
+
+---
+
+## 🛠 기술 스택 및 아키텍처
+
+- **플랫폼**: Android (Min SDK 26, Target SDK 35)
+- **프로그래밍 언어**: Kotlin 2.0+ (선정 사유: Android 공식 언어, 최신 코루틴/플로우 지원, 고성능 타입 세이프티)
+- **UI 프레임워크**: Jetpack Compose + Material 3 (선언형 반응형 UI)
+- **아키텍처**: Clean Architecture (Domain / Data / Presentation 분리)
+- **비동기 처리**: Kotlin Coroutines & StateFlow
+- **검증**: JUnit 4 / AndroidX Test
+
+```
+com.game.slg
+├── core
+│   ├── model          # 영지(Territory), 호족(Lord), 인재(Talent), 방어시설(Fortress), 의회(Council)
+│   └── engine         # 전투(CombatEngine), 의회(CouncilEngine), 잠입(InfiltrationEngine)
+├── ui                 # Jetpack Compose UI 및 시뮬레이션 컴포넌트
+└── MainActivity.kt    # 메인 액티비티 진입점
+```
