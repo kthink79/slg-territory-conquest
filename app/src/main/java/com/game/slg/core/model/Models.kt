@@ -13,7 +13,9 @@ data class Territory(
     val terrain: TerrainType,      // 지형 특성
     var currentLordIds: List<String> = emptyList(),
     var castellanId: String? = null, // 성주 ID (지역 중심 거점)
-    var fortress: Fortress? = null
+    var fortress: Fortress? = null,
+    val fertileScore: Double = 1.0,  // 농업 비옥도 지수 (추수 군량 생산 계수)
+    val adjacentCodes: List<String> = emptyList() // 인접 영지 GIS 연결 그래프
 )
 
 enum class TerrainType(val defenseBonus: Double, val mobilityPenalty: Double) {
@@ -130,3 +132,107 @@ enum class BillType {
     FORTRESS_EXPAND,  // 지역 관문 요새화
     DECLARE_WAR       // 인접 성주에 대한 선전포고
 }
+
+/**
+ * 4계절 순환 사이클 (Four Seasons Cycle)
+ */
+enum class Season(val displayName: String) {
+    SPRING("봄 (춘경 및 조세 징수)"),
+    SUMMER("여름 (치수 사업 및 풍수해)"),
+    AUTUMN("가을 (대추수 및 군량 비축)"),
+    WINTER("겨울 (혹한기 유지비 및 한파 감모)");
+
+    fun next(): Season = when (this) {
+        SPRING -> SUMMER
+        SUMMER -> AUTUMN
+        AUTUMN -> WINTER
+        WINTER -> SPRING
+    }
+}
+
+/**
+ * 여름철 풍수해/치수 이벤트
+ */
+enum class SummerDisasterType {
+    NONE,
+    FLOOD_PREVENTED,  // 제방/치수 보수 성공으로 홍수 예방
+    FLOOD_DISASTER,   // 치수 미흡으로 인한 수해 피해
+    BUMPER_WEATHER    // 가뭄 없는 최적의 기후 (대풍 조짐)
+}
+
+/**
+ * 계절 처리 결과
+ */
+data class SeasonActionResult(
+    val season: Season,
+    val goldChange: Int,
+    val grainChange: Int,
+    val disasterType: SummerDisasterType = SummerDisasterType.NONE,
+    val winterAttritionLosses: Int = 0,
+    val message: String
+)
+
+/**
+ * GIS 보급선 및 수송대 모델
+ */
+data class TransportConvoy(
+    val id: String,
+    val fromTerritoryCode: String,
+    val toTerritoryCode: String,
+    val gold: Int,
+    val grain: Int
+)
+
+data class SupplyRouteStatus(
+    val isConnected: Boolean,
+    val path: List<String> = emptyList(),
+    val blockedByTerritoryCode: String? = null,
+    val moralePenalty: Int = 0,
+    val triggersBloodlessSurrender: Boolean = false,
+    val message: String = ""
+)
+
+data class ConvoyResult(
+    val success: Boolean,
+    val deliveredGold: Int,
+    val deliveredGrain: Int,
+    val message: String
+)
+
+/**
+ * 외교 조약 & 첩보 모델
+ */
+enum class TreatyType {
+    NON_AGGRESSION_PACT, // 불가침 조약
+    DEFENSIVE_ALLIANCE,  // 방위 동맹
+    VASSAL_TRIBUTARY     // 속국 조공 조약
+}
+
+data class DiplomaticTreaty(
+    val id: String,
+    val lordId1: String,
+    val lordId2: String,
+    val treatyType: TreatyType,
+    var remainingTurns: Int,
+    val tributaryGoldPerTurn: Int = 0 // 속국이 종주국에 바치는 턴당 조공
+)
+
+data class TreatyViolationResult(
+    val isViolated: Boolean,
+    val violatorLordId: String?,
+    val prestigePenalty: Int,
+    val message: String
+)
+
+enum class EspionageOpType {
+    GATHER_INTEL,       // 적 영지 및 병력 정보 정찰
+    INSTIGATE_DISSENT   // 호족/가신 이간계 및 민심·사기 교란
+}
+
+data class EspionageResult(
+    val success: Boolean,
+    val opType: EspionageOpType,
+    val intelGathered: String? = null,
+    val moraleOrLoyaltyDeduction: Int = 0,
+    val message: String
+)
