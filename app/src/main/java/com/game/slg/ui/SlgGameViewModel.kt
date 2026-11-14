@@ -7,7 +7,13 @@ import com.game.slg.core.engine.CouncilEngine
 import com.game.slg.core.engine.CouncilEngineContract
 import com.game.slg.core.engine.DiplomacyEngine
 import com.game.slg.core.engine.IDiplomacyEngine
+import com.game.slg.core.engine.IHiddenTalentNightEngine
+import com.game.slg.core.engine.IPromotionEngine
+import com.game.slg.core.engine.IRefugeeCrisisEngine
 import com.game.slg.core.engine.ISeasonEngine
+import com.game.slg.core.engine.HiddenTalentNightEngine
+import com.game.slg.core.engine.PromotionEngine
+import com.game.slg.core.engine.RefugeeCrisisEngine
 import com.game.slg.core.engine.SeasonEngine
 import com.game.slg.core.engine.SiegeResult
 import com.game.slg.core.model.BillType
@@ -18,6 +24,12 @@ import com.game.slg.core.model.EspionageResult
 import com.game.slg.core.model.Fortress
 import com.game.slg.core.model.FortressLevel
 import com.game.slg.core.model.Lord
+import com.game.slg.core.model.NightMeetingChoice
+import com.game.slg.core.model.NightMeetingResult
+import com.game.slg.core.model.PromotionEvaluation
+import com.game.slg.core.model.PromotionResult
+import com.game.slg.core.model.PromotionStage
+import com.game.slg.core.model.RefugeeCrisisResult
 import com.game.slg.core.model.Season
 import com.game.slg.core.model.Talent
 import com.game.slg.core.model.TerrainType
@@ -224,8 +236,45 @@ data class SlgGameState(
     val casusBelli: String? = null,
     val espionageMessage: String? = null,
     val espionageCount: Int = 0,
-    val hiddenTalents: List<HiddenTalentView> = SlgWorld.HIDDEN_TALENTS
-)
+    val hiddenTalents: List<HiddenTalentView> = SlgWorld.HIDDEN_TALENTS,
+    // ── 「연방 붕괴의 그림자」: 유민 유입 딜레마 ──
+    val culturePrestige: Int = 48,
+    val refugeeChoice: String? = null,
+    val refugeeResult: String? = null,
+    // ── 「호족 의회의 이면」: 야간 밀회 ──
+    val nightMeetingTalentName: String? = null,
+    val nightMeetingChoice: String? = null,
+    val nightMeetingResult: String? = null,
+    val espionagePower: Int = 40,
+    val doubleAgentBuff: String? = null,
+    // ── 성주 승격 로드맵 ──
+    val alliedTerritories: Int = 0,
+    val promotionStage: PromotionStage = PromotionStage.DISTRICT_LORD,
+    val councilAuthorityBonus: Int = 0,
+    val promotionCeremony: String? = null,
+    val promotionMessage: String? = null
+) {
+    /** 유민 수용 여부 (연방 붕괴 이벤트 결과 표시용) */
+    val isRefugeeAccepted: Boolean get() = refugeeChoice == "REFUGEE_A_OPEN"
+
+    /** 다음 승격 단계 */
+    val nextPromotionStage: PromotionStage? get() = promotionStage.nextStage
+
+    /** 승격 의식 개최 가능 여부 */
+    val isPromotionEligible: Boolean
+        get() = nextPromotionStage?.let {
+            alliedTerritories >= it.requiredAlliedTerritories && prestige >= it.requiredPrestige
+        } ?: false
+
+    /** 야간 밀회 대상 (의심도 50 이상) */
+    val nightMeetingCandidates: List<HiddenTalentView>
+        get() = hiddenTalents.filter { it.suspicion >= NIGHT_MEETING_SUSPICION }
+
+    companion object {
+        /** 야간 밀회 대상 의심도 기준 */
+        const val NIGHT_MEETING_SUSPICION: Int = 50
+    }
+}
 
 // ============================================================================
 // ViewModel — 4탭(영지·지도 / 내정·의회 / 전장·전략 / 외교·첩보)
@@ -235,7 +284,10 @@ class SlgGameViewModel(
     private val seasonEngine: ISeasonEngine = SeasonEngine(),
     private val combatEngine: CombatEngineContract = CombatEngine(),
     private val councilEngine: CouncilEngineContract = CouncilEngine(),
-    private val diplomacyEngine: IDiplomacyEngine = DiplomacyEngine()
+    private val diplomacyEngine: IDiplomacyEngine = DiplomacyEngine(),
+    private val refugeeCrisisEngine: IRefugeeCrisisEngine = RefugeeCrisisEngine(),
+    private val nightMeetingEngine: IHiddenTalentNightEngine = HiddenTalentNightEngine(),
+    private val promotionEngine: IPromotionEngine = PromotionEngine()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SlgGameState())
@@ -293,7 +345,7 @@ class SlgGameViewModel(
                     morale = (s.morale + 8).coerceAtMost(100),
                     diplomacy = (s.diplomacy + 12).coerceAtMost(100),
                     statusMessage = "[이벤트 A] 관세 면제·상호 보급 협정 체결 — 식량 +1,200"
-                )
+                ).let { next -> next.copy(alliedTerritories = alliedTerritoryCount(next)) }
             } else {
                 s.copy(
                     eventAChoice = "A_TARIFF",
@@ -565,7 +617,7 @@ class SlgGameViewModel(
                 diplomacy = (s.diplomacy + 6).coerceAtMost(100),
                 log = (s.log + message).takeLast(8),
                 statusMessage = message
-            )
+            ).let { next -> next.copy(alliedTerritories = alliedTerritoryCount(next)) }
         }
     }
 
@@ -639,8 +691,188 @@ class SlgGameViewModel(
     }
 
     // ──────────────────────────────────────────────────────────────
+    // 「연방 붕괴의 그림자」 — 유민 유입 딜레마
+    // ──────────────────────────────────────────────────────────────
+
+    /** 유민 대응 선택 (성문 개방 / 성문 통제) */
+    fun chooseRefugeeCrisis(choiceId: String): RefugeeCrisisResult? {
+        var resultOut: RefugeeCrisisResult? = null
+        _uiState.update { s ->
+            if (s.refugeeChoice != null) {
+                return@update s.copy(statusMessage = "[유민 이벤트] 이미 처분한 안건입니다.")
+            }
+            val result = refugeeCrisisEngine.resolve(choiceId, s.food, s.gold)
+            resultOut = result
+            if (!result.isSuccess) {
+                return@update s.copy(
+                    refugeeResult = result.message,
+                    statusMessage = result.message.lineSequence().first()
+                )
+            }
+            val next = s.copy(
+                refugeeChoice = result.choiceId,
+                refugeeResult = result.message,
+                food = (s.food + result.foodChange).coerceAtLeast(0),
+                gold = (s.gold + result.goldChange).coerceAtLeast(0),
+                population = (s.population + result.populationChange).coerceAtLeast(0),
+                morale = (s.morale + result.moraleChange).coerceIn(0, 100),
+                culturePrestige = (s.culturePrestige + result.culturePrestigeChange).coerceIn(0, 100),
+                diplomacy = (s.diplomacy + result.diplomacyChange).coerceIn(0, 100),
+                log = (s.log + "[유민] ${result.message.lineSequence().first()}").takeLast(8),
+                statusMessage = result.message.lineSequence().first()
+            )
+            next
+        }
+        return resultOut
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 「호족 의회의 이면」 — 히든 인재 야간 밀회
+    // ──────────────────────────────────────────────────────────────
+
+    /** 🌙 야간 밀회: 비밀 서신 개설 (의심도 50 이상 대상) */
+    fun openNightMeeting(talentName: String) {
+        _uiState.update { s ->
+            val talent = s.hiddenTalents.firstOrNull { it.name == talentName }
+                ?: return@update s.copy(statusMessage = "[밀회 불가] 명부에 없는 인물입니다. ($talentName)")
+            if (!nightMeetingEngine.isEligible(talent.suspicion)) {
+                return@update s.copy(
+                    statusMessage = "[밀회 불가] '${talent.name}'의 의심도 ${talent.suspicion} — " +
+                        "기준(${nightMeetingEngine.suspicionThreshold}) 미달입니다."
+                )
+            }
+            s.copy(
+                nightMeetingTalentName = talent.name,
+                nightMeetingChoice = null,
+                nightMeetingResult = null,
+                statusMessage = "[야간 밀회] '${talent.name}'에게 비밀 서신을 보냈습니다. 자정, 매탄천 다리 아래."
+            )
+        }
+    }
+
+    /** 야간 밀회 3지선다 처리 (포섭 / 숙청 / 이중첩자) */
+    fun resolveNightMeeting(choice: NightMeetingChoice): NightMeetingResult? {
+        var resultOut: NightMeetingResult? = null
+        _uiState.update { s ->
+            val talentName = s.nightMeetingTalentName
+                ?: return@update s.copy(statusMessage = "[밀회] 먼저 야간 밀회 대상을 선택하세요.")
+            val talent = s.hiddenTalents.firstOrNull { it.name == talentName }
+                ?: return@update s.copy(statusMessage = "[밀회] 대상을 찾을 수 없습니다. ($talentName)")
+            if (s.nightMeetingChoice != null) {
+                return@update s.copy(statusMessage = "[밀회] 이미 선택을 마친 사건입니다.")
+            }
+
+            val result = nightMeetingEngine.resolve(choice, talent.name, talent.suspicion, s.gold)
+            resultOut = result
+            if (!result.isSuccess) {
+                return@update s.copy(
+                    nightMeetingResult = result.message,
+                    statusMessage = result.message.lineSequence().first()
+                )
+            }
+
+            val updatedTalents = s.hiddenTalents.map { hidden ->
+                when {
+                    hidden.name != talent.name -> hidden
+                    result.talentRemoved -> hidden.copy(suspicion = 0, hint = "숙청 완료 — 명단에서 제외됨")
+                    else -> hidden.copy(suspicion = (hidden.suspicion + result.suspicionChange).coerceIn(0, 100))
+                }
+            }.filterNot { result.talentRemoved && it.name == talent.name }
+
+            s.copy(
+                nightMeetingChoice = choice.name,
+                nightMeetingResult = result.message,
+                hiddenTalents = updatedTalents,
+                gold = (s.gold + result.goldChange).coerceAtLeast(0),
+                morale = (s.morale + result.moraleChange).coerceIn(0, 100),
+                prestige = (s.prestige + result.prestigeChange).coerceIn(0, 100),
+                espionagePower = (s.espionagePower + result.espionageChange).coerceIn(0, 100),
+                doubleAgentBuff = result.doubleAgentBuff ?: s.doubleAgentBuff,
+                enemyFood = if (result.doubleAgentBuff != null) (s.enemyFood - 200).coerceAtLeast(0) else s.enemyFood,
+                log = (s.log + "[야간 밀회] ${result.message.lineSequence().first()}").takeLast(8),
+                statusMessage = result.message.lineSequence().first()
+            )
+        }
+        return resultOut
+    }
+
+    /** 이중첩자 교란 효과로 광교동 군량고를 한 번 더 무너뜨림 */
+    fun exploitDoubleAgent() {
+        _uiState.update { s ->
+            val buff = s.doubleAgentBuff
+                ?: return@update s.copy(statusMessage = "[교란 불가] 보유한 이중첩자 교란 효과가 없습니다.")
+            s.copy(
+                enemyFood = (s.enemyFood - 300).coerceAtLeast(0),
+                espionageMessage = "[이중첩자 교란] 광교동 군량고 좌표를 넘겨받아 보급로를 끊었다. 적 군량 -300석 (현재 ${(s.enemyFood - 300).coerceAtLeast(0)}석).",
+                log = (s.log + "[이중첩자 교란] $buff").takeLast(8),
+                statusMessage = "[이중첩자 교란] 적 군량 -300석"
+            )
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 「성주 승격 마일스톤 로드맵」
+    // ──────────────────────────────────────────────────────────────
+
+    /** 현재 승격 조건 평가 */
+    fun promotionEvaluation(): PromotionEvaluation {
+        val s = _uiState.value
+        return promotionEngine.evaluate(s.promotionStage, alliedTerritoryCount(s), s.prestige)
+    }
+
+    /** 👑 승격 의식 개최 */
+    fun promote(): PromotionResult {
+        var resultOut: PromotionResult? = null
+        _uiState.update { s ->
+            val allies = alliedTerritoryCount(s)
+            val result = promotionEngine.promote(s.promotionStage, allies, s.prestige)
+            resultOut = result
+            if (!result.isSuccess) {
+                return@update s.copy(
+                    alliedTerritories = allies,
+                    promotionMessage = result.message,
+                    statusMessage = result.message
+                )
+            }
+            s.copy(
+                alliedTerritories = allies,
+                promotionStage = result.stage,
+                councilAuthorityBonus = s.councilAuthorityBonus + result.councilAuthorityBonus,
+                promotionCeremony = result.ceremonyBody,
+                promotionMessage = result.message,
+                prestige = (s.prestige + 3).coerceIn(0, 100),
+                log = (s.log + "[승격] ${result.message}").takeLast(8),
+                statusMessage = result.message
+            )
+        }
+        return resultOut ?: PromotionResult(
+            isSuccess = false,
+            stage = _uiState.value.promotionStage,
+            failureReason = "승격 처리 결과를 얻지 못했습니다.",
+            message = "[승격 실패] 승격 처리 결과를 얻지 못했습니다."
+        )
+    }
+
+    /** 👑 승격 의식 배너 닫기 */
+    fun dismissCeremony() {
+        _uiState.update { s -> s.copy(promotionCeremony = null) }
+    }
+
+    // ──────────────────────────────────────────────────────────────
     // 내부 유틸
     // ──────────────────────────────────────────────────────────────
+
+    /** 인접 영지 중 우호·동맹으로 묶인 수 (성주 승격 조건) */
+    private fun alliedTerritoryCount(s: SlgGameState): Int {
+        var count = 0
+        // 원천동 상인회 — 야간 물자 협약 체결 시 협력 상인회로 전환
+        if (s.eventAChoice == "A_PACT") count += 1
+        // 광교동 호족연합 — 속국 조공 조약
+        if (s.treaties.any { it.typeLabel == "속국 조공 조약" }) count += 1
+        // 용인 수지 산악 협곡 — 상호방위 조약
+        if (s.treaties.any { it.typeLabel == "상호방위 조약" }) count += 1
+        return count
+    }
 
     private fun buildPlayerLord(s: SlgGameState): Lord = Lord(
         id = "lord_player",

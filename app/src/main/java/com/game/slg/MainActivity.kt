@@ -96,6 +96,8 @@ fun SlgApp(viewModel: SlgGameViewModel) {
                         fontSize = 9.sp
                     )
                 }
+                SlgPill(state.promotionStage.displayName, SlgColors.Brass)
+                Spacer(Modifier.width(6.dp))
                 SlgPill(state.seasonName.substringBefore(" (") , SlgColors.Steel)
                 Spacer(Modifier.width(6.dp))
                 SlgPill("${state.gold}G", SlgColors.Brass)
@@ -107,7 +109,10 @@ fun SlgApp(viewModel: SlgGameViewModel) {
                         state = state,
                         onAdvanceSeason = { viewModel.advanceSeason() },
                         onChooseEventA = { accept -> viewModel.chooseEventA(accept) },
-                        onChooseEventB = { ambush -> viewModel.chooseEventB(ambush) }
+                        onChooseEventB = { ambush -> viewModel.chooseEventB(ambush) },
+                        onChooseRefugee = { choiceId -> viewModel.chooseRefugeeCrisis(choiceId) },
+                        onPromote = { viewModel.promote() },
+                        onDismissCeremony = { viewModel.dismissCeremony() }
                     )
                     1 -> CouncilScreen(
                         state = state,
@@ -122,7 +127,10 @@ fun SlgApp(viewModel: SlgGameViewModel) {
                         state = state,
                         onProposeTreaty = { type -> viewModel.proposeTreaty(type) },
                         onSecureCasusBelli = { viewModel.secureCasusBelli() },
-                        onEspionage = { op -> viewModel.conductEspionage(op) }
+                        onEspionage = { op -> viewModel.conductEspionage(op) },
+                        onOpenNightMeeting = { name -> viewModel.openNightMeeting(name) },
+                        onResolveNightMeeting = { choice -> viewModel.resolveNightMeeting(choice) },
+                        onExploitDoubleAgent = { viewModel.exploitDoubleAgent() }
                     )
                 }
             }

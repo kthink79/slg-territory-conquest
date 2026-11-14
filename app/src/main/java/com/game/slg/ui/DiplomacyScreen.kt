@@ -21,17 +21,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.game.slg.core.model.EspionageOpType
+import com.game.slg.core.model.NightMeetingChoice
 import com.game.slg.core.model.TreatyType
 
 /**
  * 탭 4 — 🤝 외교·첩보
+ * + 「호족 의회의 이면: 히든 인재 야간 밀회」 인터랙티브 3지선다
  */
 @Composable
 fun DiplomacyScreen(
     state: SlgGameState,
     onProposeTreaty: (TreatyType) -> Unit,
     onSecureCasusBelli: () -> Unit,
-    onEspionage: (EspionageOpType) -> Unit
+    onEspionage: (EspionageOpType) -> Unit,
+    onOpenNightMeeting: (String) -> Unit,
+    onResolveNightMeeting: (NightMeetingChoice) -> Unit,
+    onExploitDoubleAgent: () -> Unit
 ) {
     SlgScreenFrame {
         SlgSectionCard(title = "다자 외교", badge = "외교 ${state.diplomacy}", accent = Color(0xFFB39DDB)) {
@@ -175,7 +180,73 @@ fun DiplomacyScreen(
                         Spacer(Modifier.width(5.dp))
                         Text("${talent.suspicion}", color = SlgColors.Text, fontSize = 8.sp)
                     }
+
+                    if (talent.suspicion >= SlgGameState.NIGHT_MEETING_SUSPICION) {
+                        if (state.nightMeetingTalentName == talent.name) {
+                            if (state.nightMeetingChoice == null) {
+                                Text(
+                                    "자정, 매탄천 다리 아래. '${talent.name}'이(가) 비밀 서신을 손에 쥐고 나타났다. 어떻게 할 것인가?",
+                                    color = SlgColors.Text.copy(alpha = 0.86f),
+                                    fontSize = 9.sp,
+                                    lineHeight = 14.sp
+                                )
+                                SlgActionTile(
+                                    label = "신뢰를 주고 핵심 참모로 포섭",
+                                    hint = "의심도 -30 · 명성 +5 · 첩보력 +10",
+                                    accent = SlgColors.Success,
+                                    onClick = { onResolveNightMeeting(NightMeetingChoice.RECRUIT) }
+                                )
+                                SlgActionTile(
+                                    label = "즉시 숙청 및 재산 몰수",
+                                    hint = "자금 +400 · 민심 -8 · 인재 제거",
+                                    accent = SlgColors.Danger,
+                                    onClick = { onResolveNightMeeting(NightMeetingChoice.PURGE) }
+                                )
+                                SlgActionTile(
+                                    label = "역이용해 이중첩자로 광교동에 역파견",
+                                    hint = "자금 -150 · 광교동 정보·보급 교란 버프",
+                                    accent = Color(0xFFB39DDB),
+                                    enabled = state.gold >= 150,
+                                    onClick = { onResolveNightMeeting(NightMeetingChoice.DOUBLE_AGENT) }
+                                )
+                            }
+                        } else {
+                            SlgActionTile(
+                                label = "🌙 야간 밀회: 비밀 서신",
+                                hint = "의심도 ${talent.suspicion} — 자정 밀회로 처리 방식을 정한다",
+                                accent = Color(0xFFB39DDB),
+                                onClick = { onOpenNightMeeting(talent.name) }
+                            )
+                        }
+                    } else {
+                        Text(
+                            "의심도 ${talent.suspicion} — 밀회 기준(${SlgGameState.NIGHT_MEETING_SUSPICION}) 미달",
+                            color = SlgColors.Muted,
+                            fontSize = 8.sp
+                        )
+                    }
                 }
+            }
+
+            if (state.nightMeetingChoice != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SlgPill(
+                        "밀회 처리 · ${state.nightMeetingTalentName ?: "대상"}",
+                        Color(0xFFB39DDB)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    SlgPill("첩보력 ${state.espionagePower}", SlgColors.Steel)
+                }
+                ResultBox(state.nightMeetingResult, Color(0xFFB39DDB))
+            }
+
+            if (state.doubleAgentBuff != null) {
+                SlgActionTile(
+                    label = "🕸 이중첩자 교란 효과 발동",
+                    hint = state.doubleAgentBuff,
+                    accent = Color(0xFFB39DDB),
+                    onClick = onExploitDoubleAgent
+                )
             }
         }
 
