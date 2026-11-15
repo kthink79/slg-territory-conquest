@@ -252,8 +252,17 @@ data class SlgGameState(
     val promotionStage: PromotionStage = PromotionStage.DISTRICT_LORD,
     val councilAuthorityBonus: Int = 0,
     val promotionCeremony: String? = null,
-    val promotionMessage: String? = null
+    val promotionMessage: String? = null,
+    // ── 메인 3단 화면: 지도에서 선택한 영지 ──
+    val selectedTerritoryCode: String = SlgWorld.PLAYER_TERRITORY
 ) {
+    /** 지도에서 선택된 영지 정보 */
+    val selectedTerritory: TerritoryInfo?
+        get() = SlgWorld.TERRITORIES.firstOrNull { it.code == selectedTerritoryCode }
+
+    /** 선택된 영지의 지도 노드 (범위 밖이면 null) */
+    val selectedMapNode: com.game.slg.core.map.MapNode?
+        get() = com.game.slg.core.map.TerritoryMapLayout.node(selectedTerritoryCode)
     /** 유민 수용 여부 (연방 붕괴 이벤트 결과 표시용) */
     val isRefugeeAccepted: Boolean get() = refugeeChoice == "REFUGEE_A_OPEN"
 
@@ -293,7 +302,37 @@ class SlgGameViewModel(
     private val _uiState = MutableStateFlow(SlgGameState())
     val uiState: StateFlow<SlgGameState> = _uiState.asStateFlow()
 
+    /** 메인 3단 화면 ↔ 서브 메뉴 상세 화면 경로 */
+    private val _navigation = MutableStateFlow(MainNavigationState())
+    val navigation: StateFlow<MainNavigationState> = _navigation.asStateFlow()
+
     private var season: Season = Season.SPRING
+
+    // ──────────────────────────────────────────────────────────────
+    // 메인 3단 화면 (지도 선택 · 서브 메뉴 이동)
+    // ──────────────────────────────────────────────────────────────
+
+    /** 상단 1/3 지도에서 영지 선택 */
+    fun selectTerritory(code: String) {
+        val node = com.game.slg.core.map.TerritoryMapLayout.node(code) ?: return
+        _uiState.update { s ->
+            if (s.selectedTerritoryCode == node.code) s
+            else s.copy(
+                selectedTerritoryCode = node.code,
+                statusMessage = "[지도] '${node.name}' 선택 — ${node.relationLabel}"
+            )
+        }
+    }
+
+    /** 하단 1/3 서브 메뉴 열기 */
+    fun openSubMenu(menu: SubMenu) {
+        _navigation.update { it.open(menu) }
+    }
+
+    /** '← 메인 3단 화면' 복귀 */
+    fun backToMain() {
+        _navigation.update { it.back() }
+    }
     private val treaties = mutableListOf<DiplomaticTreaty>()
 
     // ──────────────────────────────────────────────────────────────
