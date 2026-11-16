@@ -1,74 +1,78 @@
 package com.game.slg.ui
 
 /**
- * 메인 3단 화면 하단 1/3 「서브 메뉴」 아이콘 정의.
+ * 메인 화면 하단 「서브 메뉴」와 상세 화면의 탭 구조.
  *
- * 각 항목은 기존 4탭(영지·지도 / 내정·의회 / 전장·전략 / 외교·첩보)의 모든 기능을
- * 하나도 빠뜨리지 않고 상세 화면으로 열어 준다. 마지막 '절기 진행'만 화면 이동이 아니라
- * 즉시 실행 동작([isAction])이다.
+ * 사용자 요청: *"텍스트를 많이 줄이고 비쥬얼 요소 기반으로 하고 메뉴가 많으면 탭으로 구성하거나
+ * 서브 메뉴로 만들어서 화면에 한번에 보여지는 텍스를 줄여줘"*
+ *
+ * 그래서 화면마다 (1) 큰 이모지 아이콘의 서브 메뉴 타일, (2) 2~4칸 탭 바, (3) 접히는 「?」 설명
+ * 세 층으로만 정보를 낸다. 각 탭 이름은 2~3글자로 고정한다.
  */
 enum class SubMenu(
     val id: String,
+    /** 하단 타일 라벨 — 3글자 이내 */
     val label: String,
-    val caption: String,
-    val iconKey: SubMenuIcon,
+    /** 상세 화면 제목 */
+    val title: String,
+    val emoji: String,
     val accentHex: Long,
     val isAction: Boolean = false
 ) {
     TERRITORY(
         id = "submenu_territory",
-        label = "영지·내정",
-        caption = "본진 · 자원",
-        iconKey = SubMenuIcon.HOME,
+        label = "영지",
+        title = "영지·내정",
+        emoji = "🏯",
         accentHex = 0xFFE2B755
     ),
     TECH(
         id = "submenu_tech",
-        label = "테크트리",
-        caption = "4대 계통 연구",
-        iconKey = SubMenuIcon.TECH,
+        label = "기술",
+        title = "4대 테크트리",
+        emoji = "🛠",
         accentHex = 0xFF64B5F6
     ),
     COUNCIL(
         id = "submenu_council",
-        label = "호족 의회",
-        caption = "안건 표결",
-        iconKey = SubMenuIcon.COUNCIL,
+        label = "의회",
+        title = "호족 의회",
+        emoji = "🏛",
         accentHex = 0xFF7FA4D6
     ),
     WAR(
         id = "submenu_war",
-        label = "전장·전략",
-        caption = "매복·도하·수성",
-        iconKey = SubMenuIcon.WAR,
+        label = "전장",
+        title = "전장·전략",
+        emoji = "⚔",
         accentHex = 0xFFE57373
     ),
     DIPLOMACY(
         id = "submenu_diplomacy",
-        label = "외교·첩보",
-        caption = "조약·공작·밀회",
-        iconKey = SubMenuIcon.DIPLOMACY,
+        label = "외교",
+        title = "외교·첩보",
+        emoji = "🤝",
         accentHex = 0xFFB39DDB
     ),
     EVENTS(
         id = "submenu_events",
-        label = "이벤트",
-        caption = "시나리오 선택",
-        iconKey = SubMenuIcon.EVENT,
+        label = "사건",
+        title = "시나리오 사건",
+        emoji = "🔔",
         accentHex = 0xFFF5D98A
     ),
     PROMOTION(
         id = "submenu_promotion",
-        label = "성주 로드맵",
-        caption = "호족→통합군주",
-        iconKey = SubMenuIcon.PROMOTION,
+        label = "로드맵",
+        title = "성주 로드맵",
+        emoji = "👑",
         accentHex = 0xFF81C784
     ),
     SEASON(
         id = "submenu_season",
-        label = "절기 진행",
-        caption = "조세·추수 정산",
-        iconKey = SubMenuIcon.SEASON,
+        label = "절기",
+        title = "절기 진행",
+        emoji = "🌾",
         accentHex = 0xFF90A4AE,
         isAction = true
     );
@@ -82,9 +86,69 @@ enum class SubMenu(
     }
 }
 
-/** 서브 메뉴 아이콘 종류 — Compose 계층에서 Material 아이콘으로 변환한다 */
-enum class SubMenuIcon {
-    HOME, TECH, COUNCIL, WAR, DIPLOMACY, EVENT, PROMOTION, SEASON
+/** 상세 화면 탭 — 모든 탭 라벨은 2~3글자 */
+interface ScreenTab {
+    val label: String
+}
+
+enum class TerritoryTab(override val label: String) : ScreenTab {
+    HOME("영지"),
+    STATS("지표"),
+    SEASON("절기")
+}
+
+/** 테크트리 탭 — 계통 4개가 곧 탭이다 */
+enum class TechTab(val branch: String, override val label: String) : ScreenTab {
+    ADMIN("내정", "내정"),
+    SCIENCE("과학기술", "과학"),
+    CULTURE("문화", "문화"),
+    MILITARY("군사", "군사")
+}
+
+enum class CouncilTab(override val label: String) : ScreenTab {
+    BILLS("안건"),
+    LORDS("호족")
+}
+
+enum class WarTab(override val label: String) : ScreenTab {
+    OPS("작전"),
+    REPORT("전과"),
+    DOCTRINE("원칙")
+}
+
+enum class DiplomacyTab(override val label: String) : ScreenTab {
+    TREATY("조약"),
+    ESPIONAGE("첩보"),
+    TALENT("인재")
+}
+
+enum class EventTab(override val label: String) : ScreenTab {
+    REFUGEE("유민"),
+    MERCHANT("상인"),
+    SCOUT("정찰대")
+}
+
+enum class PromotionTab(override val label: String) : ScreenTab {
+    ROADMAP("로드맵"),
+    CONDITIONS("조건"),
+    PATH("경로")
+}
+
+/** 서브 메뉴별 탭 목록 (실행형 메뉴는 탭 없음) */
+object ScreenTabs {
+    fun labelsOf(menu: SubMenu): List<String> = when (menu) {
+        SubMenu.TERRITORY -> TerritoryTab.entries.map { it.label }
+        SubMenu.TECH -> TechTab.entries.map { it.label }
+        SubMenu.COUNCIL -> CouncilTab.entries.map { it.label }
+        SubMenu.WAR -> WarTab.entries.map { it.label }
+        SubMenu.DIPLOMACY -> DiplomacyTab.entries.map { it.label }
+        SubMenu.EVENTS -> EventTab.entries.map { it.label }
+        SubMenu.PROMOTION -> PromotionTab.entries.map { it.label }
+        SubMenu.SEASON -> emptyList()
+    }
+
+    /** 화면 한 곳에 4개를 넘는 탭을 두지 않는다 */
+    const val MAX_TABS = 4
 }
 
 /** 메인 화면 경로 */
@@ -94,7 +158,7 @@ sealed interface MainRoute {
 }
 
 /**
- * 메인 3단 화면 ↔ 서브 메뉴 상세 화면 전환 상태.
+ * 메인 화면 ↔ 서브 메뉴 상세 화면 전환 상태.
  * 화면 없이 JVM에서 검증할 수 있도록 순수 데이터로 둔다.
  */
 data class MainNavigationState(val route: MainRoute = MainRoute.Home) {
@@ -108,7 +172,7 @@ data class MainNavigationState(val route: MainRoute = MainRoute.Home) {
     fun open(menu: SubMenu): MainNavigationState =
         if (menu.opensDetail) copy(route = MainRoute.Detail(menu)) else this
 
-    /** '← 메인 3단 화면' 으로 복귀 */
+    /** '‹ 메인' 으로 복귀 */
     fun back(): MainNavigationState = copy(route = MainRoute.Home)
 }
 
@@ -119,18 +183,21 @@ enum class AlertSeverity(val label: String, val accentHex: Long) {
     INFO("정보", 0xFF7FA4D6)
 }
 
-/** 중간 1/3 「현재 상태」 패널에 뜨는 경보 1건 */
+/**
+ * 메인 화면 경보 1건 — 칩에는 [icon] + [short] 만 보이고,
+ * 긴 문장은 📊 정보 패널에서만 보인다.
+ */
 data class StatusAlert(
     val id: String,
+    val icon: String,
+    val short: String,
     val title: String,
-    val detail: String,
     val severity: AlertSeverity,
     val target: SubMenu
 )
 
 /**
- * 활성 경보·이벤트 목록 생성기.
- * 미결 사건(유민 800명·야간 협약·협곡 정찰대·의회 표결·야간 밀회·승격 조건)을 모아
+ * 활성 경보 생성기. 미결 사건만 모아 아이콘·짧은 라벨로 줄이고,
  * 각 사건이 처리되는 서브 메뉴로 바로 연결한다.
  */
 object StatusAlertBuilder {
@@ -141,8 +208,9 @@ object StatusAlertBuilder {
         if (state.refugeeChoice == null) {
             alerts += StatusAlert(
                 id = "alert_refugee",
-                title = "광교·용인 유민 800명 성문 앞",
-                detail = "개방 배급(식량 -500) 과 선별 통제 중 결정 대기",
+                icon = "🚪",
+                short = "유민 800",
+                title = "유민 800명 성문 앞",
                 severity = AlertSeverity.CRITICAL,
                 target = SubMenu.EVENTS
             )
@@ -150,8 +218,9 @@ object StatusAlertBuilder {
         if (state.eventBChoice == null) {
             alerts += StatusAlert(
                 id = "alert_scout",
-                title = "광교산 협곡 정찰대 30여 명",
-                detail = "산악 매복 요격 또는 첩자 파견 선택 대기",
+                icon = "🏔",
+                short = "정찰대 30",
+                title = "광교산 정찰대 출현",
                 severity = AlertSeverity.WARNING,
                 target = SubMenu.WAR
             )
@@ -159,8 +228,9 @@ object StatusAlertBuilder {
         if (state.eventAChoice == null) {
             alerts += StatusAlert(
                 id = "alert_merchant",
-                title = "원천동 상인연합 야간 협약",
-                detail = "관세 면제 · 상호 보급 협정 미체결",
+                icon = "🌙",
+                short = "야간 협약",
+                title = "상인연합 야간 협약",
                 severity = AlertSeverity.WARNING,
                 target = SubMenu.EVENTS
             )
@@ -169,19 +239,20 @@ object StatusAlertBuilder {
         if (pendingBills > 0) {
             alerts += StatusAlert(
                 id = "alert_bills",
-                title = "호족 의회 표결 대기 ${pendingBills}건",
-                detail = "반대 65% 이상이면 연합 반란 위험",
+                icon = "🏛",
+                short = "표결 ${pendingBills}건",
+                title = "표결 대기 ${pendingBills}건",
                 severity = AlertSeverity.WARNING,
                 target = SubMenu.COUNCIL
             )
         }
-        val nightCandidates = state.nightMeetingCandidates
-        if (state.nightMeetingChoice == null && nightCandidates.isNotEmpty()) {
-            val prime = nightCandidates.maxByOrNull { it.suspicion }
+        if (state.nightMeetingChoice == null && state.nightMeetingCandidates.isNotEmpty()) {
+            val prime = state.nightMeetingCandidates.maxByOrNull { it.suspicion }
             alerts += StatusAlert(
                 id = "alert_night_meeting",
-                title = "${prime?.name ?: "의심 인물"} 밀회 제안 (의심도 ${prime?.suspicion ?: 0})",
-                detail = "포섭 · 숙청 · 이중첩자 3지선다 미결",
+                icon = "👤",
+                short = "밀회 제안",
+                title = "${prime?.name ?: "의심 인물"} 밀회",
                 severity = AlertSeverity.WARNING,
                 target = SubMenu.DIPLOMACY
             )
@@ -189,8 +260,9 @@ object StatusAlertBuilder {
         if (state.isPromotionEligible) {
             alerts += StatusAlert(
                 id = "alert_promotion",
-                title = "${state.nextPromotionStage?.displayName ?: "성주"} 승격 조건 충족",
-                detail = "승격 의식 개최 시 의회 권한 +${state.nextPromotionStage?.councilAuthorityBonus ?: 0}%",
+                icon = "👑",
+                short = "승격 가능",
+                title = "승격 조건 충족",
                 severity = AlertSeverity.INFO,
                 target = SubMenu.PROMOTION
             )
@@ -198,8 +270,9 @@ object StatusAlertBuilder {
         if (state.food < 1500) {
             alerts += StatusAlert(
                 id = "alert_food",
-                title = "군량 부족 (${state.food}석)",
-                detail = "유민 개방 배급에 500석이 필요합니다",
+                icon = "🌾",
+                short = "군량 부족",
+                title = "군량 ${state.food}석",
                 severity = AlertSeverity.CRITICAL,
                 target = SubMenu.TERRITORY
             )
@@ -207,12 +280,68 @@ object StatusAlertBuilder {
         if (state.enemyFood in 1..1500) {
             alerts += StatusAlert(
                 id = "alert_enemy_food",
-                title = "광교동 적 군량 ${state.enemyFood}석",
-                detail = "보급선 차단 · 무혈 항복 사정권",
+                icon = "🎯",
+                short = "적 군량",
+                title = "적 군량 ${state.enemyFood}석",
                 severity = AlertSeverity.INFO,
                 target = SubMenu.WAR
             )
         }
         return alerts
     }
+}
+
+/**
+ * 상단 1줄 요약 + 📊 정보 패널 데이터.
+ *
+ * 기존 「현재 상태」 1/3 패널의 긴 문장들을 모달로 옮기고,
+ * 홈에는 숫자 칩 4개만 남긴다.
+ */
+data class InfoEntry(
+    val icon: String,
+    val label: String,
+    val value: String,
+    val toneHex: Long
+)
+
+object MainInfoPanel {
+
+    const val BUTTON_LABEL = "📊 정보"
+
+    /** 홈 상단 1줄 — 자금·군량·병력·민심 */
+    fun topSummary(state: SlgGameState): List<InfoEntry> = listOf(
+        InfoEntry("💰", "자금", "${state.gold}", 0xFFE2B755),
+        InfoEntry("🌾", "군량", "${state.food}", 0xFF81C784),
+        InfoEntry("⚔", "병력", "${state.troops}", 0xFF7FA4D6),
+        InfoEntry("❤", "민심", "${state.morale}", 0xFFEDEAE3)
+    )
+
+    /** 📊 정보 패널 — 절기·승격·영지·세력 지표 */
+    fun detailRows(state: SlgGameState): List<InfoEntry> {
+        val next = state.nextPromotionStage
+        return buildList {
+            add(InfoEntry("🗓", "절기", state.seasonName.substringBefore(" ("), 0xFF90A4AE))
+            add(InfoEntry("👑", "단계", state.promotionStage.displayName, 0xFFE2B755))
+            add(InfoEntry("🏯", "선택", state.selectedTerritory?.name ?: "미선택", 0xFF7FA4D6))
+            add(InfoEntry("🤝", "우호", "${state.alliedTerritories}곳", 0xFF7FA4D6))
+            add(InfoEntry("⭐", "명성", "${state.prestige}", 0xFFE2B755))
+            add(InfoEntry("🎭", "첩보", "${state.espionagePower}", 0xFFB39DDB))
+            add(InfoEntry("🎯", "적량", "${state.enemyFood}", 0xFFE57373))
+            if (next != null) {
+                add(
+                    InfoEntry(
+                        "➡",
+                        "다음",
+                        "${next.displayName} · 영지 ${state.alliedTerritories}/${next.requiredAlliedTerritories} · 명성 ${state.prestige}/${next.requiredPrestige}",
+                        0xFF81C784
+                    )
+                )
+            }
+        }
+    }
+
+    fun alertCount(state: SlgGameState): Int = StatusAlertBuilder.build(state).size
+
+    fun hasUrgentAlert(state: SlgGameState): Boolean =
+        StatusAlertBuilder.build(state).any { it.severity == AlertSeverity.CRITICAL }
 }

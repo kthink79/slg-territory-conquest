@@ -1,11 +1,21 @@
 package com.game.slg
 
 import com.game.slg.ui.AlertSeverity
+import com.game.slg.ui.CouncilTab
+import com.game.slg.ui.DiplomacyTab
+import com.game.slg.ui.EventTab
+import com.game.slg.ui.HomeLayout
+import com.game.slg.ui.MainInfoPanel
 import com.game.slg.ui.MainNavigationState
 import com.game.slg.ui.MainRoute
+import com.game.slg.ui.PromotionTab
+import com.game.slg.ui.ScreenTabs
 import com.game.slg.ui.SlgGameViewModel
 import com.game.slg.ui.StatusAlertBuilder
 import com.game.slg.ui.SubMenu
+import com.game.slg.ui.TechTab
+import com.game.slg.ui.TerritoryTab
+import com.game.slg.ui.WarTab
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -13,12 +23,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 메인 3단 화면 — 서브 메뉴 이동 상태 · 지도 영지 선택 · 현재 상태 경보 테스트.
+ * 메인 화면 · 서브 메뉴 이동 · 탭 구성 · 경보 칩 테스트.
  */
 class MainUiNavigationTest {
 
     @Test
-    fun `앱을 열면 메인 3단 화면에서 시작한다`() {
+    fun `앱을 열면 메인 화면에서 시작한다`() {
         val navigation = MainNavigationState()
 
         assertTrue(navigation.isHome)
@@ -37,7 +47,7 @@ class MainUiNavigationTest {
     }
 
     @Test
-    fun `메인 3단 화면 버튼으로 홈에 돌아온다`() {
+    fun `메인 버튼으로 홈에 돌아온다`() {
         val opened = MainNavigationState().open(SubMenu.WAR)
         val back = opened.back()
 
@@ -57,12 +67,54 @@ class MainUiNavigationTest {
         assertEquals(8, SubMenu.entries.size)
         assertEquals(7, SubMenu.detailMenus.size)
         assertEquals(SubMenu.entries.size, SubMenu.entries.map { it.id }.distinct().size)
-        assertTrue(SubMenu.entries.all { it.label.isNotBlank() && it.caption.isNotBlank() })
-        // 기존 4탭 기능이 모두 서브 메뉴로 남아 있다
         listOf(
             SubMenu.TERRITORY, SubMenu.TECH, SubMenu.COUNCIL, SubMenu.WAR,
             SubMenu.DIPLOMACY, SubMenu.EVENTS, SubMenu.PROMOTION
         ).forEach { assertTrue("$it 누락", SubMenu.detailMenus.contains(it)) }
+    }
+
+    @Test
+    fun `메뉴 타일 라벨은 3글자 이내이고 이모지 아이콘을 가진다`() {
+        SubMenu.entries.forEach { menu ->
+            assertTrue("${menu.label} 이 너무 길다", menu.label.length <= 3)
+            assertTrue("${menu.label} 이모지 없음", menu.emoji.isNotBlank())
+            assertTrue("${menu.title} 제목 없음", menu.title.isNotBlank())
+        }
+    }
+
+    @Test
+    fun `모든 상세 화면은 2~4개의 짧은 탭을 가진다`() {
+        SubMenu.detailMenus.forEach { menu ->
+            val tabs = ScreenTabs.labelsOf(menu)
+            assertTrue("$menu 탭이 없다", tabs.isNotEmpty())
+            assertTrue("$menu 탭이 4개를 넘는다", tabs.size <= ScreenTabs.MAX_TABS)
+            assertTrue("$menu 탭 라벨이 길다", tabs.all { it.length <= 3 })
+            assertEquals("$menu 탭 중복", tabs.size, tabs.distinct().size)
+        }
+        assertEquals(emptyList<String>(), ScreenTabs.labelsOf(SubMenu.SEASON))
+    }
+
+    @Test
+    fun `테크트리 탭은 4대 계통과 1대1로 맞물린다`() {
+        assertEquals(4, TechTab.entries.size)
+        assertEquals(listOf("내정", "과학기술", "문화", "군사"), TechTab.entries.map { it.branch })
+        TechTab.entries.forEach { tab ->
+            assertEquals(
+                "4단계 계통",
+                4,
+                com.game.slg.ui.SlgWorld.TECH_ITEMS.count { it.branch == tab.branch }
+            )
+        }
+    }
+
+    @Test
+    fun `사건 탭은 세 사건과 대응한다`() {
+        assertEquals(listOf("유민", "상인", "정찰대"), EventTab.entries.map { it.label })
+        assertEquals(3, TerritoryTab.entries.size)
+        assertEquals(2, CouncilTab.entries.size)
+        assertEquals(3, WarTab.entries.size)
+        assertEquals(3, DiplomacyTab.entries.size)
+        assertEquals(3, PromotionTab.entries.size)
     }
 
     @Test
@@ -117,9 +169,18 @@ class MainUiNavigationTest {
         assertTrue(ids.contains("alert_merchant"))
         assertTrue(ids.contains("alert_bills"))
         assertTrue(ids.contains("alert_night_meeting"))
-        // 경보는 모두 상세 화면이 있는 서브 메뉴로 연결된다
         assertTrue(alerts.all { it.target.opensDetail })
         assertEquals(AlertSeverity.CRITICAL, alerts.first { it.id == "alert_refugee" }.severity)
+    }
+
+    @Test
+    fun `경보 칩 문구는 짧고 아이콘을 가진다`() {
+        val alerts = StatusAlertBuilder.build(SlgGameViewModel().uiState.value)
+        alerts.forEach { alert ->
+            assertTrue("${alert.short} 칩 문구가 길다", alert.short.length <= 8)
+            assertTrue("${alert.short} 아이콘 없음", alert.icon.isNotBlank())
+            assertTrue("${alert.title} 제목이 길다", alert.title.length <= 16)
+        }
     }
 
     @Test
@@ -174,5 +235,37 @@ class MainUiNavigationTest {
         vm.proposeTreaty(com.game.slg.core.model.TreatyType.DEFENSIVE_ALLIANCE)
 
         assertEquals(3, vm.uiState.value.alliedTerritories)
+    }
+
+    @Test
+    fun `메인 화면에서 지도가 가장 큰 영역을 차지한다`() {
+        // 360×800dp 기준: 상단 40 + 상태 88 + 메뉴 158 을 빼면 지도가 남논다
+        assertEquals(514, HomeLayout.mapHeight(800))
+        assertTrue(HomeLayout.mapHeight(800) > 800 / 2)
+        assertTrue(HomeLayout.mapHeight(640) >= 320)
+        assertEquals(0, HomeLayout.mapHeight(120))
+    }
+
+    @Test
+    fun `글자 크기는 최소 10sp 이상으로 읽기 쉽게 유지된다`() {
+        assertTrue(com.game.slg.ui.SlgType.MICRO.value >= 10f)
+        assertTrue(com.game.slg.ui.SlgType.LABEL.value >= 11f)
+        assertTrue(com.game.slg.ui.SlgType.BODY.value >= 13f)
+    }
+
+    @Test
+    fun `상단 1줄은 자원 3종만 보여 주고 상세 정보는 정보 패널로 간다`() {
+        val state = SlgGameViewModel().uiState.value
+        val top = MainInfoPanel.topSummary(state)
+        val detail = MainInfoPanel.detailRows(state)
+
+        assertEquals(4, top.size)
+        assertTrue(top.all { it.value.length <= 7 })
+        // 상세 행은 2열 그리드로 접히므로 홈보다 훨씬 많은 정보를 담을 수 있다
+        assertTrue(detail.size >= 7)
+        assertTrue(detail.all { it.label.length <= 3 })
+        assertEquals(MainInfoPanel.BUTTON_LABEL, "📊 정보")
+        assertEquals(StatusAlertBuilder.build(state).size, MainInfoPanel.alertCount(state))
+        assertTrue(MainInfoPanel.hasUrgentAlert(state))
     }
 }
