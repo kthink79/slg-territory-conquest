@@ -118,7 +118,7 @@ private fun HomeTopBar(state: SlgGameState, alertCount: Int, onOpenInfo: () -> U
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text("⚔", fontSize = SlgType.BODY)
+        Text("🏯", fontSize = SlgType.BODY)
         MainInfoPanel.topSummary(state).take(3).forEach { entry ->
             SlgSummaryChip(
                 icon = entry.icon,
@@ -198,6 +198,8 @@ private fun HomeStatusStrip(
                 color = SlgColors.Steel,
                 fontSize = SlgType.LABEL
             )
+            Spacer(Modifier.width(6.dp))
+            Text("❤ ${state.morale}", color = SlgColors.Text, fontSize = SlgType.MICRO)
             Spacer(Modifier.weight(1f))
             PromotionDots(state = state)
             Spacer(Modifier.width(6.dp))
