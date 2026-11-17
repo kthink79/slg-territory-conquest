@@ -216,7 +216,7 @@ private fun HeroSlotRow(state: SlgGameState, role: HeroRole, onUnassign: (String
     ) {
         Box(
             modifier = Modifier
-                .size(width = 62.dp, height = 30.dp)
+                .size(width = 78.dp, height = 32.dp)
                 .clip(RoundedCornerShape(50))
                 .background(accent.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
