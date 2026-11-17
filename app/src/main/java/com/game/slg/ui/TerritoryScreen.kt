@@ -106,7 +106,7 @@ private fun TerritoryOverview(state: SlgGameState) {
             Column(horizontalAlignment = Alignment.End) {
                 Text("지휘관", color = SlgColors.Muted, fontSize = SlgType.MICRO)
                 Text(
-                    "${state.playerLord?.name ?: "이광수"} 호족",
+                    "${state.playerLord?.name ?: "이광수"} 리더",
                     color = SlgColors.Brass,
                     fontSize = SlgType.LABEL,
                     fontWeight = FontWeight.Bold
@@ -125,7 +125,7 @@ private fun TerritoryOverview(state: SlgGameState) {
         }
     }
 
-    // 지역·호족 정원
+    // 지역·리더 정원
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -150,11 +150,11 @@ private fun TerritoryOverview(state: SlgGameState) {
             SlgSummaryChip("📐", "1,000명/석", SlgColors.Brass, Modifier.weight(1f))
         }
         Text(
-            "인구 ${state.regionPopulation}명 ÷ 1,000 = 호족 ${state.lordCapacity}석 · 인계 ${state.registeredLords}석 · " +
+            "인구 ${state.regionPopulation}명 ÷ 1,000 = 리더 ${state.lordCapacity}석 · 인계 ${state.registeredLords}석 · " +
                 "나머지 ${state.aiLordCount}석은 AI 운영",
             color = SlgColors.Muted,
             fontSize = SlgType.MICRO,
-            lineHeight = 15.sp
+            lineHeight = SlgLine.MICRO
         )
         SlgPill(state.expansionTier.label, SlgColors.Steel, filled = true)
         Text(
@@ -162,7 +162,7 @@ private fun TerritoryOverview(state: SlgGameState) {
                 "(다음 Lv.까지 ${state.command.xpRemaining} XP)",
             color = SlgColors.Text.copy(alpha = 0.85f),
             fontSize = SlgType.MICRO,
-            lineHeight = 15.sp
+            lineHeight = SlgLine.MICRO
         )
     }
 
@@ -235,7 +235,7 @@ private fun TerritoryStats(state: SlgGameState, onSelectTerritory: (String) -> U
                             .background(accent.copy(alpha = 0.18f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(if (node.isLocked) "🔒" else node.terrain.emoji(), fontSize = 14.sp)
+                        Text(if (node.isLocked) "🔒" else node.terrain.emoji(), fontSize = SlgType.LABEL)
                     }
                     Spacer(Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {

@@ -20,6 +20,12 @@ import com.game.slg.core.engine.ModernBattleResult
 import com.game.slg.core.engine.PromotionEngine
 import com.game.slg.core.engine.RefugeeCrisisEngine
 import com.game.slg.core.engine.SeasonEngine
+import com.game.slg.core.hero.Hero
+import com.game.slg.core.hero.HeroBonus
+import com.game.slg.core.hero.HeroEngine
+import com.game.slg.core.hero.HeroRole
+import com.game.slg.core.hero.HeroRoster
+import com.game.slg.core.hero.HeroRosterState
 import com.game.slg.core.map.MapNode
 import com.game.slg.core.map.TerritoryMapLayout
 import com.game.slg.core.model.BillType
@@ -48,8 +54,13 @@ import com.game.slg.core.region.AiLordGenerator
 import com.game.slg.core.region.AiLordProfile
 import com.game.slg.core.region.CommandProgress
 import com.game.slg.core.region.ExpansionTier
+import com.game.slg.core.region.AttackScope
+import com.game.slg.core.region.AttackSide
+import com.game.slg.core.region.AttackVerdict
 import com.game.slg.core.region.LordCapacity
 import com.game.slg.core.region.RegionArea
+import com.game.slg.core.region.RegionUnion
+import com.game.slg.core.region.RegionUnionEngine
 import com.game.slg.core.region.RegionCatalog
 import com.game.slg.core.save.CampaignSave
 import com.game.slg.core.save.CampaignStore
@@ -92,7 +103,7 @@ data class TechItem(
     val effect: String
 )
 
-/** 호족 의회 안건 상태 */
+/** 리더 의회 안건 상태 */
 data class BillState(
     val id: String,
     val title: String,
@@ -139,11 +150,11 @@ data class HiddenTalentView(
 enum class GameStage(val title: String) {
     INTRO("인트로"),
     REGION_SELECT("지역 선택"),
-    LORD_SELECT("호족 선택"),
+    LORD_SELECT("리더 선택"),
     PLAY("플레이")
 }
 
-/** 호족 명부 1줄 — AI 호족과 플레이어가 같은 형식으로 보인다 */
+/** 리더 명부 1줄 — AI 리더과 플레이어가 같은 형식으로 보인다 */
 data class LordView(
     val id: String,
     val name: String,
@@ -185,12 +196,12 @@ object SlgWorld {
 
     val HIDDEN_TALENTS: List<HiddenTalentView> = listOf(
         HiddenTalentView("한도윤", "물류단지 회계 서기", "야간에 경비 인력 40명을 모집한 정황 · 소문 미확산", 62),
-        HiddenTalentView("서이레", "구역 자치회 회계 담당", "호족연합의 병력 장부를 이중으로 관리 중", 48),
+        HiddenTalentView("서이레", "구역 자치회 회계 담당", "리더 연합의 병력 장부를 이중으로 관리 중", 48),
         HiddenTalentView("문태오", "중앙로 상인", "최근 인접 구역 인사와 접촉 빈도 급증", 33)
     )
 
-    /** 인구 1,000명당 호족 1명 — 화면 안내용 */
-    const val LORD_RULE_LABEL = "인구 1,000명당 1호족"
+    /** 인구 1,000명당 리더 1명 — 화면 안내용 */
+    const val LORD_RULE_LABEL = "인구 1,000명당 1리더"
 }
 
 // ============================================================================
@@ -209,7 +220,7 @@ data class SlgGameState(
     val regionGroupKey: String = "충청남도 아산시",
     val regionPopulation: Int = 48604,
     val lordCapacity: Int = LordCapacity.of(48604),
-    // ── 호족 명부 ──
+    // ── 리더 명부 ──
     val lords: List<LordView> = emptyList(),
     val playerLordId: String? = null,
     val selectedLordId: String? = null,
@@ -263,8 +274,28 @@ data class SlgGameState(
     val promotionStage: PromotionStage = PromotionStage.DISTRICT_LORD,
     val councilAuthorityBonus: Int = 0,
     val promotionCeremony: String? = null,
-    val promotionMessage: String? = null
+    val promotionMessage: String? = null,
+    // ── 영웅(인재) ──
+    val heroes: HeroRosterState = HeroRosterState.initial(),
+    val heroMessage: String? = null,
+    // ── 지역 연합 · 스폰 보호 ──
+    val union: RegionUnion = RegionUnion()
 ) {
+    /** 배치된 영웅이 주는 실제 보너스 */
+    val heroBonus: HeroBonus
+        get() = heroes.activeBonus()
+
+    /** 스폰 보호 중인지 */
+    val spawnProtected: Boolean
+        get() = union.active
+
+    /** 이 공격이 지금 허용되는지 */
+    fun attackVerdict(scope: AttackScope, side: AttackSide = AttackSide.EXPEDITION): AttackVerdict =
+        RegionUnionEngine.decide(union, scope, side)
+
+    /** 지역 명부의 같은 지역 AI 리더 수 (연합 대상) */
+    val unionPartnerCount: Int
+        get() = if (union.active) aiLordCount else 0
     /** 선택된 지도 거점 */
     val selectedTerritory: MapNode?
         get() = TerritoryMapLayout.node(mapNodes, selectedTerritoryCode)
@@ -295,7 +326,7 @@ data class SlgGameState(
     val unlockedNodeCount: Int
         get() = mapNodes.count { it.unlocked }
 
-    /** 같은 구역에서 이미 인계된 호족(플레이어)을 뺀 AI 운영 수 */
+    /** 같은 구역에서 이미 인계된 리더(플레이어)을 뺀 AI 운영 수 */
     val aiLordCount: Int
         get() = (lordCapacity - if (isCampaignStarted) 1 else 0).coerceAtLeast(0)
 
@@ -325,7 +356,7 @@ data class SlgGameState(
 }
 
 // ============================================================================
-// ViewModel — 인트로 → 지역 선택 → 호족 인계 → 4탭 영지 운영
+// ViewModel — 인트로 → 지역 선택 → 리더 인계 → 4탭 영지 운영
 // ============================================================================
 
 class SlgGameViewModel(
@@ -355,7 +386,7 @@ class SlgGameViewModel(
     private var season: Season = Season.SPRING
     private val treaties = mutableListOf<DiplomaticTreaty>()
 
-    /** 저장값이 있으면 그 지역·호족으로 이어서 시작한다 */
+    /** 저장값이 있으면 그 지역·리더으로 이어서 시작한다 */
     private fun buildInitialState(): SlgGameState {
         val base = SlgGameState(
             stage = if (store.isIntroSeen()) GameStage.REGION_SELECT else GameStage.INTRO,
@@ -375,7 +406,13 @@ class SlgGameViewModel(
                 playerName = "이광수",
                 homeTroops = 1200
             ),
-            selectedTerritoryCode = startRegion.code
+            selectedTerritoryCode = startRegion.code,
+            heroes = HeroRosterState(),
+            union = RegionUnion(
+                regionCode = startRegion.code,
+                regionName = startRegion.name,
+                remainingTurns = 0
+            )
         )
         val restore = saved ?: return base
         val lord = startLords.firstOrNull { it.id == restore.lordId } ?: return base
@@ -413,6 +450,20 @@ class SlgGameViewModel(
                 homeTroops = restore.troops
             ),
             selectedTerritoryCode = startRegion.code,
+            heroes = if (restore.ownedHeroes.isEmpty()) {
+                HeroRosterState.initial()
+            } else {
+                HeroRosterState.fromSaves(
+                    owned = restore.ownedHeroes,
+                    placed = restore.heroPlacements,
+                    affinity = restore.heroAffinity
+                )
+            },
+            union = RegionUnion(
+                regionCode = startRegion.code,
+                regionName = startRegion.name,
+                remainingTurns = restore.spawnTurns.coerceIn(0, RegionUnion.DEFAULT_TURNS)
+            ),
             statusMessage = "[이어서] ${startRegion.fullName} · Lv.${command.level} ${command.tier.label} — 저장된 진행을 불러왔습니다.",
             log = listOf("[이어서] ${startRegion.fullName}에서 플레이를 재개했습니다.")
         )
@@ -438,7 +489,15 @@ class SlgGameViewModel(
                 researchedTechs = state.researchedTechs,
                 alliedTerritories = state.alliedTerritories,
                 promotionStage = state.promotionStage.name,
-                councilAuthorityBonus = state.councilAuthorityBonus
+                councilAuthorityBonus = state.councilAuthorityBonus,
+                spawnTurns = state.union.remainingTurns,
+                ownedHeroes = state.heroes.ownedHeroes.map { it.id }.toSet(),
+                heroPlacements = state.heroes.ownedHeroes
+                    .mapNotNull { hero ->
+                        state.heroes.recordOf(hero.id).assignedRole?.let { hero.id to it.name }
+                    }
+                    .toMap(),
+                heroAffinity = state.heroes.ownedHeroes.associate { it.id to state.heroes.recordOf(it.id).affinity }
             )
         )
     }
@@ -465,13 +524,15 @@ class SlgGameViewModel(
             registeredLords = 0,
             mapNodes = TerritoryMapLayout.build(region, 0, "이광수", 0),
             selectedTerritoryCode = region.code,
+            heroes = HeroRosterState(),
+            union = RegionUnion(regionCode = region.code, regionName = region.name, remainingTurns = 0),
             statusMessage = "[새 게임] 시작 지역을 다시 선택하세요.",
             log = listOf("[새 게임] 새 지역에서 다시 시작합니다.")
         )
     }
 
     // ──────────────────────────────────────────────────────────────
-    // 시작 흐름: 인트로 → 지역 선택 → 호족 인계
+    // 시작 흐름: 인트로 → 지역 선택 → 리더 인계
     // ──────────────────────────────────────────────────────────────
 
     /** 인트로 마지막 장면 또는 SKIP */
@@ -500,7 +561,7 @@ class SlgGameViewModel(
     fun areasOf(groupKey: String) = RegionCatalog.areasOfGroup(groupKey)
 
     /**
-     * 시작 지역 선택 — 인구에 맞는 호족 정원을 계산하고 AI 호족 명부를 새로 만든다.
+     * 시작 지역 선택 — 인구에 맞는 리더 정원을 계산하고 AI 리더 명부를 새로 만든다.
      */
     fun chooseStartRegion(regionCode: String) {
         val region = RegionCatalog.area(regionCode) ?: return
@@ -524,8 +585,10 @@ class SlgGameViewModel(
                 facilities = emptySet(),
                 mapNodes = TerritoryMapLayout.build(region, 0, "이광수", 0),
                 selectedTerritoryCode = region.code,
-                statusMessage = "[지역 선택] ${region.fullName} — 인구 ${region.population}명 · 호족 ${region.lordCapacity}석",
-                log = listOf("[D+14] ${region.fullName}에 ${region.lordCapacity}명의 호족이 각자 거점을 세웠다.")
+                heroes = HeroRosterState(),
+                union = RegionUnion(regionCode = region.code, regionName = region.name, remainingTurns = 0),
+                statusMessage = "[지역 선택] ${region.fullName} — 인구 ${region.population}명 · 리더 ${region.lordCapacity}석",
+                log = listOf("[D+14] ${region.fullName}에 ${region.lordCapacity}명의 리더이 각자 거점을 세웠다.")
             )
         }
     }
@@ -544,8 +607,8 @@ class SlgGameViewModel(
     }
 
     /**
-     * AI 호족 하나를 인계받아 플레이어 세력으로 시작.
-     * 인계 시 그 호족의 병력·자금·보급·명성을 그대로 물려받는다.
+     * AI 리더 하나를 인계받아 플레이어 세력으로 시작.
+     * 인계 시 그 리더의 병력·자금·보급·명성을 그대로 물려받는다.
      */
     fun chooseLord(lordId: String) {
         _uiState.update { s ->
@@ -572,9 +635,14 @@ class SlgGameViewModel(
                 unlockedHop = command.unlockedHop,
                 mapNodes = TerritoryMapLayout.build(region, command.unlockedHop, playerName, chosen.troops),
                 selectedTerritoryCode = s.regionCode,
-                statusMessage = "[인계 완료] ${chosen.stronghold} — ${chosen.name} 호족의 거점을 이어받았습니다.",
-                log = (s.log + "[인계] ${s.regionFullName} ${chosen.stronghold}의 ${chosen.name} 호족 세력을 인계받았다. " +
-                    "Lv.1 관할 구역부터 시작합니다.").takeLast(8)
+                heroes = HeroRosterState.initial(),
+                heroMessage = "기본 영웅 3명과 함께 시작합니다 — 한서연[내정] · 윤도현[기술] · 차명숙[상업]",
+                union = RegionUnionEngine.open(s.regionCode, s.regionName),
+                statusMessage = "[인계 완료] ${chosen.stronghold} — ${chosen.name} 리더의 거점을 이어받았습니다.",
+                log = (s.log + "[인계] ${s.regionFullName} ${chosen.stronghold}의 ${chosen.name} 리더 세력을 인계받았다. " +
+                    "Lv.1 관할 구역부터 시작합니다." +
+                    "[지역 연합] 같은 지역 AI 리더 ${s.lordCapacity - 1}명과 자동 연합 · 스폰 보호 " +
+                    "${RegionUnion.DEFAULT_TURNS}턴 시작.").takeLast(8)
             )
         }
         persist()
@@ -601,8 +669,12 @@ class SlgGameViewModel(
         }
     }
 
-    fun openSubMenu(menu: SubMenu) {
-        _navigation.update { it.open(menu) }
+    fun openTab(tab: MainTab, sub: Int = 0) {
+        _navigation.update { it.open(tab, sub) }
+    }
+
+    fun selectSubTab(index: Int) {
+        _navigation.update { it.selectSub(index) }
     }
 
     fun backToMain() {
@@ -619,7 +691,7 @@ class SlgGameViewModel(
             val playerName = s.playerLord?.name ?: "이광수"
             val playerLord = Lord(
                 id = "lord_player",
-                name = "$playerName 호족",
+                name = "$playerName 리더",
                 isHumanPlayer = true,
                 territoryCode = s.regionCode,
                 troops = s.troops,
@@ -643,14 +715,20 @@ class SlgGameViewModel(
             )
             val nextSeason = season.next()
             val grainGain = (result.grainChange * (1.0 + economy)).toInt()
+            val heroBonus = s.heroBonus
+            val heroGold = (result.goldChange.coerceAtLeast(0) * heroBonus.goldPercent) / 100
+            val heroGrain = (grainGain.coerceAtLeast(0) * heroBonus.foodPercent) / 100
+            val (unionNext, unionMessage) = RegionUnionEngine.onTurnPassed(s.union)
             val before = s.command
             val gained = before.gainXp(CommandProgress.XP_SEASON)
-            val message = "[절기 순환: ${season.displayName}] ${result.message}"
+            val heroNote = if (heroBonus.isEmpty) "" else "\n[영웅] 배치 보너스 — ${heroBonus.summary()}"
+            val message = "[절기 순환: ${season.displayName}] ${result.message}" + heroNote
             season = nextSeason
             s.copy(
                 seasonName = nextSeason.displayName,
-                gold = playerLord.gold,
-                food = (playerLord.grain + (grainGain - result.grainChange)).coerceAtLeast(0),
+                gold = (playerLord.gold + heroGold).coerceAtLeast(0),
+                food = (playerLord.grain + (grainGain - result.grainChange) + heroGrain).coerceAtLeast(0),
+                union = unionNext,
                 command = gained,
                 unlockedHop = gained.unlockedHop,
                 mapNodes = if (gained.level != before.level) {
@@ -662,7 +740,7 @@ class SlgGameViewModel(
                     )
                 } else s.mapNodes,
                 levelUpMessage = if (gained.level != before.level) levelUpText(gained) else s.levelUpMessage,
-                log = (s.log + message).takeLast(8),
+                log = (s.log + message + listOfNotNull(unionMessage)).takeLast(8),
                 statusMessage = message
             )
         }
@@ -754,12 +832,15 @@ class SlgGameViewModel(
             if (previous != null && !s.researchedTechs.contains(previous.id)) {
                 return@update s.copy(statusMessage = "[연구 불가] 선행 기술 '${previous.name}'을(를) 먼저 연구해야 합니다.")
             }
-            if (s.gold < tech.cost) {
-                return@update s.copy(statusMessage = "[연구 불가] 자금이 부족합니다. (필요 ${tech.cost}G / 보유 ${s.gold}G)")
+            val discount = s.heroBonus.researchDiscountPercent.coerceIn(0, 60)
+            val cost = (tech.cost * (100 - discount) / 100).coerceAtLeast(1)
+            if (s.gold < cost) {
+                return@update s.copy(statusMessage = "[연구 불가] 자금이 부족합니다. (필요 ${cost}G / 보유 ${s.gold}G)")
             }
-            val message = "[연구 완료] ${tech.branch} ${tech.stage}단계 '${tech.name}' — ${tech.effect}"
+            val message = "[연구 완료] ${tech.branch} ${tech.stage}단계 '${tech.name}' — ${tech.effect}" +
+                if (discount > 0) " (기술 영웅 할인 -$discount% · ${cost}G)" else ""
             s.copy(
-                gold = s.gold - tech.cost,
+                gold = s.gold - cost,
                 researchedTechs = s.researchedTechs + techId,
                 morale = if (tech.branch == "문화") (s.morale + 2).coerceAtMost(100) else s.morale,
                 diplomacy = if (tech.branch == "문화") (s.diplomacy + 2).coerceAtMost(100) else s.diplomacy,
@@ -796,7 +877,7 @@ class SlgGameViewModel(
         return validation
     }
 
-    /** 호족 의회 안건 표결 */
+    /** 리더 의회 안건 표결 */
     fun voteBill(billId: String) {
         _uiState.update { s ->
             val state = s.bills.firstOrNull { it.id == billId } ?: return@update s
@@ -816,9 +897,9 @@ class SlgGameViewModel(
             val passed = result.isPassed
             val rebellion = result.isRebellionTriggered
             val message = buildString {
-                append("[호족 의회 표결] '${state.title}' — 찬성 ${result.votesInFavor} : 반대 ${result.votesAgainst} → ")
+                append("[리더 의회 표결] '${state.title}' — 찬성 ${result.votesInFavor} : 반대 ${result.votesAgainst} → ")
                 append(if (passed) "가결" else "부결")
-                if (rebellion) append("\n반대 65% 이상! 반대 호족들이 연합해 대표 호족에 불복합니다.")
+                if (rebellion) append("\n반대 65% 이상! 반대 리더들이 연합해 대표 리더에 불복합니다.")
             }
 
             var gold = s.gold
@@ -887,6 +968,41 @@ class SlgGameViewModel(
                 )
             }
 
+            // 스폰 보호막 — 보호 기간에는 외부 침공이 지역 연합 방어선에서 자동으로 막힌다.
+            if (operationId == "OP_BASE" && s.spawnProtected) {
+                val shieldMessage = RegionUnionEngine.shieldRepelMessage(s.union)
+                val before = s.command
+                val gained = before.gainXp(CommandProgress.XP_OPERATION_WIN)
+                val report = OperationReport(
+                    operation = "통합 방호기지 방어",
+                    defenderWon = true,
+                    attackerLosses = 0,
+                    defenderLosses = 0,
+                    message = shieldMessage,
+                    verdict = "🛡️ 스폰 보호막 — 사상자 0",
+                    targetName = s.regionName,
+                    composition = "지역 연합 방어선 / 외부 침공 저지",
+                    requiredLevel = 1
+                )
+                return@update s.copy(
+                    prestige = (s.prestige + 1).coerceIn(0, 100),
+                    command = gained,
+                    unlockedHop = gained.unlockedHop,
+                    mapNodes = if (gained.level != before.level) {
+                        TerritoryMapLayout.build(
+                            start = s.regionArea ?: RegionCatalog.defaultRegion(),
+                            unlockedHop = gained.unlockedHop,
+                            playerName = s.playerLord?.name ?: "이광수",
+                            homeTroops = s.troops
+                        )
+                    } else s.mapNodes,
+                    levelUpMessage = if (gained.level != before.level) levelUpText(gained) else s.levelUpMessage,
+                    lastReport = report,
+                    log = (s.log + shieldMessage).takeLast(8),
+                    statusMessage = shieldMessage
+                )
+            }
+
             val target = when (operationId) {
                 "OP_DRONE", "OP_BRIDGE" -> s.mapNodes.firstOrNull { it.hopDistance == 1 && it.unlocked }
                 else -> s.homeNode
@@ -894,7 +1010,10 @@ class SlgGameViewModel(
             val targetTerrain = target?.terrain ?: TerrainType.PLAIN
             val homeTerrain = s.homeNode?.terrain ?: TerrainType.PLAIN
 
-            val own = facilityEngine.reinforced(ForceComposition.standard(s.troops), s.facilities)
+            val own = facilityEngine.reinforced(
+                ForceComposition.standard((s.troops * (1.0 + s.heroBonus.combatPercent / 100.0)).toInt()),
+                s.facilities
+            )
             val enemyMultiplier = when (operationId) {
                 "OP_DRONE" -> 0.95
                 "OP_BRIDGE" -> 1.05
@@ -1115,7 +1234,7 @@ class SlgGameViewModel(
                     (s.enemyFood - 300).coerceAtLeast(0)
                 } else s.enemyFood,
                 prestige = if (result.success) (s.prestige + 2).coerceAtMost(100) else s.prestige,
-                espionagePower = (s.espionagePower + intelBonus).coerceIn(0, 100),
+                espionagePower = (s.espionagePower + intelBonus + s.heroBonus.intelBonus).coerceIn(0, 100),
                 espionageMessage = result.message + extra,
                 espionageCount = s.espionageCount + 1,
                 log = (s.log + "[첩보] ${result.message}").takeLast(8),
@@ -1237,6 +1356,130 @@ class SlgGameViewModel(
     }
 
     // ──────────────────────────────────────────────────────────────
+    // 영웅(인재) — 탐색 · 설득 · 고용 · 슬롯 배치
+    // ──────────────────────────────────────────────────────────────
+
+    /** 탐색 — 미보유 영웅의 접점을 확보한다 (200G) */
+    fun scoutHero(heroId: String) {
+        val s = _uiState.value
+        applyHeroResult(HeroEngine.scout(s.heroes, heroId, s.gold))
+    }
+
+    /** 설득 — 명성 + 외교 영웅의 설득력으로 마음을 연다 */
+    fun persuadeHero(heroId: String) {
+        val s = _uiState.value
+        applyHeroResult(HeroEngine.persuade(s.heroes, heroId, s.prestige, s.heroBonus.diplomacyBonus))
+    }
+
+    /** 고용 — 자금을 지급하고 보유 영웅으로 만든다 */
+    fun hireHero(heroId: String) {
+        val s = _uiState.value
+        applyHeroResult(HeroEngine.hire(s.heroes, heroId, s.gold))
+    }
+
+    /** 슬롯 배치 */
+    fun assignHero(heroId: String, role: HeroRole) {
+        applyHeroResult(HeroEngine.assign(_uiState.value.heroes, heroId, role))
+    }
+
+    /** 슬롯에서 내리기 */
+    fun unassignHero(heroId: String) {
+        applyHeroResult(HeroEngine.unassign(_uiState.value.heroes, heroId))
+    }
+
+    private fun applyHeroResult(result: com.game.slg.core.hero.HeroActionResult) {
+        _uiState.update { s ->
+            s.copy(
+                heroes = result.roster,
+                gold = (s.gold + result.goldDelta).coerceAtLeast(0),
+                prestige = (s.prestige + result.prestigeDelta).coerceIn(0, 100),
+                heroMessage = result.message,
+                statusMessage = result.message,
+                log = if (result.success) (s.log + result.message).takeLast(8) else s.log
+            )
+        }
+        persist()
+    }
+
+    /** 영웅 탭에서 빈 슬롯을 대기 영웅으로 채운다 */
+    fun autoFillHeroSlots() {
+        val filled = HeroEngine.fillEmptySlots(_uiState.value.heroes)
+        applyHeroResult(
+            com.game.slg.core.hero.HeroActionResult(
+                roster = filled,
+                success = filled != _uiState.value.heroes,
+                message = "[배치] 빈 슬롯을 대기 영웅으로 채웠습니다."
+            )
+        )
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 지역 연합 — 같은 지역 리더 교전
+    // ──────────────────────────────────────────────────────────────
+
+    /**
+     * 지역 내 AI 리더 압박. 지역 연합 기간에는 교전이 막히고,
+     * 연합이 끝나면 실제 교전이 열린다.
+     */
+    fun challengeRegionLord(lordId: String) {
+        _uiState.update { s ->
+            val target = s.lords.firstOrNull { it.id == lordId && !it.isPlayer }
+                ?: return@update s.copy(statusMessage = "[교전] 명부에 없는 리더입니다.")
+            val verdict = s.attackVerdict(AttackScope.SAME_REGION, AttackSide.EXPEDITION)
+            if (!verdict.allowed) {
+                val message = RegionUnionEngine.unionBlockMessage(s.union)
+                return@update s.copy(
+                    statusMessage = message,
+                    log = (s.log + message).takeLast(8)
+                )
+            }
+
+            val area = s.regionArea ?: RegionCatalog.defaultRegion()
+            val own = ForceComposition.standard(
+                (s.troops * (1.0 + s.heroBonus.combatPercent / 100.0)).toInt()
+            )
+            val enemy = ForceComposition.standard(target.troops.coerceAtLeast(60))
+            val result = modernBattleEngine.resolve(
+                attackers = own,
+                defenders = enemy,
+                territory = buildTerritory(area = area, fortress = null).copy(terrain = area.terrain),
+                isSupplyLineCut = s.intelGained,
+                defenseBonusRatio = 0.0,
+                casualtyReductionBonus = 0.0
+            )
+            val win = !result.defenderWon
+            val ourLosses = result.attackerLosses
+            val theirLosses = result.defenderLosses
+            val message = "[교전] ${target.name} 리더 — ${if (win) "압박 성공" else "공격 실패"} · " +
+                "적 사상자 $theirLosses, 아군 사상자 $ourLosses"
+            val report = OperationReport(
+                operation = "지역 리더 압박",
+                defenderWon = !win,
+                attackerLosses = theirLosses,
+                defenderLosses = ourLosses,
+                message = message,
+                verdict = if (win) "지역 내 주도권 확보" else "지역 내 반발 — 재편성 필요",
+                targetName = target.name,
+                composition = "아군 ${own.describe()} / 적 ${enemy.describe()}",
+                requiredLevel = 1
+            )
+            s.copy(
+                troops = (s.troops - ourLosses).coerceAtLeast(0),
+                prestige = (s.prestige + if (win) 4 else -3).coerceIn(0, 100),
+                morale = (s.morale + if (win) 2 else -3).coerceIn(0, 100),
+                lords = s.lords.map { lord ->
+                    if (lord.id == target.id) lord.copy(troops = (lord.troops - theirLosses).coerceAtLeast(0))
+                    else lord
+                },
+                lastReport = report,
+                log = (s.log + message).takeLast(8),
+                statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    // ──────────────────────────────────────────────────────────────
     // 승격 로드맵
     // ──────────────────────────────────────────────────────────────
 
@@ -1345,7 +1588,7 @@ class SlgGameViewModel(
 
     private fun buildPlayerLord(s: SlgGameState): Lord = Lord(
         id = "lord_player",
-        name = "${s.playerLord?.name ?: "이광수"} 호족 (${s.regionName})",
+        name = "${s.playerLord?.name ?: "이광수"} 리더 (${s.regionName})",
         isHumanPlayer = true,
         territoryCode = s.regionCode,
         troops = s.troops,
@@ -1355,18 +1598,18 @@ class SlgGameViewModel(
         isCastellan = true
     )
 
-    /** 의회 구성 — 플레이어를 제외한 AI 호족 (최대 12석) */
+    /** 의회 구성 — 플레이어를 제외한 AI 리더 (최대 12석) */
     private fun buildCouncilLords(s: SlgGameState): List<Lord> {
         val aiLords = s.lords.filter { !it.isPlayer }.take(12)
         if (aiLords.isEmpty()) {
             return listOf(
-                Lord("lord_1", "인접 호족 A", false, s.regionCode, troops = 300, grain = 1200, gold = 800, prestige = 55)
+                Lord("lord_1", "인접 리더 A", false, s.regionCode, troops = 300, grain = 1200, gold = 800, prestige = 55)
             )
         }
         return aiLords.map { lord ->
             Lord(
                 id = lord.id,
-                name = "${lord.name} 호족",
+                name = "${lord.name} 리더",
                 isHumanPlayer = false,
                 territoryCode = s.regionCode,
                 troops = lord.troops,

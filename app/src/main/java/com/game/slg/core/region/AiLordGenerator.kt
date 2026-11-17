@@ -4,7 +4,7 @@ import com.game.slg.core.model.CombatArm
 import java.util.Random
 
 /**
- * AI 호족 성향 — 초기 거점 성격과 병과 특화.
+ * AI 리더 성향 — 초기 거점 성격과 병과 특화.
  */
 enum class LordTrait(
     val displayName: String,
@@ -24,7 +24,7 @@ enum class LordTrait(
 }
 
 /**
- * 게임 시작 시 이미 그 지역을 운영하고 있는 AI 호족 1명.
+ * 게임 시작 시 이미 그 지역을 운영하고 있는 AI 리더 1명.
  * 플레이어는 이 명부에서 하나를 골라 그 세력을 인계받는다.
  */
 data class AiLordProfile(
@@ -42,14 +42,14 @@ data class AiLordProfile(
     val arm: CombatArm
 ) {
     /** 명부 표시용 이름 */
-    val title: String get() = "$name 호족"
+    val title: String get() = "$name 리더"
 
     /** 인계 시 플레이어 세력이 되는지 */
     fun asPlayerLord(): AiLordProfile = copy(name = name)
 }
 
 /**
- * 지역 인구 → 호족 정원만큼 AI 호족을 만든다.
+ * 지역 인구 → 리더 정원만큼 AI 리더을 만든다.
  *
  * - 같은 지역·같은 시드는 항상 같은 명부를 만든다(재현 가능).
  * - 이름·거점·성향이 겹치지 않게 뽑는다.
@@ -73,7 +73,7 @@ object AiLordGenerator {
         "시외버스 터미널", "테크노파크", "재난안전센터", "구도심 재개발구역"
     )
 
-    /** 지역의 호족 정원만큼 AI 호족 명부 생성 */
+    /** 지역의 리더 정원만큼 AI 리더 명부 생성 */
     fun generate(region: RegionArea, seed: Long = seedOf(region)): List<AiLordProfile> =
         generate(region, region.lordCapacity, seed)
 
@@ -117,7 +117,7 @@ object AiLordGenerator {
 
     fun seedOf(region: RegionArea): Long = region.code.hashCode().toLong()
 
-    /** 첫 번째 AI 호족 — 인계 없이 시작 흐름을 확인할 때 쓰는 기본값 */
+    /** 첫 번째 AI 리더 — 인계 없이 시작 흐름을 확인할 때 쓰는 기본값 */
     fun defaultProfile(region: RegionArea): AiLordProfile =
         generate(region).firstOrNull() ?: AiLordProfile(
             id = "ai_${region.code}_0",

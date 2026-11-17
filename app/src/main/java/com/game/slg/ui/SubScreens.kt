@@ -31,56 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.game.slg.core.model.PromotionStage
 
-/**
- * 서브 메뉴 상세 화면 공통 틀 — ① «메인» ② 제목 ③ 탭 바 ④ 본문.
- * 탭 선택은 화면(메뉴)별로 기억된다.
- */
-@Composable
-fun SubScreenHost(
-    menu: SubMenu,
-    onBack: () -> Unit,
-    content: @Composable (Int) -> Unit
-) {
-    val tabs = ScreenTabs.labelsOf(menu)
-    var tabIndex by rememberSaveable(menu.id) { mutableIntStateOf(0) }
-    val accent = Color(menu.accentHex)
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(SlgColors.Background)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF0E1218))
-                .padding(horizontal = 10.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SlgBackButton(onBack = onBack)
-            Spacer(Modifier.weight(1f))
-            Text(
-                "${menu.emoji} ${menu.title}",
-                color = SlgColors.Text,
-                fontSize = SlgType.BODY,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        if (tabs.isNotEmpty()) {
-            SlgTabBar(
-                tabs = tabs,
-                selectedIndex = tabIndex,
-                accent = accent,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                onSelect = { tabIndex = it }
-            )
-        }
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            content(tabIndex)
-        }
-    }
-}
-
 private fun branchAccent(tab: TechTab): Color = when (tab) {
     TechTab.ADMIN -> SlgColors.Success
     TechTab.SCIENCE -> Color(0xFF64B5F6)
@@ -302,7 +252,7 @@ fun PromotionScreen(
             PromotionTab.PATH -> {
                 SlgSectionCard(title = "승격 경로", accent = SlgColors.Brass) {
                     listOf(
-                        Triple("🏙", "거점 호족", "${state.regionName}에서 시작"),
+                        Triple("🏙", "거점 리더", "${state.regionName}에서 시작"),
                         Triple("🏛", "연합 대표", "우호 거점 2곳 · 명성 80"),
                         Triple("👑", "광역 통합군주", "우호 거점 3곳 · 명성 95")
                     ).forEach { (icon, title, caption) ->

@@ -61,16 +61,36 @@ object SlgColors {
 }
 
 /**
- * 모바일 가독 기준 글자 크기 — 8sp 이하 텍스트를 없애고 최소 10sp 로 올렸다.
- * 화면에 한 번에 보이는 정보량은 글자 크기가 아니라 **표시 항목 수**로 줄인다.
+ * 모바일 가독 기준 글자 크기 — 2026-11-18 사용자 요청으로 한 단계 더 키웠다.
+ *
+ * "글씨가 너무 작아 메뉴를 다 넣을 공간이 없다면 탭을 추가해서라도 더 키워줘"
+ * → 가장 작은 글자도 13sp, 본문 16sp, 제목 19sp, 히어로 24sp.
+ * 화면에 한 번에 보이는 정보량은 글자 크기가 아니라 **탭 분리**로 처리다.
  */
 object SlgType {
-    val MICRO = 10.sp
-    val LABEL = 11.sp
-    val BODY_SMALL = 12.sp
-    val BODY = 13.sp
-    val TITLE = 15.sp
-    val HERO = 20.sp
+    /** 배지·기록·보조 수치 */
+    val MICRO = 13.sp
+
+    /** 칩·라벨·버튼 보조 */
+    val LABEL = 14.sp
+
+    /** 카드 제목·탭 라벨 */
+    val BODY_SMALL = 15.sp
+
+    /** 본문 */
+    val BODY = 16.sp
+
+    /** 화면 제목 */
+    val TITLE = 19.sp
+
+    /** 히어로 숫자·대제목 */
+    val HERO = 24.sp
+}
+
+/** 줄 간격 — 작은 글씨도 읽히도록 본문의 1.35배 */
+object SlgLine {
+    val MICRO = 18.sp
+    val BODY = 22.sp
 }
 
 fun relationColor(label: String): Color = when (label) {
@@ -98,8 +118,8 @@ fun SlgScreenFrame(content: @Composable ColumnScope.() -> Unit) {
 }
 
 /**
- * 가로 꽉 찬 탭 바 — TCG 「듀얼 게이트」와 같은 패턴.
- * 2~4개 탭을 화면 폭에 균등 배치하고 선택 탭만 강조색으로 채운다.
+ * 가로 꽉 찬 탭 바 — 한 줄에 4개까지, 넘치면 다음 줄로 넘긴다.
+ * 글자를 키운 만큼 탭을 잘게 나누고 두 줄까지 허용한다.
  */
 @Composable
 fun SlgTabBar(
@@ -110,43 +130,125 @@ fun SlgTabBar(
     onSelect: (Int) -> Unit
 ) {
     if (tabs.isEmpty()) return
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF11151C))
+            .border(1.dp, SlgColors.Line, RoundedCornerShape(14.dp))
+            .padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        tabs.chunked(4).forEachIndexed { rowIndex, row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                row.forEachIndexed { columnIndex, label ->
+                    val index = rowIndex * 4 + columnIndex
+                    val selected = index == selectedIndex
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(
+                                if (selected) {
+                                    Brush.horizontalGradient(
+                                        listOf(accent.copy(alpha = 0.95f), accent.copy(alpha = 0.60f))
+                                    )
+                                } else {
+                                    Brush.linearGradient(listOf(Color(0xFF1A1F29), Color(0xFF1A1F29)))
+                                }
+                            )
+                            .clickable { onSelect(index) }
+                            .padding(vertical = 11.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label,
+                            color = if (selected) Color(0xFF10131A) else SlgColors.Muted,
+                            fontSize = SlgType.BODY_SMALL,
+                            fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
+                        )
+                    }
+                }
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/**
+ * 하단 메인 탭 바 — 지도 · 영지 · 영웅 · 작전 · 외교.
+ * 큰 이모지 + 큰 글씨로 엄지 하나로 오가게 한다.
+ */
+@Composable
+fun SlgBottomNav(
+    selected: MainTab,
+    modifier: Modifier = Modifier,
+    badgeOf: (MainTab) -> Int = { 0 },
+    onSelect: (MainTab) -> Unit
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(13.dp))
-            .background(Color(0xFF11151C))
-            .border(1.dp, SlgColors.Line, RoundedCornerShape(13.dp))
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+            .background(Color(0xFF0B0E13))
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        tabs.forEachIndexed { index, label ->
-            val selected = index == selectedIndex
+        MainTab.bottomOrder.forEach { tab ->
+            val active = tab == selected
+            val accent = Color(tab.accentHex)
+            val badge = badgeOf(tab)
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        if (selected) {
-                            Brush.horizontalGradient(
-                                listOf(accent.copy(alpha = 0.95f), accent.copy(alpha = 0.60f))
-                            )
-                        } else {
-                            Brush.linearGradient(listOf(Color(0xFF1A1F29), Color(0xFF1A1F29)))
-                        }
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (active) accent.copy(alpha = 0.18f) else SlgColors.Surface)
+                    .border(
+                        1.dp,
+                        if (active) accent.copy(alpha = 0.75f) else SlgColors.Line.copy(alpha = 0.6f),
+                        RoundedCornerShape(12.dp)
                     )
-                    .clickable { onSelect(index) }
-                    .padding(vertical = 9.dp),
-                contentAlignment = Alignment.Center
+                    .clickable { onSelect(tab) }
+                    .padding(vertical = 7.dp)
             ) {
-                Text(
-                    label,
-                    color = if (selected) Color(0xFF10131A) else SlgColors.Muted,
-                    fontSize = SlgType.BODY_SMALL,
-                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(tab.emoji, fontSize = 21.sp)
+                    Text(
+                        tab.label,
+                        color = if (active) accent else SlgColors.Muted,
+                        fontSize = SlgType.BODY_SMALL,
+                        fontWeight = if (active) FontWeight.ExtraBold else FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+                if (badge > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(SlgColors.Danger),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "$badge",
+                            color = Color(0xFF10131A),
+                            fontSize = SlgType.MICRO,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
             }
         }
     }
@@ -330,7 +432,7 @@ fun SlgChoiceCard(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
-                Text(icon, fontSize = 15.sp)
+                Text(icon, fontSize = SlgType.BODY_SMALL)
                 Spacer(Modifier.width(6.dp))
             }
             Text(
@@ -393,7 +495,7 @@ fun SlgExpand(summary: String, detail: String, accent: Color = SlgColors.Muted) 
             Text(if (expanded) "▲" else "▼", color = accent, fontSize = SlgType.MICRO)
         }
         if (expanded) {
-            Text(detail, color = SlgColors.Muted, fontSize = SlgType.MICRO, lineHeight = 16.sp)
+            Text(detail, color = SlgColors.Muted, fontSize = SlgType.MICRO, lineHeight = SlgLine.MICRO)
         }
     }
 }
@@ -515,7 +617,7 @@ fun SlgLogBox(lines: List<String>, maxLines: Int = 3) {
     ) {
         val visible = if (expanded) lines.takeLast(12) else lines.takeLast(maxLines)
         visible.forEach { line ->
-            Text("· $line", color = SlgColors.Muted, fontSize = SlgType.MICRO, lineHeight = 15.sp)
+            Text("· $line", color = SlgColors.Muted, fontSize = SlgType.MICRO, lineHeight = SlgLine.MICRO)
         }
         if (lines.isEmpty()) {
             Text("· 기록 없음", color = SlgColors.Muted, fontSize = SlgType.MICRO)
@@ -542,7 +644,7 @@ fun ResultBox(text: String?, accent: Color) {
             .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(9.dp))
             .padding(9.dp)
     ) {
-        Text(text, color = SlgColors.Text.copy(alpha = 0.92f), fontSize = SlgType.MICRO, lineHeight = 16.sp)
+        Text(text, color = SlgColors.Text.copy(alpha = 0.92f), fontSize = SlgType.MICRO, lineHeight = SlgLine.MICRO)
     }
 }
 

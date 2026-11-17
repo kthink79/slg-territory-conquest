@@ -80,19 +80,19 @@ interface IDiplomacyEngine {
 }
 
 /**
- * 대표 호족-호족 의회 및 예비군 소집·반란 엔진
+ * 대표 리더-리더 의회 및 예비군 소집·반란 엔진
  */
 class CouncilEngine : CouncilEngineContract {
 
     /**
-     * 대표 호족이 지역 정책(경비 인력 소집 등)을 호족 의회에 상정
+     * 대표 리더이 지역 정책(경비 인력 소집 등)을 리더 의회에 상정
      */
     override fun voteOnBill(bill: CouncilBill, lords: List<Lord>): CouncilBill {
         var favor = 0
         var against = 0
 
         for (lord in lords) {
-            // 호족들의 병력 규모와 성향에 따른 투표 시뮬레이션
+            // 리더들의 병력 규모와 성향에 따른 투표 시뮬레이션
             val acceptsLevy = when (bill.type) {
                 BillType.TROOP_LEVY -> {
                     // 병력의 30% 초과 차출 요구 시 반발
@@ -111,7 +111,7 @@ class CouncilEngine : CouncilEngineContract {
         bill.votesAgainst = against
         bill.isPassed = favor > against
 
-        // 반대표가 65% 이상일 경우 다른 호족들과 연합해 대표 호족에 대한 불복·반란을 일으킬 수 있음 (호족이 없을 경우 방지)
+        // 반대표가 65% 이상일 경우 다른 리더들과 연합해 대표 리더에 대한 불복·반란을 일으킬 수 있음 (리더이 없을 경우 방지)
         if (lords.isNotEmpty() && (against.toDouble() / lords.size >= 0.65)) {
             bill.isRebellionTriggered = true
         } else {
@@ -128,7 +128,7 @@ class CouncilEngine : CouncilEngineContract {
 class InfiltrationEngine : InfiltrationEngineContract {
 
     /**
-     * 유저가 호족이 아닌 재야 인재로 시작했을 때 조용히 사병을 모으고 암약
+     * 유저가 리더이 아닌 재야 인재로 시작했을 때 조용히 사병을 모으고 암약
      */
     override fun accumulatePower(talent: Talent, recruitedTroops: Int, subvertProgress: Int) {
         require(talent.isPlayerHiddenTalent) { "일반 인재는 암약 시스템을 독립 실행할 수 없습니다." }
@@ -141,7 +141,7 @@ class InfiltrationEngine : InfiltrationEngineContract {
     }
 
     /**
-     * 고용주 호족 세력 취득 (하극상/찬탈) 결행
+     * 고용주 리더 세력 취득 (하극상/찬탈) 결행
      * 사병 수와 지지도가 고용주의 병력을 압도할 때 성공
      */
     override fun attemptCoup(talent: Talent, employerLord: Lord): CoupResult {
@@ -153,7 +153,7 @@ class InfiltrationEngine : InfiltrationEngineContract {
         val success = powerRatio >= 0.8 && talent.rebellionPrestige >= 50
 
         return if (success) {
-            // 하극상 성공: 고용주의 영지와 지위를 찬탈하고 새 호족으로 등극
+            // 하극상 성공: 고용주의 영지와 지위를 찬탈하고 새 리더으로 등극
             employerLord.troops = talent.privateTroops
             CoupResult(
                 success = true,
@@ -265,11 +265,11 @@ class SeasonEngine : ISeasonEngine {
 
         return when (currentSeason) {
             Season.SPRING -> {
-                // 봄: 예산 편성·지방세 징수. 인구당 0.05골드 + 호족별 100골드
+                // 봄: 예산 편성·지방세 징수. 인구당 0.05골드 + 리더별 100골드
                 val populationTax = (territory.population * 0.05).toInt()
                 val lordTax = lords.size * 100
                 val totalGoldRevenue = populationTax + lordTax
-                // 영지 내 호족들에게 자금 균등 배분
+                // 영지 내 리더들에게 자금 균등 배분
                 if (lords.isNotEmpty()) {
                     val share = totalGoldRevenue / lords.size
                     lords.forEach { it.gold += share }
@@ -279,7 +279,7 @@ class SeasonEngine : ISeasonEngine {
                     season = Season.SPRING,
                     goldChange = totalGoldRevenue,
                     grainChange = 0,
-                    message = "봄 지방세 징수 완료: 관할 인구(${territory.population}명)와 호족(${lords.size}명)에게서 ${totalGoldRevenue} 자금을 확보했습니다."
+                    message = "봄 지방세 징수 완료: 관할 인구(${territory.population}명)와 리더(${lords.size}명)에게서 ${totalGoldRevenue} 자금을 확보했습니다."
                 )
             }
 
@@ -498,12 +498,12 @@ class LogisticsEngine : ILogisticsEngine {
             )
         }
 
-        // 출발 호족 자원 차감
+        // 출발 리더 자원 차감
         fromLord.gold -= convoy.gold
         fromLord.grain -= convoy.grain
 
         if (routeStatus.isConnected) {
-            // 목적 호족 자원 적재
+            // 목적 리더 자원 적재
             toLord.gold += convoy.gold
             toLord.grain += convoy.grain
             return ConvoyResult(

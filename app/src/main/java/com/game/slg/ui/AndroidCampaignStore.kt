@@ -36,7 +36,22 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
             researchedTechs = prefs.getStringSet(KEY_TECHS, emptySet()).orEmpty(),
             alliedTerritories = prefs.getInt(KEY_ALLIED, 0),
             promotionStage = prefs.getString(KEY_STAGE, "DISTRICT_LORD") ?: "DISTRICT_LORD",
-            councilAuthorityBonus = prefs.getInt(KEY_AUTHORITY, 0)
+            councilAuthorityBonus = prefs.getInt(KEY_AUTHORITY, 0),
+            spawnTurns = prefs.getInt(KEY_SPAWN_TURNS, 0),
+            ownedHeroes = prefs.getStringSet(KEY_HEROES, null)?.orEmpty()
+                ?: com.game.slg.core.hero.HeroRosterState.STARTING_IDS.toSet(),
+            heroPlacements = prefs.getStringSet(KEY_HERO_SLOTS, emptySet()).orEmpty()
+                .mapNotNull { entry ->
+                    val parts = entry.split(':')
+                    if (parts.size == 2) parts[0] to parts[1] else null
+                }
+                .toMap(),
+            heroAffinity = prefs.getStringSet(KEY_HERO_AFFINITY, emptySet()).orEmpty()
+                .mapNotNull { entry ->
+                    val parts = entry.split(':')
+                    parts.getOrNull(0)?.let { id -> id to (parts.getOrNull(1)?.toIntOrNull() ?: 80) }
+                }
+                .toMap()
         )
     }
 
@@ -61,6 +76,16 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
             .putInt(KEY_ALLIED, save.alliedTerritories)
             .putString(KEY_STAGE, save.promotionStage)
             .putInt(KEY_AUTHORITY, save.councilAuthorityBonus)
+            .putInt(KEY_SPAWN_TURNS, save.spawnTurns)
+            .putStringSet(KEY_HEROES, save.ownedHeroes)
+            .putStringSet(
+                KEY_HERO_SLOTS,
+                save.heroPlacements.map { (id, role) -> "$id:$role" }.toSet()
+            )
+            .putStringSet(
+                KEY_HERO_AFFINITY,
+                save.heroAffinity.map { (id, value) -> "$id:$value" }.toSet()
+            )
             .apply()
     }
 
@@ -80,5 +105,9 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
         private const val KEY_ALLIED = "allied"
         private const val KEY_STAGE = "promotion_stage"
         private const val KEY_AUTHORITY = "council_authority"
+        private const val KEY_SPAWN_TURNS = "spawn_turns"
+        private const val KEY_HEROES = "owned_heroes"
+        private const val KEY_HERO_SLOTS = "hero_slots"
+        private const val KEY_HERO_AFFINITY = "hero_affinity"
     }
 }

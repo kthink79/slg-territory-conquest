@@ -38,6 +38,7 @@ fun WarScreen(
     SlgScreenFrame {
         when (WarTab.entries[tabIndex.coerceIn(0, WarTab.entries.lastIndex)]) {
             WarTab.OPS -> WarOperations(state, onRunOperation)
+            WarTab.REGION -> WarOperations(state, onRunOperation)
             WarTab.REPORT -> WarReport(state)
             WarTab.DOCTRINE -> WarDoctrine()
         }
@@ -246,7 +247,7 @@ private fun WarReport(state: SlgGameState) {
             }
         }
         if (report.composition.isNotBlank()) {
-            Text("🪖 ${report.composition}", color = SlgColors.Muted, fontSize = SlgType.MICRO, lineHeight = 15.sp)
+            Text("🪖 ${report.composition}", color = SlgColors.Muted, fontSize = SlgType.MICRO, lineHeight = SlgLine.MICRO)
         }
         SlgExpand(
             summary = "작전 보고 — 원문",
@@ -265,7 +266,7 @@ private fun WarDoctrine() {
         "🌉" to "교량·보급로 차단",
         "🕵" to "정보국으로 보급 거점",
         "🤝" to "다자 외교로 결전 회피",
-        "🏛" to "과반 호족 연합 → 대표"
+        "🏛" to "과반 리더 연합 → 대표"
     )
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         rules.forEachIndexed { index, (icon, label) ->
@@ -299,8 +300,8 @@ private fun WarDoctrine() {
             detail = "① 방공 레이더망·스마트 방호망 등 방호 시설을 먼저 확보한다\n" +
                 "② 드론 정찰로 표적을 먼저 확보하고 기갑·화력으로 마무리한다\n" +
                 "③ 교량·물류 허브를 끊어 적 보급을 차단한다\n" +
-                "④ 정보국·첩보로 적 보급 거점과 호족 이간을 준비한다\n" +
-                "⑤ 과반 호족의 편입·연합으로 연합 대표 지위를 확보한다",
+                "④ 정보국·첩보로 적 보급 거점과 리더 이간을 준비한다\n" +
+                "⑤ 과반 리더의 편입·연합으로 연합 대표 지위를 확보한다",
             accent = SlgColors.Steel
         )
     }

@@ -60,7 +60,7 @@ object SlgIntro {
             kicker = "D+3",
             title = "깃발이 먼저 올라갔다",
             narration = "시청과 구청이 스스로 통치를 선언했다. 남은 것은 인구와 조직,\n" +
-                "그리고 서로를 견제하는 수십 명의 호족이었다.",
+                "그리고 서로를 견제하는 수십 명의 리더이었다.",
             tag = "자치구 독립"
         ),
         IntroScene(
@@ -75,9 +75,9 @@ object SlgIntro {
             image = R.drawable.slg_intro_04,
             kicker = "D+14",
             title = "당신의 구역이 시작된다",
-            narration = "지휘통제실의 지도 위에 수십 개의 호족 거점이 떠오른다.\n" +
+            narration = "지휘통제실의 지도 위에 수십 개의 리더 거점이 떠오른다.\n" +
                 "하나를 인계받아, 인구가 허락하는 만큼의 세력을 키워라.",
-            tag = "호족 인계"
+            tag = "리더 인계"
         )
     )
 

@@ -172,7 +172,7 @@ private fun EspionagePanel(state: SlgGameState, onEspionage: (EspionageOpType) -
         onClick = { onEspionage(EspionageOpType.INSTIGATE_DISSENT) }
     )
     SlgChoiceCard(
-        title = "정보 공작 — 호족 분열",
+        title = "정보 공작 — 리더 분열",
         icon = "🕸",
         effects = listOf(
             Effect("🎭", "사기 교란", SlgColors.Violet),
@@ -197,7 +197,7 @@ private fun EspionagePanel(state: SlgGameState, onEspionage: (EspionageOpType) -
     SlgExpand(
         summary = "첩자 공작 규칙",
         detail = "공작은 매 절기 1회씩 성공 판정이 있습니다. 보급 거점 교란은 적 보급 -300, " +
-            "정보 공작은 호족 불복을 유도하고, 정찰은 적 병력·보급·물류 지수를 드러냅니다.",
+            "정보 공작은 리더 불복을 유도하고, 정찰은 적 병력·보급·물류 지수를 드러냅니다.",
         accent = SlgColors.Violet
     )
 }

@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -22,32 +23,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.game.slg.core.map.MapViewport
 import com.game.slg.ui.AndroidCampaignStore
-import com.game.slg.ui.CouncilScreen
-import com.game.slg.ui.DiplomacyScreen
-import com.game.slg.ui.EventScenarioScreen
 import com.game.slg.ui.GameStage
 import com.game.slg.ui.LordSelectScreen
-import com.game.slg.ui.MainRoute
-import com.game.slg.ui.PromotionScreen
+import com.game.slg.ui.MainNavigationState
+import com.game.slg.ui.MainTab
 import com.game.slg.ui.RegionSelectScreen
+import com.game.slg.ui.SlgBottomNav
 import com.game.slg.ui.SlgColors
+import com.game.slg.ui.SlgGameState
 import com.game.slg.ui.SlgGameViewModel
 import com.game.slg.ui.SlgInfoOverlay
 import com.game.slg.ui.SlgIntroScreen
 import com.game.slg.ui.SlgMainScreen
-import com.game.slg.ui.SubMenu
-import com.game.slg.ui.SubScreenHost
-import com.game.slg.ui.TechTreeScreen
-import com.game.slg.ui.TerritoryScreen
-import com.game.slg.ui.WarScreen
+import com.game.slg.ui.SlgTabSurface
+import com.game.slg.ui.StatusAlertBuilder
 
 /**
  * 「단일 연방의 황혼」 — 2020년대 대한민국 자치구 영지전.
  *
  * 화면 흐름
- *  · 인트로(4장면) → 시작 지역 선택 → AI 호족 인계 → 메인
- *  · 메인 : 지도(주인공) + 경보 칩 1줄 + 서브 메뉴 8칸, 상단은 자원 1줄
- *  · 상세 : «메인» + 제목 + 2~4칸 탭 바 + 그림·배지 중심 본문
+ *  · 인트로(4장면) → 시작 지역 선택 → AI 리더 인계 → 메인
+ *  · 하단 탭 5개: 지도 / 영지 / 영웅 / 작전 / 외교
+ *  · 그 안의 상단 탭이 세부 화면을 나누고, 글씨를 키운 만큼 한 화면 항목을 줄인다.
  */
 class MainActivity : ComponentActivity() {
     private lateinit var gameViewModel: SlgGameViewModel
@@ -86,11 +83,11 @@ fun SlgApp(viewModel: SlgGameViewModel) {
 
     // 📊 정보 모달이 열려 있으면 뒤로가기는 모달만 닫는다
     BackHandler(enabled = infoOpen) { infoOpen = false }
-    // 상세 화면에서 뒤로가기 → 메인
+    // 상세 탭에서 뒤로가기 → 지도
     BackHandler(enabled = !infoOpen && state.stage == GameStage.PLAY && !navigation.isHome) {
         viewModel.backToMain()
     }
-    // 호족 선택에서 뒤로가기 → 지역 선택
+    // 리더 선택에서 뒤로가기 → 지역 선택
     BackHandler(enabled = !infoOpen && state.stage == GameStage.LORD_SELECT) {
         viewModel.backToRegionSelect()
     }
@@ -148,92 +145,53 @@ fun SlgApp(viewModel: SlgGameViewModel) {
 
 @Composable
 private fun PlaySurface(
-    state: com.game.slg.ui.SlgGameState,
-    navigation: com.game.slg.ui.MainNavigationState,
+    state: SlgGameState,
+    navigation: MainNavigationState,
     viewModel: SlgGameViewModel,
     mapViewport: MapViewport,
     onViewportChange: (MapViewport) -> Unit,
     infoOpen: Boolean,
     onInfoOpenChange: (Boolean) -> Unit
 ) {
-    when (val route = navigation.route) {
-        is MainRoute.Home -> SlgMainScreen(
-            state = state,
-            viewport = mapViewport,
-            onViewportChange = onViewportChange,
-            onSelectTerritory = { viewModel.selectTerritory(it) },
-            onOpenMenu = { viewModel.openSubMenu(it) },
-            onAdvanceSeason = { viewModel.advanceSeason() },
-            onOpenInfo = { onInfoOpenChange(true) },
-            onDismissLevelUp = { viewModel.dismissLevelUp() }
-        )
-
-        is MainRoute.Detail -> SubScreenHost(
-            menu = route.menu,
-            onBack = { viewModel.backToMain() }
-        ) { tab ->
-            when (route.menu) {
-                SubMenu.TERRITORY -> TerritoryScreen(
+    val alerts = StatusAlertBuilder.build(state)
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+            if (navigation.isHome) {
+                SlgMainScreen(
                     state = state,
-                    onAdvanceSeason = { viewModel.advanceSeason() },
-                    onDismissCeremony = { viewModel.dismissCeremony() },
-                    tabIndex = tab,
+                    viewport = mapViewport,
+                    onViewportChange = onViewportChange,
                     onSelectTerritory = { viewModel.selectTerritory(it) },
-                    onBuildFacility = { viewModel.buildFacility(it) }
+                    onOpenTab = { tab, sub -> viewModel.openTab(tab, sub) },
+                    onAdvanceSeason = { viewModel.advanceSeason() },
+                    onOpenInfo = { onInfoOpenChange(true) },
+                    onDismissLevelUp = { viewModel.dismissLevelUp() }
                 )
-
-                SubMenu.TECH -> TechTreeScreen(
+            } else {
+                SlgTabSurface(
                     state = state,
-                    onResearch = { id -> viewModel.research(id) },
-                    tabIndex = tab
+                    navigation = navigation,
+                    viewModel = viewModel,
+                    onAdvanceSeason = { viewModel.advanceSeason() }
                 )
-
-                SubMenu.COUNCIL -> CouncilScreen(
-                    state = state,
-                    onVoteBill = { id -> viewModel.voteBill(id) },
-                    tabIndex = tab
-                )
-
-                SubMenu.WAR -> WarScreen(
-                    state = state,
-                    onRunOperation = { id -> viewModel.runOperation(id) },
-                    tabIndex = tab
-                )
-
-                SubMenu.DIPLOMACY -> DiplomacyScreen(
-                    state = state,
-                    onProposeTreaty = { type -> viewModel.proposeTreaty(type) },
-                    onSecureCasusBelli = { viewModel.secureCasusBelli() },
-                    onEspionage = { op -> viewModel.conductEspionage(op) },
-                    onOpenNightMeeting = { name -> viewModel.openNightMeeting(name) },
-                    onResolveNightMeeting = { choice -> viewModel.resolveNightMeeting(choice) },
-                    onExploitDoubleAgent = { viewModel.exploitDoubleAgent() },
-                    tabIndex = tab
-                )
-
-                SubMenu.EVENTS -> EventScenarioScreen(
-                    state = state,
-                    onChooseEventA = { accept -> viewModel.chooseEventA(accept) },
-                    onChooseEventB = { ambush -> viewModel.chooseEventB(ambush) },
-                    onChooseRefugee = { choiceId -> viewModel.chooseRefugeeCrisis(choiceId) }
-                )
-
-                SubMenu.PROMOTION -> PromotionScreen(
-                    state = state,
-                    onPromote = { viewModel.promote() },
-                    onDismissCeremony = { viewModel.dismissCeremony() }
-                )
-
-                SubMenu.SEASON -> Unit
             }
         }
+
+        // 하단 탭 — 어느 화면에서든 한 번에 다른 탭으로 이동
+        SlgBottomNav(
+            selected = navigation.tab,
+            badgeOf = { tab -> alerts.count { it.target == tab } },
+            onSelect = { tab ->
+                if (tab == MainTab.MAP) viewModel.backToMain() else viewModel.openTab(tab, 0)
+            }
+        )
     }
 
     if (infoOpen) {
         SlgInfoOverlay(
             state = state,
             onClose = { onInfoOpenChange(false) },
-            onOpenMenu = { viewModel.openSubMenu(it) },
+            onOpenTab = { tab, sub -> viewModel.openTab(tab, sub) },
             onReplayIntro = { viewModel.replayIntro() },
             onRestart = { viewModel.restartCampaign() }
         )

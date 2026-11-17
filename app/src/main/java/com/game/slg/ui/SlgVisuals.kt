@@ -101,7 +101,7 @@ fun SlgRadarChart(
             isAntiAlias = true
             textAlign = android.graphics.Paint.Align.CENTER
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-            textSize = 10.sp.toPx()
+            textSize = 13.sp.toPx()
             color = android.graphics.Color.rgb(237, 234, 227)
         }
         stats.forEachIndexed { index, stat ->
@@ -207,7 +207,7 @@ fun SlgTechBranchCanvas(
             isAntiAlias = true
             textAlign = android.graphics.Paint.Align.LEFT
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-            textSize = 11.sp.toPx()
+            textSize = 14.sp.toPx()
         }
         for (index in 0 until count) {
             val y = top + step * index
@@ -293,7 +293,7 @@ fun SlgRoadmapTrack(
             isAntiAlias = true
             textAlign = android.graphics.Paint.Align.CENTER
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-            textSize = 10.sp.toPx()
+            textSize = 13.sp.toPx()
         }
         // 진행선
         val progressX = step * (currentIndex + 0.5f)

@@ -84,7 +84,8 @@ class SlgGameFlowTest {
         vm.research("admin_1")
         val afterFirst = vm.uiState.value
         assertTrue(afterFirst.researchedTechs.contains("admin_1"))
-        assertEquals(funded.gold - 400, afterFirst.gold)
+        // 기술 영웅(윤도현 · -12%)이 배치되어 400G → 352G 로 할인된다
+        assertEquals(funded.gold - 352, afterFirst.gold)
 
         vm.research("admin_3")
         val blocked = vm.uiState.value

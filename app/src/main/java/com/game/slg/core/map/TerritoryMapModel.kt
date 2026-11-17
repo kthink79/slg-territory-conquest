@@ -26,7 +26,7 @@ data class MapNode(
     val isHome: Boolean = false,
     /** 지휘 레벨로 작전 범위가 열렸는지 */
     val unlocked: Boolean = true,
-    /** 이 지역의 호족 정원 (인구 / 1,000) */
+    /** 이 지역의 리더 정원 (인구 / 1,000) */
     val lordCapacity: Int = 0
 ) {
     /** 지도에서 잠긴 거점은 흐리게 그린다 */
@@ -90,7 +90,7 @@ object TerritoryMapLayout {
      *
      * @param start 시작 지역
      * @param unlockedHop 지휘 레벨로 열린 최대 hop
-     * @param playerName 플레이어 호족 이름 (본진 표기)
+     * @param playerName 플레이어 리더 이름 (본진 표기)
      * @param homeTroops 본진 병력
      */
     fun build(
@@ -143,7 +143,7 @@ object TerritoryMapLayout {
                         !unlocked -> 0
                         else -> (area.lordCapacity * 6).coerceAtMost(1200)
                     },
-                    note = "호족 정원 ${area.lordCapacity}석 · 인구 ${area.population}명",
+                    note = "리더 정원 ${area.lordCapacity}석 · 인구 ${area.population}명",
                     isHome = isHome,
                     unlocked = unlocked,
                     lordCapacity = area.lordCapacity

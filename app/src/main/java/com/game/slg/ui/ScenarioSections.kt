@@ -211,7 +211,7 @@ fun RefugeeCrisisCard(state: SlgGameState, onChooseRefugee: (String) -> Unit) {
         SlgExpand(
             summary = "통제선 앞 — 원문",
             detail = "연방 통신·물류망이 끊긴 세 번째 밤, 관할 구역 통제선 앞에 이재민 800명이 몰려들었다. " +
-                "아이를 안은 여성이 임시 펜스를 두드린다. 「호족님, 하룻밤만이라도… 물 한 모금이면 됩니다.」",
+                "아이를 안은 여성이 임시 펜스를 두드린다. 「리더님, 하룻밤만이라도… 물 한 모금이면 됩니다.」",
             accent = SlgColors.Danger
         )
     }
@@ -313,7 +313,7 @@ fun PromotionCeremonyBanner(state: SlgGameState, onDismissCeremony: () -> Unit) 
                 fontSize = SlgType.TITLE,
                 fontWeight = FontWeight.ExtraBold
             )
-            Text(ceremony, color = Color(0xFF24190A), fontSize = SlgType.LABEL, lineHeight = 17.sp)
+            Text(ceremony, color = Color(0xFF24190A), fontSize = SlgType.LABEL, lineHeight = SlgLine.BODY)
             SlgChoiceCard(
                 title = "의회 권한 +${state.councilAuthorityBonus}% · 닫기",
                 effects = emptyList(),

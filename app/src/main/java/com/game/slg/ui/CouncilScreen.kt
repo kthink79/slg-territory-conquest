@@ -26,7 +26,7 @@ import com.game.slg.R
 import com.game.slg.core.model.BillType
 
 /**
- * 서브 메뉴 「호족 의회」 — 탭 2개: 안건 / 호족.
+ * 서브 메뉴 「리더 의회」 — 탭 2개: 안건 / 리더.
  *
  * 안건은 찬반 스플릿 바(반대 65% 반란선 포함)만 보고 표결한다.
  */
@@ -48,7 +48,7 @@ fun CouncilScreen(
 private fun CouncilBills(state: SlgGameState, onVoteBill: (String) -> Unit) {
     SlgArtHeader(
         image = R.drawable.slg_council_chamber,
-        title = "${state.regionName} 호족 의회",
+        title = "${state.regionName} 리더 의회",
         badges = listOf("🏛 대표 권한" to SlgColors.Steel, "권한 +${state.councilAuthorityBonus}%" to SlgColors.Brass),
         height = 136
     )
@@ -113,7 +113,7 @@ private fun CouncilBills(state: SlgGameState, onVoteBill: (String) -> Unit) {
                 Spacer(Modifier.weight(1f))
             }
             if (bill.rebellion) {
-                SlgPill("불복 위험 — 반대 호족 연합", SlgColors.Danger, filled = true)
+                SlgPill("불복 위험 — 반대 리더 연합", SlgColors.Danger, filled = true)
             }
             if (bill.passed == null) {
                 SlgChoiceCard(
@@ -142,7 +142,7 @@ private fun CouncilBills(state: SlgGameState, onVoteBill: (String) -> Unit) {
 
     SlgExpand(
         summary = "의회 규칙",
-        detail = "대표 호족은 경비 인력 소집·특별 조례를 상정할 수 있으나, 호족 65% 이상이 반대하면 " +
+        detail = "대표 리더은 경비 인력 소집·특별 조례를 상정할 수 있으나, 리더 65% 이상이 반대하면 " +
             "연합 불복이 일어납니다. 승격할 때마다 의회 권한 보너스가 올라 반대표를 낮춥니다.",
         accent = SlgColors.Steel
     )
@@ -191,7 +191,7 @@ private fun CouncilLords(state: SlgGameState) {
                 Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${name} 호족", color = SlgColors.Text, fontSize = SlgType.LABEL, fontWeight = FontWeight.Bold)
+                        Text("${name} 리더", color = SlgColors.Text, fontSize = SlgType.LABEL, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(5.dp))
                         SlgPill(role, if (isPlayer) SlgColors.Brass else SlgColors.Muted)
                     }
@@ -210,8 +210,8 @@ private fun CouncilLords(state: SlgGameState) {
             }
         }
         SlgExpand(
-            summary = "호족 ${lords.size}석 구성",
-            detail = "${state.regionFullName}에는 호족 정원 ${state.lordCapacity}석이 있습니다. " +
+            summary = "리더 ${lords.size}석 구성",
+            detail = "${state.regionFullName}에는 리더 정원 ${state.lordCapacity}석이 있습니다. " +
                 "그중 1석을 인계받았고 나머지 ${state.aiLordCount}석은 AI가 운영합니다. " +
                 "표결에서 반대 65%를 넘기면 연합 불복으로 이어집니다.",
             accent = SlgColors.Brass

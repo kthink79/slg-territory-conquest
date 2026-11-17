@@ -87,7 +87,7 @@ class RefugeeCrisisEngine : IRefugeeCrisisEngine {
                         culturePrestigeChange = 8,
                         message = "[통제선 개방] 관할 구역 통제선이 열리고 이재민 ${acceptedPopulation}명이 임시 주거 구역으로 들어왔다. " +
                             "아이들의 울음과 임시 난방기의 열기가 주차장을 채운다.\n" +
-                            "\"호족님, 이 은혜는 잊지 않겠습니다.\" — 보급 -${openFoodCost}석 · 인구 +${acceptedPopulation} · " +
+                            "\"리더님, 이 은혜는 잊지 않겠습니다.\" — 보급 -${openFoodCost}석 · 인구 +${acceptedPopulation} · " +
                             "민심 +10 · 문화 명성 +8"
                     )
                 }
@@ -111,7 +111,7 @@ class RefugeeCrisisEngine : IRefugeeCrisisEngine {
 }
 
 // =============================================================================
-// 2. 「호족 의회의 이면: 히든 인재 야간 밀회」 엔진
+// 2. 「리더 의회의 이면: 히든 인재 야간 밀회」 엔진
 // =============================================================================
 
 /**
@@ -174,7 +174,7 @@ class HiddenTalentNightEngine : IHiddenTalentNightEngine {
                 suspicionChange = -30,
                 prestigeChange = 5,
                 espionageChange = 10,
-                message = "[포섭 성공] 비밀 서신에 답장이 왔다. \"호족님의 뜻을 따르겠습니다.\"\n" +
+                message = "[포섭 성공] 비밀 서신에 답장이 왔다. \"리더님의 뜻을 따르겠습니다.\"\n" +
                     "'$talentName'을(를) 핵심 참모로 포섭했습니다. 의심도 -30 · 명성 +5 · 첩보력 +10"
             )
 
@@ -219,12 +219,12 @@ class HiddenTalentNightEngine : IHiddenTalentNightEngine {
 }
 
 // =============================================================================
-// 3. 「대표 호족 승격 마일스톤 로드맵」 엔진
+// 3. 「대표 리더 승격 마일스톤 로드맵」 엔진
 // =============================================================================
 
 /**
  * 승격 로드맵 엔진 인터페이스
- * - 거점 호족 → 과반 연합 대표 → 광역 통합군주
+ * - 거점 리더 → 과반 연합 대표 → 광역 통합군주
  * - 인접 영지 우호/동맹 수와 명성 조건을 채우면 승격 의식을 올릴 수 있다.
  */
 interface IPromotionEngine {
@@ -319,8 +319,8 @@ class PromotionEngine : IPromotionEngine {
             promoted = true,
             ceremonyTitle = if (next == PromotionStage.UNITED_CASTELLAN) "👑 연합 대표 승격 의식" else "👑 광역 통합군주 취임식",
             ceremonyBody = if (next == PromotionStage.UNITED_CASTELLAN) {
-                "관할 구역 시민광장에 호족들이 모였다. 과반의 연합 서명이 놓이고, " +
-                    "'${current.displayName}' 대표 호족이 연합 대표 자리에 올랐다.\n" +
+                "관할 구역 시민광장에 리더들이 모였다. 과반의 연합 서명이 놓이고, " +
+                    "'${current.displayName}' 대표 리더이 연합 대표 자리에 올랐다.\n" +
                     "의회 권한이 확장되어 경비 인력 소집 요구 상한이 +${next.councilAuthorityBonus}% 완화되고, " +
                     "특별세 안건 가결 요건이 낮아졌다."
             } else {

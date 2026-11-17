@@ -3,7 +3,7 @@ package com.game.slg.core.model
 /**
  * 현실 지명 기반 영지 (최하 단위: 읍·면·동)
  *
- * 2020년대 대한민국 자치구 — 호족이 운영하는 하나의 생활권 거점이다.
+ * 2020년대 대한민국 자치구 — 리더이 운영하는 하나의 생활권 거점이다.
  */
 data class Territory(
     val code: String,              // 행정동 법정동 코드 (예: "4420033000" 아산시 탕정면)
@@ -11,10 +11,10 @@ data class Territory(
     val province: String,          // "충청남도", "서울특별시"
     val cityCountyDistrict: String,// "아산시", "강남구"
     val population: Int,           // 실제 주민등록인구
-    val maxLords: Int,             // 호족 정원 — 인구 1,000명당 1명
+    val maxLords: Int,             // 리더 정원 — 인구 1,000명당 1명
     val terrain: TerrainType,      // 지형 특성
     var currentLordIds: List<String> = emptyList(),
-    var castellanId: String? = null, // 대표 호족 ID (지역 중심 거점)
+    var castellanId: String? = null, // 대표 리더 ID (지역 중심 거점)
     var fortress: Fortress? = null,
     val fertileScore: Double = 1.0,  // 물류·생산 지수 (절기 보급 생산 계수)
     val adjacentCodes: List<String> = emptyList() // 인접 영지 GIS 연결 그래프
@@ -63,7 +63,7 @@ enum class FortressLevel(val displayName: String, val casualtyReduction: Double)
 }
 
 /**
- * 유저 및 AI 호족 (Lord)
+ * 유저 및 AI 리더 (Lord)
  */
 data class Lord(
     val id: String,
@@ -75,7 +75,7 @@ data class Lord(
     var gold: Int,
     var prestige: Int,
     var isCastellan: Boolean = false,
-    var allegianceLordId: String? = null // 종속된 상위 호족/대표 호족 ID
+    var allegianceLordId: String? = null // 종속된 상위 리더/대표 리더 ID
 ) {
     init {
         require(troops >= 0) { "Lord troops cannot be negative" }
@@ -96,7 +96,7 @@ data class Talent(
     val leadership: Int,               // 통솔 (1~100)
     val politics: Int,                 // 정치 (1~100)
     val charm: Int,                    // 매력 (1~100)
-    var employerLordId: String? = null,// 고용주 호족 ID
+    var employerLordId: String? = null,// 고용주 리더 ID
     var loyalty: Int = 100,            // 충성도 (0~100)
     var privateTroops: Int = 0,        // 암약하며 조용히 키운 사병 수
     var rebellionPrestige: Int = 0     // 쿠데타/하극상 지지도
@@ -109,7 +109,7 @@ data class Talent(
 }
 
 /**
- * 호족 의회 정책 안건
+ * 리더 의회 정책 안건
  */
 data class CouncilBill(
     val id: String,
@@ -223,7 +223,7 @@ data class TreatyViolationResult(
 
 enum class EspionageOpType {
     GATHER_INTEL,       // 적 영지 및 병력 정보 정찰
-    INSTIGATE_DISSENT   // 호족/가신 이간계 및 민심·사기 교란
+    INSTIGATE_DISSENT   // 리더/가신 이간계 및 민심·사기 교란
 }
 
 data class EspionageResult(

@@ -25,25 +25,25 @@ data class RegionArea(
     val fullName: String
         get() = listOf(province, city, district, name).filter { it.isNotBlank() }.joinToString(" ")
 
-    /** 이 지역에 등록 가능한 호족 정원 — 인구 1,000명당 1개(최소 1개) */
+    /** 이 지역에 등록 가능한 리더 정원 — 인구 1,000명당 1개(최소 1개) */
     val lordCapacity: Int
         get() = LordCapacity.of(population)
 
-    /** 호족 정원이 가득 찼는지 (신규 가입 불가) */
+    /** 리더 정원이 가득 찼는지 (신규 가입 불가) */
     val isLordSlotFull: Boolean
         get() = lordCapacity <= 0
 }
 
 /**
- * 호족 정원 규칙 — 사용자 확정 사항.
+ * 리더 정원 규칙 — 사용자 확정 사항.
  *
- * "지역 별 등록 가입한 호족(가칭) 수는 인구 1000명당 1개씩 가능하게 설정해줘"
+ * "지역 별 등록 가입한 리더(가칭) 수는 인구 1000명당 1개씩 가능하게 설정해줘"
  */
 object LordCapacity {
-    /** 호족 1명이 담당하는 주민 수 */
+    /** 리더 1명이 담당하는 주민 수 */
     const val CITIZENS_PER_LORD: Int = 1000
 
-    /** 인구 → 호족 정원 (내림, 최소 1개) */
+    /** 인구 → 리더 정원 (내림, 최소 1개) */
     fun of(population: Int): Int =
         (population / CITIZENS_PER_LORD).coerceAtLeast(1)
 
@@ -251,7 +251,7 @@ object RegionCatalog {
     init {
         require(AREAS.isNotEmpty()) { "지역 데이터가 비어 있습니다." }
         require(AREAS.all { it.population > 0 }) { "인구는 0보다 커야 합니다." }
-        require(AREAS.all { it.lordCapacity >= 1 }) { "호족 정원은 최소 1개입니다." }
+        require(AREAS.all { it.lordCapacity >= 1 }) { "리더 정원은 최소 1개입니다." }
         require(AREAS.all { it.code.length == 10 }) { "법정동 코드는 10자리입니다." }
         require(BY_CODE.size == AREAS.size) { "법정동 코드가 중복됩니다." }
     }

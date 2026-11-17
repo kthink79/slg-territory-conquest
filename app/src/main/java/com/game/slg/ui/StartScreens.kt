@@ -43,7 +43,7 @@ private fun comma(value: Int): String = "%,d".format(value)
  * 새 게임 1단계 — 시작 지역 선택.
  *
  * 시·도 → 시·군·구 → 읍·면·동 순서로 좁히고, 카드마다 인구와
- * 「인구 1,000명당 1호족」 규칙으로 계산한 호족 정원을 보여 준다.
+ * 「인구 1,000명당 1리더」 규칙으로 계산한 리더 정원을 보여 준다.
  */
 @Composable
 fun RegionSelectScreen(
@@ -88,10 +88,10 @@ fun RegionSelectScreen(
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
-                "인구 1,000명당 호족 1석 — 지역을 고르면 그 인구만큼 AI 호족이 이미 운영 중입니다.",
+                "인구 1,000명당 리더 1석 — 지역을 고르면 그 인구만큼 AI 리더이 이미 운영 중입니다.",
                 color = SlgColors.Muted,
                 fontSize = SlgType.MICRO,
-                lineHeight = 15.sp
+                lineHeight = SlgLine.MICRO
             )
         }
 
@@ -145,10 +145,10 @@ fun RegionSelectScreen(
                 item {
                     Text(
                         "· 인구는 행정안전부 주민등록인구(2026년 9월) 기준입니다. 일부 지역은 최근 공개 수치의 근사치입니다.\n" +
-                            "· 호족 정원 = 인구 ÷ 1,000 (내림, 최소 1석). 지역을 고른 뒤 AI 호족 한 명을 인계받습니다.",
+                            "· 리더 정원 = 인구 ÷ 1,000 (내림, 최소 1석). 지역을 고른 뒤 AI 리더 한 명을 인계받습니다.",
                         color = SlgColors.Muted,
                         fontSize = SlgType.MICRO,
-                        lineHeight = 15.sp,
+                        lineHeight = SlgLine.MICRO,
                         modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
                     )
                 }
@@ -229,7 +229,7 @@ private fun AreaCard(area: RegionArea, onClick: () -> Unit) {
                 }
             }
             Text(
-                "👥 ${comma(area.population)}명  ·  🏙 호족 ${area.lordCapacity}석",
+                "👥 ${comma(area.population)}명  ·  🏙 리더 ${area.lordCapacity}석",
                 color = SlgColors.Muted,
                 fontSize = SlgType.MICRO
             )
@@ -247,9 +247,9 @@ private fun AreaCard(area: RegionArea, onClick: () -> Unit) {
 }
 
 /**
- * 새 게임 2단계 — AI 호족 인계.
+ * 새 게임 2단계 — AI 리더 인계.
  *
- * 지역 인구가 정한 정원만큼 AI 호족이 이미 운영 중이고,
+ * 지역 인구가 정한 정원만큼 AI 리더이 이미 운영 중이고,
  * 그중 하나를 골라 세력·거점·병력·자금을 그대로 물려받는다.
  */
 @Composable
@@ -273,7 +273,7 @@ fun LordSelectScreen(
         ) {
             SlgBackButton(onBack = onBack)
             Spacer(Modifier.weight(1f))
-            Text("🏙 호족 인계", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Text("🏙 리더 인계", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
         }
 
         // 지역 요약 — 인구 ÷ 1,000
@@ -309,16 +309,16 @@ fun LordSelectScreen(
             }
             Text(
                 "인구 ${comma(state.regionPopulation)} ÷ ${LordCapacity.CITIZENS_PER_LORD} = " +
-                    "호족 ${state.lordCapacity}석 · 지금은 AI ${state.lordCapacity}명이 각자 거점을 운영 중",
+                    "리더 ${state.lordCapacity}석 · 지금은 AI ${state.lordCapacity}명이 각자 거점을 운영 중",
                 color = SlgColors.Brass,
                 fontSize = SlgType.MICRO,
-                lineHeight = 15.sp
+                lineHeight = SlgLine.MICRO
             )
             Text(
                 "한 명을 인계받으면 나머지는 AI로 계속 운영됩니다. 초반 작전 범위는 선택한 읍·면·동 내부입니다.",
                 color = SlgColors.Muted,
                 fontSize = SlgType.MICRO,
-                lineHeight = 15.sp
+                lineHeight = SlgLine.MICRO
             )
         }
 
@@ -361,7 +361,7 @@ private fun LordCard(lord: LordView, onClick: () -> Unit) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "${lord.name} 호족",
+                    "${lord.name} 리더",
                     color = SlgColors.Text,
                     fontSize = SlgType.BODY_SMALL,
                     fontWeight = FontWeight.Bold

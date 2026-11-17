@@ -74,7 +74,7 @@ class SlgViewModel(
 
         val playerLord = Lord(
             id = "lord_player",
-            name = "충청 대호족 (플레이어)",
+            name = "충청 대표 리더 (플레이어)",
             isHumanPlayer = true,
             territoryCode = t1.code,
             troops = 1200,
@@ -95,7 +95,7 @@ class SlgViewModel(
         )
         val neighborLord = Lord(
             id = "lord_neighbor",
-            name = "경기 호족 이경원",
+            name = "경기 리더 이경원",
             isHumanPlayer = false,
             territoryCode = "t_neighbor_04",
             troops = 1500,
