@@ -34,6 +34,21 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // 로컬 셸의 user.home 이 비정상인 환경에서도 같은 debug keystore 를 쓰도록 고정한다.
+    // (keystore 가 없으면 AGP 기본 동작에 맡겨 CI 에서 자동 생성되게 한다)
+    signingConfigs {
+        val homeDir = System.getenv("HOME") ?: System.getProperty("user.home")
+        val debugKeystore = file("$homeDir/.android/debug.keystore")
+        if (debugKeystore.exists()) {
+            getByName("debug") {
+                storeFile = debugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildFeatures {
         compose = true
     }
