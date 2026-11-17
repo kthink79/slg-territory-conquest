@@ -51,8 +51,9 @@ fun RegionSelectScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var province by rememberSaveable { mutableStateOf(RegionCatalog.PROVINCES.first()) }
-    var groupKey by rememberSaveable { mutableStateOf("") }
+    // 사용자가 예로 든 탕정면(충남 아산시)을 기본으로 보여 준다
+    var province by rememberSaveable { mutableStateOf(RegionCatalog.defaultRegion().province) }
+    var groupKey by rememberSaveable { mutableStateOf(RegionCatalog.defaultRegion().groupKey) }
     val groups: List<RegionGroup> = RegionCatalog.groupsOfProvince(province)
     val currentGroup = groups.firstOrNull { it.key == groupKey } ?: groups.firstOrNull()
 
