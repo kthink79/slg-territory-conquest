@@ -52,7 +52,7 @@ enum class ExpansionTier(
         level = 8,
         maxHop = 5,
         label = "전국 연결망",
-        detail = "연결된 모든 거점이 작전 범위에 들어옴"
+        detail = "같은 연결망의 5단계 이웃까지 작전 범위"
     );
 
     /** 다음 단계 (마지막이면 null) */

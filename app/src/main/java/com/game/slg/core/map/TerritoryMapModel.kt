@@ -52,7 +52,7 @@ data class WorldBounds(val minX: Float, val maxX: Float, val minY: Float, val ma
 object TerritoryMapLayout {
 
     /** 세계 좌표 최대 반경 (이 밖으로는 화면이 나가지 않는다) */
-    const val WORLD_HALF_EXTENT = 1.30f
+    const val WORLD_HALF_EXTENT = 1.55f
 
     /** 확대/축소 한계 — 0.7배 ~ 2.5배 */
     const val MIN_SCALE = 0.7f
@@ -63,7 +63,7 @@ object TerritoryMapLayout {
     const val BASE_VIEW_RADIUS = 0.95f
 
     /** 영향권 경계 점선 반경 (hop 1 고리) */
-    const val INFLUENCE_RADIUS = 0.58f
+    const val INFLUENCE_RADIUS = 0.52f
 
     /** 장식용 하천 폴리라인 — 실제 지형과 무관한 지도 질감 */
     val RIVER: List<Pair<Float, Float>> = listOf(
@@ -78,10 +78,11 @@ object TerritoryMapLayout {
     /** hop → 고리 반경 */
     fun ringRadius(hop: Int): Float = when (hop) {
         0 -> 0f
-        1 -> 0.58f
-        2 -> 0.88f
-        3 -> 1.10f
-        else -> 1.24f
+        1 -> 0.52f
+        2 -> 0.80f
+        3 -> 1.04f
+        4 -> 1.26f
+        else -> 1.46f
     }
 
     /**
@@ -98,7 +99,7 @@ object TerritoryMapLayout {
         playerName: String = "플레이어",
         homeTroops: Int = 0
     ): List<MapNode> {
-        val distances = RegionCatalog.hopDistances(start.code)
+        val distances = RegionCatalog.hopDistances(start.code, limit = 30)
         val previewHop = (unlockedHop + 1).coerceAtMost(6)
         val included = distances.filterValues { it <= previewHop }
 
@@ -154,7 +155,7 @@ object TerritoryMapLayout {
 
     /** 시작 지역 묶음 안에서 지도에 아직 그리지 않은 거점 수 */
     fun outOfRangeCount(start: RegionArea, unlockedHop: Int): Int {
-        val distances = RegionCatalog.hopDistances(start.code)
+        val distances = RegionCatalog.hopDistances(start.code, limit = 30)
         val previewHop = (unlockedHop + 1).coerceAtMost(6)
         return distances.count { it.value > previewHop }
     }

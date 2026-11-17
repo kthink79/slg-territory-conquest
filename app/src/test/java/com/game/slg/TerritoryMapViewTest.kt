@@ -92,12 +92,12 @@ class TerritoryMapViewTest {
     }
 
     @Test
-    fun `최소 배율에서는 이동이 본진에 고정된다`() {
+    fun `최소 배율에서는 이동 여지가 거의 없다`() {
         val viewport = MapViewport(scale = TerritoryMapLayout.MIN_SCALE).pannedBy(2f, 2f)
 
-        assertEquals(0f, viewport.panLimit, 0.0001f)
-        assertEquals(0f, viewport.centerX, 0.0001f)
-        assertEquals(0f, viewport.centerY, 0.0001f)
+        assertTrue("최소 배율 이동 여지는 0.25 이하", viewport.panLimit <= 0.25f)
+        assertEquals(viewport.panLimit, viewport.centerX, 0.0001f)
+        assertEquals(viewport.panLimit, viewport.centerY, 0.0001f)
     }
 
     @Test

@@ -200,4 +200,25 @@ class RegionRulesTest {
         assertTrue(start.nextUnlockLabel()!!.contains("인접 구역"))
         assertEquals(null, CommandProgress(level = CommandProgress.MAX_LEVEL).nextUnlockLabel())
     }
+
+    @Test
+    fun `탕정면에서 단계별로 열리는 거점 고리가 정해져 있다`() {
+        val hops = RegionCatalog.hopDistances(tangjeong.code)
+        val byHop = hops.entries
+            .groupBy({ it.value }, { RegionCatalog.area(it.key)?.name ?: it.key })
+            .mapValues { it.value.sorted() }
+
+        assertEquals(listOf("배방읍", "염치읍", "음봉면"), byHop[1])
+        assertTrue(byHop[2]!!.containsAll(listOf("불당1동", "송악면", "온양1동", "온양2동")))
+        assertTrue(byHop[3]!!.contains("백석동"))
+        // 같은 충남 권역(아산·천안)은 모두 이어진다
+        val chungnam = RegionCatalog.AREAS.filter { it.province == "충청남도" }
+        assertTrue("충남 권역 연결", chungnam.all { hops.containsKey(it.code) })
+        println("탕정면 확장 고리: " + byHop.toSortedMap())
+
+        // 수도권 권역도 수원에서 모두 이어진다 (부산·대구는 별도 생활권)
+        val metroHops = RegionCatalog.hopDistances("4111154000", limit = 30)
+        val metro = RegionCatalog.AREAS.filter { it.province in setOf("경기도", "서울특별시") }
+        assertTrue("수도권 권역 연결: " + metro.filter { !metroHops.containsKey(it.code) }.joinToString { it.name }, metro.all { metroHops.containsKey(it.code) })
+    }
 }
