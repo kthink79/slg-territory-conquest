@@ -30,7 +30,7 @@
 | 경기 수원시 광교1동 | 53,856 | **53석** |
 | 서울 강남구 역삼1동 | 34,307 | **34석** |
 
-- 데이터: 충남(아산·천안), 수도권(수원·성남·용인·화성·서울), 부산·대구의 주요 읍·면·동 43곳.
+- 데이터: 충남(아산·천안), 수도권(수원·성남·용인·화성·서울), 부산·대구의 주요 읍·면·동 52곳(11개 시·군·구).
 - 인구는 행정안전부 주민등록인구 기준이며 일부는 최근 공개 수치의 근사치다.
 - 인접 그래프(양방향)로 연결되어 시작 지역에서 BFS hop 거리로 해금 단계가 정해진다.
 
@@ -86,7 +86,7 @@
 ```
 com.game.slg
 ├── core
-│   ├── region   # RegionCatalog(43개 읍면동) · LordCapacity · CommandProgression · AiLordGenerator
+│   ├── region   # RegionCatalog(52개 읍면동) · LordCapacity · CommandProgression · AiLordGenerator
 │   ├── model    # Territory · Lord · CombatArm · ForceComposition · FacilityType · Fortress
 │   ├── engine   # ModernBattleEngine · FacilityEngine · CouncilEngine · Diplomacy · Season
 │   └── map      # TerritoryMapLayout(단계별 안개 배치) · MapViewport
