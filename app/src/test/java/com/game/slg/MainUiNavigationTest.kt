@@ -72,11 +72,11 @@ class MainUiNavigationTest {
     }
 
     @Test
-    fun `상단 탭은 화면마다 2~7개이고 라벨은 4글자 이하다`() {
+    fun `상단 탭은 화면마다 2~8개이고 라벨은 4글자 이하다`() {
         MainTab.entries.filter { it != MainTab.MAP }.forEach { tab ->
             val tabs = ScreenTabs.labelsOf(tab)
             assertTrue("$tab 탭이 없다", tabs.isNotEmpty())
-            assertTrue("$tab 탭이 7개를 넘는다", tabs.size <= 7)
+            assertTrue("$tab 탭이 8개를 넘는다", tabs.size <= 8)
             assertTrue("$tab 탭 라벨이 길다", tabs.all { it.length <= 4 })
             assertEquals("$tab 탭 중복", tabs.size, tabs.distinct().size)
         }
@@ -84,12 +84,12 @@ class MainUiNavigationTest {
     }
 
     @Test
-    fun `영지 탭은 7개 상단 탭으로 나뉜다`() {
+    fun `영지 탭은 8개 상단 탭으로 나뉜다`() {
         assertEquals(
-            listOf("내정", "지표", "시설", "기술", "의회", "승격", "사건"),
+            listOf("내정", "지표", "시설", "절기", "기술", "의회", "승격", "사건"),
             DomainTab.entries.map { it.label }
         )
-        assertEquals(7, ScreenTabs.labelsOf(MainTab.DOMAIN).size)
+        assertEquals(8, ScreenTabs.labelsOf(MainTab.DOMAIN).size)
     }
 
     @Test

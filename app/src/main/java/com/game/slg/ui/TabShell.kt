@@ -195,6 +195,15 @@ private fun DomainSurface(
             onBuildFacility = { viewModel.buildFacility(it) }
         )
 
+        DomainTab.SEASON -> TerritoryScreen(
+            state = state,
+            onAdvanceSeason = onAdvanceSeason,
+            onDismissCeremony = { viewModel.dismissCeremony() },
+            tabIndex = 2,
+            onSelectTerritory = { viewModel.selectTerritory(it) },
+            onBuildFacility = { viewModel.buildFacility(it) }
+        )
+
         DomainTab.TECH -> {
             var branch by rememberSaveable { mutableIntStateOf(0) }
             Column(Modifier.fillMaxSize()) {

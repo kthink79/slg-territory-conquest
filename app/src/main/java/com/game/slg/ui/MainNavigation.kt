@@ -70,6 +70,7 @@ enum class DomainTab(val label: String) {
     HOME("내정"),
     STATS("지표"),
     FACILITIES("시설"),
+    SEASON("절기"),
     TECH("기술"),
     COUNCIL("의회"),
     PROMOTION("승격"),
