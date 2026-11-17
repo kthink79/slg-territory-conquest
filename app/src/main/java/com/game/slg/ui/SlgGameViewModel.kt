@@ -51,6 +51,9 @@ import com.game.slg.core.region.ExpansionTier
 import com.game.slg.core.region.LordCapacity
 import com.game.slg.core.region.RegionArea
 import com.game.slg.core.region.RegionCatalog
+import com.game.slg.core.save.CampaignSave
+import com.game.slg.core.save.CampaignStore
+import com.game.slg.core.save.InMemoryCampaignStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -334,14 +337,29 @@ class SlgGameViewModel(
     private val diplomacyEngine: IDiplomacyEngine = DiplomacyEngine(),
     private val refugeeCrisisEngine: IRefugeeCrisisEngine = RefugeeCrisisEngine(),
     private val nightMeetingEngine: IHiddenTalentNightEngine = HiddenTalentNightEngine(),
-    private val promotionEngine: IPromotionEngine = PromotionEngine()
+    private val promotionEngine: IPromotionEngine = PromotionEngine(),
+    private val store: CampaignStore = InMemoryCampaignStore()
 ) : ViewModel() {
 
-    private val startRegion = RegionCatalog.defaultRegion()
-    private val startLords = AiLordGenerator.generate(startRegion)
+    private val saved: CampaignSave? = store.load()
+    private val startRegion: RegionArea =
+        saved?.let { RegionCatalog.area(it.regionCode) } ?: RegionCatalog.defaultRegion()
+    private val startLords: List<AiLordProfile> = AiLordGenerator.generate(startRegion)
 
-    private val _uiState = MutableStateFlow(
-        SlgGameState(
+    private val _uiState = MutableStateFlow(buildInitialState())
+    val uiState: StateFlow<SlgGameState> = _uiState.asStateFlow()
+
+    private val _navigation = MutableStateFlow(MainNavigationState())
+    val navigation: StateFlow<MainNavigationState> = _navigation.asStateFlow()
+
+    private var season: Season = Season.SPRING
+    private val treaties = mutableListOf<DiplomaticTreaty>()
+
+    /** 저장값이 있으면 그 지역·호족으로 이어서 시작한다 */
+    private fun buildInitialState(): SlgGameState {
+        val base = SlgGameState(
+            stage = if (store.isIntroSeen()) GameStage.REGION_SELECT else GameStage.INTRO,
+            introSeen = store.isIntroSeen(),
             regionCode = startRegion.code,
             regionName = startRegion.name,
             regionFullName = startRegion.fullName,
@@ -359,14 +377,98 @@ class SlgGameViewModel(
             ),
             selectedTerritoryCode = startRegion.code
         )
-    )
-    val uiState: StateFlow<SlgGameState> = _uiState.asStateFlow()
+        val restore = saved ?: return base
+        val lord = startLords.firstOrNull { it.id == restore.lordId } ?: return base
+        val facilities = restore.facilities.mapNotNull { name ->
+            FacilityType.entries.firstOrNull { it.name == name }
+        }.toSet()
+        val stage = PromotionStage.entries.firstOrNull { it.name == restore.promotionStage }
+            ?: PromotionStage.DISTRICT_LORD
+        val command = CommandProgress(restore.level.coerceIn(1, CommandProgress.MAX_LEVEL), restore.xp)
+        return base.copy(
+            stage = GameStage.PLAY,
+            introSeen = true,
+            playerLordId = lord.id,
+            selectedLordId = lord.id,
+            lords = base.lords.map {
+                if (it.id == lord.id) it.copy(name = "이광수", isPlayer = true) else it
+            },
+            registeredLords = 1,
+            gold = restore.gold,
+            food = restore.food,
+            troops = restore.troops,
+            morale = restore.morale,
+            prestige = restore.prestige,
+            facilities = facilities,
+            researchedTechs = restore.researchedTechs,
+            alliedTerritories = restore.alliedTerritories,
+            promotionStage = stage,
+            councilAuthorityBonus = restore.councilAuthorityBonus,
+            command = command,
+            unlockedHop = command.unlockedHop,
+            mapNodes = TerritoryMapLayout.build(
+                start = startRegion,
+                unlockedHop = command.unlockedHop,
+                playerName = "이광수",
+                homeTroops = restore.troops
+            ),
+            selectedTerritoryCode = startRegion.code,
+            statusMessage = "[이어서] ${startRegion.fullName} · Lv.${command.level} ${command.tier.label} — 저장된 진행을 불러왔습니다.",
+            log = listOf("[이어서] ${startRegion.fullName}에서 플레이를 재개했습니다.")
+        )
+    }
 
-    private val _navigation = MutableStateFlow(MainNavigationState())
-    val navigation: StateFlow<MainNavigationState> = _navigation.asStateFlow()
+    /** 재개에 필요한 최소값만 저장한다 */
+    private fun persist() {
+        val state = _uiState.value
+        val lordId = state.playerLordId ?: return
+        if (state.stage != GameStage.PLAY) return
+        store.save(
+            CampaignSave(
+                regionCode = state.regionCode,
+                lordId = lordId,
+                level = state.command.level,
+                xp = state.command.xp,
+                gold = state.gold,
+                food = state.food,
+                troops = state.troops,
+                morale = state.morale,
+                prestige = state.prestige,
+                facilities = state.facilities.map { it.name }.toSet(),
+                researchedTechs = state.researchedTechs,
+                alliedTerritories = state.alliedTerritories,
+                promotionStage = state.promotionStage.name,
+                councilAuthorityBonus = state.councilAuthorityBonus
+            )
+        )
+    }
 
-    private var season: Season = Season.SPRING
-    private val treaties = mutableListOf<DiplomaticTreaty>()
+    /** 📊 정보 → 새 게임 (저장 삭제 후 지역 선택으로) */
+    fun restartCampaign() {
+        store.save(null)
+        val region = RegionCatalog.defaultRegion()
+        val lords = AiLordGenerator.generate(region)
+        season = Season.SPRING
+        treaties.clear()
+        _navigation.value = MainNavigationState()
+        _uiState.value = SlgGameState(
+            stage = GameStage.REGION_SELECT,
+            introSeen = true,
+            regionCode = region.code,
+            regionName = region.name,
+            regionFullName = region.fullName,
+            regionGroupKey = region.groupKey,
+            regionPopulation = region.population,
+            lordCapacity = region.lordCapacity,
+            population = region.population,
+            lords = lords.map { it.toView() },
+            registeredLords = 0,
+            mapNodes = TerritoryMapLayout.build(region, 0, "이광수", 0),
+            selectedTerritoryCode = region.code,
+            statusMessage = "[새 게임] 시작 지역을 다시 선택하세요.",
+            log = listOf("[새 게임] 새 지역에서 다시 시작합니다.")
+        )
+    }
 
     // ──────────────────────────────────────────────────────────────
     // 시작 흐름: 인트로 → 지역 선택 → 호족 인계
@@ -374,6 +476,7 @@ class SlgGameViewModel(
 
     /** 인트로 마지막 장면 또는 SKIP */
     fun finishIntro() {
+        store.setIntroSeen(true)
         _uiState.update { s ->
             s.copy(
                 stage = if (s.isCampaignStarted || s.introReplay) GameStage.PLAY else GameStage.REGION_SELECT,
@@ -381,6 +484,7 @@ class SlgGameViewModel(
                 introReplay = false
             )
         }
+        persist()
     }
 
     /** 📊 정보 → 인트로 다시보기 */
@@ -473,6 +577,7 @@ class SlgGameViewModel(
                     "Lv.1 관할 구역부터 시작합니다.").takeLast(8)
             )
         }
+        persist()
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -561,6 +666,7 @@ class SlgGameViewModel(
                 statusMessage = message
             )
         }
+        persist()
     }
 
     /** 이벤트 A — 인접 물류 상인회의 야간 보급 협약 */
@@ -595,6 +701,7 @@ class SlgGameViewModel(
                 )
             }
         }
+        persist()
     }
 
     /** 이벤트 B — 인접 구역의 무인기 정찰조 출현 */
@@ -628,6 +735,7 @@ class SlgGameViewModel(
                 )
             }
         }
+        persist()
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -659,6 +767,7 @@ class SlgGameViewModel(
                 statusMessage = message
             )
         }
+        persist()
     }
 
     /** 시설 건설 — 지휘통제실·드론 격납고·방공 레이더망 등 */
@@ -683,6 +792,7 @@ class SlgGameViewModel(
                 statusMessage = "[시설] ${type.displayName} 건설 완료 — ${type.effectLabel}"
             )
         }
+        if (validation.canBuild) persist()
         return validation
     }
 
@@ -752,6 +862,7 @@ class SlgGameViewModel(
                 statusMessage = message
             )
         }
+        persist()
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -878,6 +989,7 @@ class SlgGameViewModel(
                 statusMessage = line
             )
         }
+        persist()
     }
 
     /** 작전 후 레벨업 안내를 닫는다 */
@@ -939,6 +1051,7 @@ class SlgGameViewModel(
                 statusMessage = message
             ).let { next -> next.copy(alliedTerritories = alliedTerritoryCount(next)) }
         }
+        persist()
     }
 
     /** 무력 대응 명분(Casus Belli) 확보 */
@@ -1161,6 +1274,7 @@ class SlgGameViewModel(
                 statusMessage = result.message
             )
         }
+        persist()
         return resultOut ?: PromotionResult(
             isSuccess = false,
             stage = _uiState.value.promotionStage,

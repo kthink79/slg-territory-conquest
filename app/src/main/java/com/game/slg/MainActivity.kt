@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.game.slg.core.map.MapViewport
+import com.game.slg.ui.AndroidCampaignStore
 import com.game.slg.ui.CouncilScreen
 import com.game.slg.ui.DiplomacyScreen
 import com.game.slg.ui.EventScenarioScreen
@@ -49,10 +50,11 @@ import com.game.slg.ui.WarScreen
  *  · 상세 : «메인» + 제목 + 2~4칸 탭 바 + 그림·배지 중심 본문
  */
 class MainActivity : ComponentActivity() {
-    private val gameViewModel = SlgGameViewModel()
+    private lateinit var gameViewModel: SlgGameViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        gameViewModel = SlgGameViewModel(store = AndroidCampaignStore(applicationContext))
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
@@ -232,7 +234,8 @@ private fun PlaySurface(
             state = state,
             onClose = { onInfoOpenChange(false) },
             onOpenMenu = { viewModel.openSubMenu(it) },
-            onReplayIntro = { viewModel.replayIntro() }
+            onReplayIntro = { viewModel.replayIntro() },
+            onRestart = { viewModel.restartCampaign() }
         )
     }
 }

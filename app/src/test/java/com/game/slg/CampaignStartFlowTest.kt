@@ -1,6 +1,7 @@
 package com.game.slg
 
 import com.game.slg.core.region.AiLordGenerator
+import com.game.slg.core.save.InMemoryCampaignStore
 import com.game.slg.core.region.RegionCatalog
 import com.game.slg.ui.GameStage
 import com.game.slg.ui.SlgGameViewModel
@@ -170,5 +171,57 @@ class CampaignStartFlowTest {
         assertEquals(1, state.command.level)
         assertEquals(0, state.unlockedHop)
         assertNull(state.playerLordId)
+    }
+
+    @Test
+    fun `인트로를 본 뒤에는 다음 실행에서 인트로를 건너뛴다`() {
+        val store = InMemoryCampaignStore()
+        val first = SlgGameViewModel(store = store)
+        assertEquals(GameStage.INTRO, first.uiState.value.stage)
+        first.finishIntro()
+
+        val second = SlgGameViewModel(store = store)
+
+        assertEquals(GameStage.REGION_SELECT, second.uiState.value.stage)
+        assertTrue(second.uiState.value.introSeen)
+    }
+
+    @Test
+    fun `호족을 인계하면 다음 실행에서 그 진행으로 이어진다`() {
+        val store = InMemoryCampaignStore()
+        val first = SlgGameViewModel(store = store)
+        first.finishIntro()
+        first.chooseStartRegion("4420033000")
+        val lord = first.uiState.value.lords.first()
+        first.chooseLord(lord.id)
+        first.runOperation("OP_BASE")
+        val saved = first.uiState.value
+
+        val second = SlgGameViewModel(store = store)
+        val restored = second.uiState.value
+
+        assertEquals(GameStage.PLAY, restored.stage)
+        assertEquals("탕정면", restored.regionName)
+        assertEquals(lord.id, restored.playerLordId)
+        assertEquals(saved.command.level, restored.command.level)
+        assertEquals(saved.gold, restored.gold)
+        assertEquals(saved.troops, restored.troops)
+        assertEquals(saved.prestige, restored.prestige)
+        assertEquals(saved.unlockedHop, restored.unlockedHop)
+        assertTrue(restored.isCampaignStarted)
+    }
+
+    @Test
+    fun `새 게임은 저장을 지우고 지역 선택으로 돌아간다`() {
+        val store = InMemoryCampaignStore()
+        val vm = SlgGameViewModel(store = store)
+        vm.chooseLord(vm.uiState.value.lords.first().id)
+        vm.restartCampaign()
+
+        val state = vm.uiState.value
+        assertEquals(GameStage.REGION_SELECT, state.stage)
+        assertNull(state.playerLordId)
+        assertEquals(0, state.unlockedHop)
+        assertNull(store.load())
     }
 }

@@ -363,7 +363,8 @@ fun SlgInfoOverlay(
     state: SlgGameState,
     onClose: () -> Unit,
     onOpenMenu: (SubMenu) -> Unit,
-    onReplayIntro: () -> Unit = {}
+    onReplayIntro: () -> Unit = {},
+    onRestart: () -> Unit = {}
 ) {
     val alerts = StatusAlertBuilder.build(state)
     Box(
@@ -518,6 +519,17 @@ fun SlgInfoOverlay(
                 onClick = {
                     onClose()
                     onReplayIntro()
+                }
+            )
+
+            SlgChoiceCard(
+                title = "새 게임 — 지역 다시 선택",
+                icon = "🔄",
+                effects = listOf(Effect("🗺", "저장 삭제", SlgColors.Danger)),
+                accent = SlgColors.Danger,
+                onClick = {
+                    onClose()
+                    onRestart()
                 }
             )
 
