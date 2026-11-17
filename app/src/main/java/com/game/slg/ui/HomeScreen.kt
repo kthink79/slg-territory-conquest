@@ -57,7 +57,7 @@ object HomeLayout {
  * │ ● 탕정면 ⚔1200  Lv.1 관할 ▲    │
  * │ 🚪이재민 🛰정찰조 🏛표결2 →      │
  * ├──────────────────────────────┤
- * │ 🏯   🛠   🏛   ⚔              │
+ * │ 🏙   🛠   🏛   ⚔              │
  * │ 영지 기술 의회 전장             │
  * │ 🤝   🔔   👑   🌾              │
  * └──────────────────────────────┘
@@ -122,7 +122,7 @@ private fun HomeTopBar(state: SlgGameState, alertCount: Int, onOpenInfo: () -> U
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text("🏯", fontSize = SlgType.BODY)
+        Text("🏙", fontSize = SlgType.BODY)
         MainInfoPanel.topSummary(state).take(3).forEach { entry ->
             SlgSummaryChip(
                 icon = entry.icon,

@@ -25,7 +25,7 @@ enum class SubMenu(
         id = "submenu_territory",
         label = "영지",
         title = "영지·내정",
-        emoji = "🏯",
+        emoji = "🏙",
         accentHex = 0xFFE2B755
     ),
     TECH(
@@ -335,7 +335,7 @@ object MainInfoPanel {
         return buildList {
             add(InfoEntry("🗺", "지역", state.regionName, 0xFF7FA4D6))
             add(InfoEntry("👥", "인구", "%,d".format(state.regionPopulation), 0xFFEDEAE3))
-            add(InfoEntry("🏯", "호족", "${state.registeredLords}/${state.lordCapacity}석", 0xFFE2B755))
+            add(InfoEntry("🏙", "호족", "${state.registeredLords}/${state.lordCapacity}석", 0xFFE2B755))
             add(InfoEntry("🎖", "지휘", "Lv.${state.command.level}", 0xFFE2B755))
             add(InfoEntry("🌫", "해금", state.expansionTier.label, 0xFF7FA4D6))
             add(InfoEntry("🗓", "절기", state.seasonName.substringBefore(" ("), 0xFF90A4AE))

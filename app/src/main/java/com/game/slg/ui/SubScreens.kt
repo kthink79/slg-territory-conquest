@@ -302,7 +302,7 @@ fun PromotionScreen(
             PromotionTab.PATH -> {
                 SlgSectionCard(title = "승격 경로", accent = SlgColors.Brass) {
                     listOf(
-                        Triple("🏯", "거점 호족", "${state.regionName}에서 시작"),
+                        Triple("🏙", "거점 호족", "${state.regionName}에서 시작"),
                         Triple("🏛", "연합 대표", "우호 거점 2곳 · 명성 80"),
                         Triple("👑", "광역 통합군주", "우호 거점 3곳 · 명성 95")
                     ).forEach { (icon, title, caption) ->

@@ -188,7 +188,7 @@ private fun RegionGroupHeader(group: RegionGroup) {
         Spacer(Modifier.width(5.dp))
         SlgPill("👥 ${comma(group.totalPopulation)}", SlgColors.Text)
         Spacer(Modifier.width(5.dp))
-        SlgPill("🏯 ${group.totalLordSlots}석", SlgColors.Brass)
+        SlgPill("🏙 ${group.totalLordSlots}석", SlgColors.Brass)
     }
 }
 
@@ -228,7 +228,7 @@ private fun AreaCard(area: RegionArea, onClick: () -> Unit) {
                 }
             }
             Text(
-                "👥 ${comma(area.population)}명  ·  🏯 호족 ${area.lordCapacity}석",
+                "👥 ${comma(area.population)}명  ·  🏙 호족 ${area.lordCapacity}석",
                 color = SlgColors.Muted,
                 fontSize = SlgType.MICRO
             )
@@ -272,7 +272,7 @@ fun LordSelectScreen(
         ) {
             SlgBackButton(onBack = onBack)
             Spacer(Modifier.weight(1f))
-            Text("🏯 호족 인계", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Text("🏙 호족 인계", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
         }
 
         // 지역 요약 — 인구 ÷ 1,000
@@ -303,7 +303,7 @@ fun LordSelectScreen(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 SlgSummaryChip("👥", comma(state.regionPopulation), SlgColors.Text, Modifier.weight(1f))
-                SlgSummaryChip("🏯", "${state.lordCapacity}석", SlgColors.Brass, Modifier.weight(1f))
+                SlgSummaryChip("🏙", "${state.lordCapacity}석", SlgColors.Brass, Modifier.weight(1f))
                 SlgSummaryChip("🤖", "AI ${state.lordCapacity}", SlgColors.Steel, Modifier.weight(1f))
             }
             Text(

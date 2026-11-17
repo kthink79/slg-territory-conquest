@@ -137,7 +137,7 @@ private fun TerritoryOverview(state: SlgGameState) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("관할 구역", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
-            SlgPill("🏯 ${state.lordCapacity}석", SlgColors.Brass)
+            SlgPill("🏙 ${state.lordCapacity}석", SlgColors.Brass)
         }
         SlgStatBar(
             ratio = state.registeredLords.toFloat() / state.lordCapacity.coerceAtLeast(1),
@@ -255,7 +255,7 @@ private fun TerritoryStats(state: SlgGameState, onSelectTerritory: (String) -> U
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("👥 ${node.population}", color = SlgColors.Muted, fontSize = SlgType.MICRO)
                             Spacer(Modifier.width(7.dp))
-                            Text("🏯 ${node.lordCapacity}석", color = SlgColors.Muted, fontSize = SlgType.MICRO)
+                            Text("🏙 ${node.lordCapacity}석", color = SlgColors.Muted, fontSize = SlgType.MICRO)
                             Spacer(Modifier.width(7.dp))
                             Text(
                                 "⚔ ${if (node.isHome) state.troops else node.troops}",
