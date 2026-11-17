@@ -340,33 +340,36 @@ fun SlgRoadmapTrack(
 }
 
 // ============================================================================
-// 6. 작전 지형도 — 산악 매복 · 하천 도하 · 요새 수성
+// 6. 작전 지형도 — 무인기 타격 · 교량 봉쇄 · 방호기지
 // ============================================================================
 
 enum class OperationKind { MOUNTAIN, RIVER, FORTRESS }
 
+/**
+ * 작전 지형도 — ① 무인기 정찰·타격 ② 교량·도하 봉쇄 ③ 통합 방호기지 방어.
+ * 봉건 성벽 대신 벙커·레이더·무인기·차단 차량을 그린다.
+ */
 @Composable
 fun SlgOperationScene(kind: OperationKind, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        // 밤 하늘
         drawRect(
             brush = Brush.verticalGradient(listOf(Color(0xFF16202C), Color(0xFF0B0F16))),
             size = size
         )
-        drawCircle(Color(0xFFD9D3C0).copy(alpha = 0.55f), radius = h * 0.09f, center = Offset(w * 0.82f, h * 0.22f))
+        drawCircle(Color(0xFFD9D3C0).copy(alpha = 0.50f), radius = h * 0.09f, center = Offset(w * 0.82f, h * 0.20f))
 
-        // 지형 실루엣
+        // 능선 실루엣
         val ridge = Path().apply {
             moveTo(0f, h)
-            lineTo(0f, h * 0.72f)
-            lineTo(w * 0.16f, h * 0.50f)
-            lineTo(w * 0.30f, h * 0.66f)
-            lineTo(w * 0.46f, h * 0.40f)
-            lineTo(w * 0.62f, h * 0.66f)
-            lineTo(w * 0.80f, h * 0.52f)
-            lineTo(w, h * 0.70f)
+            lineTo(0f, h * 0.74f)
+            lineTo(w * 0.16f, h * 0.52f)
+            lineTo(w * 0.30f, h * 0.68f)
+            lineTo(w * 0.46f, h * 0.44f)
+            lineTo(w * 0.62f, h * 0.68f)
+            lineTo(w * 0.80f, h * 0.54f)
+            lineTo(w, h * 0.72f)
             lineTo(w, h)
             close()
         }
@@ -374,99 +377,101 @@ fun SlgOperationScene(kind: OperationKind, modifier: Modifier = Modifier) {
 
         when (kind) {
             OperationKind.MOUNTAIN -> {
-                // 협곡(통로) 밝은 길
-                drawPath(
-                    Path().apply {
-                        moveTo(w * 0.30f, h)
-                        lineTo(w * 0.44f, h * 0.42f)
-                        lineTo(w * 0.54f, h * 0.42f)
-                        lineTo(w * 0.66f, h)
-                        close()
-                    },
-                    color = Color(0xFF2A3746)
+                // 외곽 도로
+                drawRect(
+                    color = Color(0xFF2A3746),
+                    topLeft = Offset(w * 0.34f, h * 0.60f),
+                    size = Size(w * 0.34f, h * 0.40f)
                 )
-                // 매복 병력 (산 위 삼각형 무리)
-                repeat(5) { i ->
-                    val bx = w * (0.32f + i * 0.045f)
-                    val by = h * 0.44f - i * 3f
-                    drawPath(
-                        Path().apply {
-                            moveTo(bx, by)
-                            lineTo(bx + 9f, by + 13f)
-                            lineTo(bx - 9f, by + 13f)
-                            close()
-                        },
-                        color = Steel
-                    )
+                // 드론 3기 — 동체 + 좌우 날개
+                listOf(0.24f to 0.30f, 0.52f to 0.22f, 0.74f to 0.36f).forEach { (fx, fy) ->
+                    val cx = w * fx
+                    val cy = h * fy
+                    drawRect(Steel, topLeft = Offset(cx - 5f, cy - 2.5f), size = Size(10f, 5f))
+                    drawLine(Steel, Offset(cx - 12f, cy - 5f), Offset(cx + 12f, cy - 5f), strokeWidth = 2f)
+                    drawLine(Steel, Offset(cx - 6f, cy - 5f), Offset(cx - 6f, cy + 4f), strokeWidth = 1.2f)
+                    drawLine(Steel, Offset(cx + 6f, cy - 5f), Offset(cx + 6f, cy + 4f), strokeWidth = 1.2f)
                 }
-                // 적 진입 화살표
-                drawArrow(Offset(w * 0.72f, h * 0.86f), Offset(w * 0.50f, h * 0.56f), Danger)
+                // 표적 조준선
+                val tx = w * 0.52f
+                val ty = h * 0.62f
+                drawCircle(Danger.copy(alpha = 0.85f), radius = 10f, center = Offset(tx, ty), style = Stroke(width = 1.6f))
+                drawLine(Danger, Offset(tx - 18f, ty), Offset(tx + 18f, ty), strokeWidth = 1f)
+                drawLine(Danger, Offset(tx, ty - 18f), Offset(tx, ty + 18f), strokeWidth = 1f)
+                // 폭발 섬광
+                drawCircle(Brass.copy(alpha = 0.35f), radius = 5f, center = Offset(tx, ty))
             }
 
             OperationKind.RIVER -> {
                 // 하천
                 drawRect(
                     color = SlgColors.Water.copy(alpha = 0.55f),
-                    topLeft = Offset(0f, h * 0.60f),
-                    size = Size(w, h * 0.16f)
+                    topLeft = Offset(0f, h * 0.58f),
+                    size = Size(w, h * 0.22f)
                 )
                 repeat(6) { i ->
-                    val ry = h * 0.63f + (i % 3) * h * 0.04f
+                    val ry = h * 0.62f + (i % 3) * h * 0.05f
                     drawLine(
-                        color = Color(0xFF7FB0D0).copy(alpha = 0.5f),
-                        start = Offset(w * 0.08f + i * w * 0.16f, ry),
-                        end = Offset(w * 0.18f + i * w * 0.16f, ry),
+                        color = Color(0xFF7FB0D0).copy(alpha = 0.45f),
+                        start = Offset(w * 0.06f + i * w * 0.16f, ry),
+                        end = Offset(w * 0.16f + i * w * 0.16f, ry),
                         strokeWidth = 2f,
                         cap = StrokeCap.Round
                     )
                 }
-                // 도하 지점 표시
-                drawLine(Steel, Offset(w * 0.34f, h * 0.58f), Offset(w * 0.52f, h * 0.78f), strokeWidth = 4f, cap = StrokeCap.Round)
-                drawArrow(Offset(w * 0.30f, h * 0.42f), Offset(w * 0.48f, h * 0.70f), Danger)
-                // 요격 병력
-                repeat(4) { i ->
-                    drawCircle(Steel, radius = 5f, center = Offset(w * (0.60f + i * 0.05f), h * 0.66f))
+                // 교량 상판 + 난간 + 차단 차량
+                drawRect(Color(0xFF2E3542), topLeft = Offset(0f, h * 0.50f), size = Size(w, h * 0.10f))
+                repeat(9) { i ->
+                    drawLine(
+                        Color(0xFF47505E),
+                        Offset(w * 0.05f + i * w * 0.11f, h * 0.45f),
+                        Offset(w * 0.05f + i * w * 0.11f, h * 0.50f),
+                        strokeWidth = 1.6f
+                    )
                 }
+                drawRect(Color(0xFF1C2430), topLeft = Offset(w * 0.40f, h * 0.42f), size = Size(w * 0.16f, h * 0.08f))
+                drawCircle(Color(0xFF0F1319), radius = 3.2f, center = Offset(w * 0.43f, h * 0.51f))
+                drawCircle(Color(0xFF0F1319), radius = 3.2f, center = Offset(w * 0.53f, h * 0.51f))
+                // 차단 콘
+                repeat(4) { i ->
+                    val cx = w * (0.62f + i * 0.07f)
+                    drawPath(
+                        Path().apply {
+                            moveTo(cx, h * 0.44f)
+                            lineTo(cx + 5f, h * 0.52f)
+                            lineTo(cx - 5f, h * 0.52f)
+                            close()
+                        },
+                        color = SlgColors.Brass.copy(alpha = 0.85f)
+                    )
+                }
+                drawArrow(Offset(w * 0.20f, h * 0.90f), Offset(w * 0.40f, h * 0.55f), Danger)
             }
 
             OperationKind.FORTRESS -> {
-                // 성벽 + 망루
-                val wallTop = h * 0.52f
-                drawRect(
-                    color = Color(0xFF2E3542),
-                    topLeft = Offset(w * 0.10f, wallTop),
-                    size = Size(w * 0.80f, h * 0.30f)
-                )
-                repeat(14) { i ->
-                    drawRect(
-                        color = Color(0xFF3A4350),
-                        topLeft = Offset(w * 0.10f + i * w * 0.058f, wallTop - 7f),
-                        size = Size(w * 0.030f, 7f)
+                // 콘크리트 방벽 + 벙커
+                drawRect(Color(0xFF2E3542), topLeft = Offset(w * 0.12f, h * 0.54f), size = Size(w * 0.72f, h * 0.26f))
+                drawRect(Color(0xFF3A4350), topLeft = Offset(w * 0.12f, h * 0.50f), size = Size(w * 0.72f, h * 0.05f))
+                drawRect(Color(0xFF151A22), topLeft = Offset(w * 0.30f, h * 0.62f), size = Size(w * 0.12f, h * 0.10f))
+                drawRect(Color(0xFF151A22), topLeft = Offset(w * 0.55f, h * 0.62f), size = Size(w * 0.12f, h * 0.10f))
+                // 레이더 접시 — 원 + 지지대
+                val rx = w * 0.74f
+                val ry = h * 0.40f
+                drawCircle(Brass.copy(alpha = 0.75f), radius = h * 0.09f, center = Offset(rx, ry), style = Stroke(width = 2.4f))
+                drawLine(Brass.copy(alpha = 0.75f), Offset(rx, ry), Offset(rx, h * 0.52f), strokeWidth = 2.2f)
+                drawLine(Brass.copy(alpha = 0.75f), Offset(rx - h * 0.06f, ry + h * 0.06f), Offset(rx + h * 0.06f, ry - h * 0.06f), strokeWidth = 1.4f)
+                // 모래주머니 라인
+                repeat(8) { i ->
+                    drawCircle(
+                        Color(0xFF3C4452),
+                        radius = h * 0.035f,
+                        center = Offset(w * 0.16f + i * w * 0.09f, h * 0.82f)
                     )
                 }
-                listOf(0.12f, 0.46f, 0.78f).forEach { fx ->
-                    drawRect(
-                        color = Color(0xFF414B5A),
-                        topLeft = Offset(w * fx, wallTop - h * 0.16f),
-                        size = Size(w * 0.10f, h * 0.16f)
-                    )
-                    drawPath(
-                        Path().apply {
-                            moveTo(w * fx - 4f, wallTop - h * 0.16f)
-                            lineTo(w * (fx + 0.05f), wallTop - h * 0.24f)
-                            lineTo(w * (fx + 0.10f) + 4f, wallTop - h * 0.16f)
-                            close()
-                        },
-                        color = Brass.copy(alpha = 0.75f)
-                    )
-                }
-                // 성문
-                drawRect(
-                    color = Color(0xFF151A22),
-                    topLeft = Offset(w * 0.435f, wallTop + h * 0.10f),
-                    size = Size(w * 0.13f, h * 0.20f)
-                )
-                drawArrow(Offset(w * 0.62f, h * 0.92f), Offset(w * 0.50f, h * 0.72f), Danger)
+                // 무인기
+                drawRect(Steel, topLeft = Offset(w * 0.16f - 5f, h * 0.22f - 2.5f), size = Size(10f, 5f))
+                drawLine(Steel, Offset(w * 0.16f - 12f, h * 0.22f - 5f), Offset(w * 0.16f + 12f, h * 0.22f - 5f), strokeWidth = 2f)
+                drawArrow(Offset(w * 0.50f, h * 0.96f), Offset(w * 0.50f, h * 0.80f), Danger)
             }
         }
     }

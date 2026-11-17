@@ -48,8 +48,8 @@ fun CouncilScreen(
 private fun CouncilBills(state: SlgGameState, onVoteBill: (String) -> Unit) {
     SlgArtHeader(
         image = R.drawable.slg_council_chamber,
-        title = "매탄동 호족 의회",
-        badges = listOf("🏛 성주 권한" to SlgColors.Steel, "권한 +${state.councilAuthorityBonus}%" to SlgColors.Brass),
+        title = "${state.regionName} 호족 의회",
+        badges = listOf("🏛 대표 권한" to SlgColors.Steel, "권한 +${state.councilAuthorityBonus}%" to SlgColors.Brass),
         height = 136
     )
 
@@ -83,10 +83,10 @@ private fun CouncilBills(state: SlgGameState, onVoteBill: (String) -> Unit) {
                 )
                 SlgPill(
                     when (bill.type) {
-                        BillType.TROOP_LEVY -> "병력 차출"
-                        BillType.SPECIAL_TAX -> "특별세"
-                        BillType.FORTRESS_EXPAND -> "요새 확장"
-                        else -> "선전포고"
+                        BillType.TROOP_LEVY -> "인력 소집"
+                        BillType.SPECIAL_TAX -> "특별 조례"
+                        BillType.FORTRESS_EXPAND -> "시설 증설"
+                        else -> "무력 결의"
                     },
                     SlgColors.Steel
                 )
@@ -113,7 +113,7 @@ private fun CouncilBills(state: SlgGameState, onVoteBill: (String) -> Unit) {
                 Spacer(Modifier.weight(1f))
             }
             if (bill.rebellion) {
-                SlgPill("반란 위험 — 반대 호족 연합", SlgColors.Danger, filled = true)
+                SlgPill("불복 위험 — 반대 호족 연합", SlgColors.Danger, filled = true)
             }
             if (bill.passed == null) {
                 SlgChoiceCard(
@@ -142,24 +142,27 @@ private fun CouncilBills(state: SlgGameState, onVoteBill: (String) -> Unit) {
 
     SlgExpand(
         summary = "의회 규칙",
-        detail = "성주는 전시 병력 차출·특별세를 상정할 수 있으나, 호족 65% 이상이 반대하면 " +
-            "연합 반란이 일어납니다. 승격할 때마다 의회 권한 보너스가 올라 반대표를 낮춥니다.",
+        detail = "대표 호족은 경비 인력 소집·특별 조례를 상정할 수 있으나, 호족 65% 이상이 반대하면 " +
+            "연합 불복이 일어납니다. 승격할 때마다 의회 권한 보너스가 올라 반대표를 낮춥니다.",
         accent = SlgColors.Steel
     )
 }
 
 @Composable
 private fun CouncilLords(state: SlgGameState) {
-    val lords = listOf(
-        Triple("이광수", "성주 · 플레이어", state.troops) to state.prestige,
-        Triple("한서윤", "호족", 320) to 55,
-        Triple("오진혁", "호족", 410) to 48,
-        Triple("배수아", "호족", 260) to 61
-    )
+    val lords = buildList {
+        state.lords.filter { it.isPlayer }.forEach { lord ->
+            add(Triple(lord.name, "대표 · 플레이어", state.troops) to state.prestige)
+        }
+        state.lords.filter { !it.isPlayer }.take(11).forEach { lord ->
+            add(Triple(lord.name, lord.traitLabel, lord.troops) to lord.prestige)
+        }
+    }
     val maxTroops = lords.maxOf { it.first.third }.coerceAtLeast(1)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         lords.forEach { (info, prestige) ->
             val (name, role, troops) = info
+            val isPlayer = role.contains("플레이어")
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -173,14 +176,14 @@ private fun CouncilLords(state: SlgGameState) {
                         .size(30.dp)
                         .clip(CircleShape)
                         .background(
-                            if (role.contains("성주")) SlgColors.Brass.copy(alpha = 0.22f)
+                            if (isPlayer) SlgColors.Brass.copy(alpha = 0.22f)
                             else SlgColors.SurfaceAlt
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         name.substring(0, 1),
-                        color = if (role.contains("성주")) SlgColors.Brass else SlgColors.Muted,
+                        color = if (isPlayer) SlgColors.Brass else SlgColors.Muted,
                         fontSize = SlgType.BODY_SMALL,
                         fontWeight = FontWeight.Bold
                     )
@@ -188,9 +191,9 @@ private fun CouncilLords(state: SlgGameState) {
                 Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(name, color = SlgColors.Text, fontSize = SlgType.LABEL, fontWeight = FontWeight.Bold)
+                        Text("${name} 호족", color = SlgColors.Text, fontSize = SlgType.LABEL, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(5.dp))
-                        SlgPill(role, if (role.contains("성주")) SlgColors.Brass else SlgColors.Muted)
+                        SlgPill(role, if (isPlayer) SlgColors.Brass else SlgColors.Muted)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("⚔", color = SlgColors.Steel, fontSize = SlgType.MICRO)
@@ -207,9 +210,10 @@ private fun CouncilLords(state: SlgGameState) {
             }
         }
         SlgExpand(
-            summary = "호족 5석 구성",
-            detail = "매탄동 본진에는 4명의 호족이 있습니다. 성주(플레이어)를 포함해 5석이며, " +
-                "표결에서 반대 65%를 넘기면 연합 반란으로 이어집니다.",
+            summary = "호족 ${lords.size}석 구성",
+            detail = "${state.regionFullName}에는 호족 정원 ${state.lordCapacity}석이 있습니다. " +
+                "그중 1석을 인계받았고 나머지 ${state.aiLordCount}석은 AI가 운영합니다. " +
+                "표결에서 반대 65%를 넘기면 연합 불복으로 이어집니다.",
             accent = SlgColors.Brass
         )
     }

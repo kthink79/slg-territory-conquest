@@ -37,8 +37,8 @@ import com.game.slg.core.model.PromotionStage
 fun EventMerchantCard(state: SlgGameState, onChooseEventA: (Boolean) -> Unit) {
     SlgArtHeader(
         image = R.drawable.slg_event_merchant,
-        title = "원천동 야간 협약",
-        badges = listOf("🌙 야간" to SlgColors.Violet, "상인연합" to SlgColors.Stone)
+        title = "인접 물류 야간 협약",
+        badges = listOf("🌙 야간" to SlgColors.Violet, "물류 상인회" to SlgColors.Stone)
     )
     Column(
         modifier = Modifier
@@ -49,14 +49,14 @@ fun EventMerchantCard(state: SlgGameState, onChooseEventA: (Boolean) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         Text(
-            "관세를 면제하면 야간 보급로로 곡물을 대겠다는 제안.",
+            "통행료를 면제하면 야간 물류로로 식량·연료를 대겠다는 제안.",
             color = SlgColors.Text.copy(alpha = 0.9f),
             fontSize = SlgType.BODY_SMALL,
             maxLines = 2
         )
         if (state.eventAChoice == null) {
             SlgChoiceCard(
-                title = "관세 면제 · 보급 협정",
+                title = "통행료 면제 · 보급 협정",
                 icon = "🤝",
                 effects = listOf(
                     Effect("💰", "-600", SlgColors.Brass),
@@ -68,7 +68,7 @@ fun EventMerchantCard(state: SlgGameState, onChooseEventA: (Boolean) -> Unit) {
                 onClick = { onChooseEventA(true) }
             )
             SlgChoiceCard(
-                title = "통행세 징수",
+                title = "통행료 징수",
                 icon = "💰",
                 effects = listOf(
                     Effect("💰", "+900", SlgColors.Brass),
@@ -83,8 +83,8 @@ fun EventMerchantCard(state: SlgGameState, onChooseEventA: (Boolean) -> Unit) {
         }
         SlgExpand(
             summary = "사절의 말 — 원문",
-            detail = "「관세를 면제해 주면 야간 보급로로 곡물과 연료를 대겠습니다. " +
-                "대신 우리 화물에는 통행세를 매기지 마십시오.」",
+            detail = "「통행료를 면제해 주면 야간 물류로로 식량과 연료를 대겠습니다. " +
+                "대신 우리 화물에는 통행료를 매기지 마십시오.」",
             accent = SlgColors.Violet
         )
     }
@@ -95,8 +95,8 @@ fun EventMerchantCard(state: SlgGameState, onChooseEventA: (Boolean) -> Unit) {
 fun EventScoutCard(state: SlgGameState, onChooseEventB: (Boolean) -> Unit) {
     SlgArtHeader(
         image = R.drawable.slg_event_scout,
-        title = "광교산 정찰대 30",
-        badges = listOf("🏔 산악" to SlgColors.Stone, "경보" to SlgColors.Danger)
+        title = "무인기 정찰조",
+        badges = listOf("🛰 무인기" to SlgColors.Stone, "경보" to SlgColors.Danger)
     )
     Column(
         modifier = Modifier
@@ -107,31 +107,31 @@ fun EventScoutCard(state: SlgGameState, onChooseEventB: (Boolean) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         Text(
-            "군장 없이 곡괭이와 측량 장비를 든 30여 명. 광교 깃발은 없다.",
+            "식별 표식 없는 소형 무인기 3기. 외곽 도로를 따라 낮게 비행한다.",
             color = SlgColors.Text.copy(alpha = 0.9f),
             fontSize = SlgType.BODY_SMALL,
             maxLines = 2
         )
         if (state.eventBChoice == null) {
             SlgChoiceCard(
-                title = "산악 매복 요격",
-                icon = "🏔",
+                title = "대드론 재밍·요격",
+                icon = "🛰",
                 effects = listOf(
-                    Effect("⚔", "-80", SlgColors.Danger),
+                    Effect("⚔", "-8", SlgColors.Danger),
                     Effect("💰", "+250", SlgColors.Brass),
                     Effect("⭐", "+6", SlgColors.Brass)
                 ),
                 accent = SlgColors.Danger,
-                footnote = "광교 보복 위험",
+                footnote = "상대 보복 위험",
                 onClick = { onChooseEventB(true) }
             )
             SlgChoiceCard(
-                title = "첩자 파견 · 배후 파악",
+                title = "첩보 파견 · 배후 파악",
                 icon = "🕵",
                 effects = listOf(
                     Effect("💰", "-200", SlgColors.Brass),
                     Effect("❤", "+3"),
-                    Effect("🎯", "군량고", SlgColors.Steel)
+                    Effect("🎯", "보급 거점", SlgColors.Steel)
                 ),
                 accent = SlgColors.Steel,
                 onClick = { onChooseEventB(false) }
@@ -140,9 +140,9 @@ fun EventScoutCard(state: SlgGameState, onChooseEventB: (Boolean) -> Unit) {
             ResultBox(state.eventBResult, SlgColors.Steel)
         }
         SlgExpand(
-            summary = "감시탑 보고 — 원문",
-            detail = "「미확인 인원 30여 명, 군장 없이 곡괭이와 측량 장비를 들고 협곡을 오르고 있습니다. " +
-                "광교 호족연합의 깃발은 없습니다.」",
+            summary = "관제 보고 — 원문",
+            detail = "「미확인 소형 무인기 3기, 외곽 도로를 따라 저고도로 접근 중입니다. " +
+                "식별 표식은 없습니다.」",
             accent = SlgColors.Steel
         )
     }
@@ -153,7 +153,7 @@ fun EventScoutCard(state: SlgGameState, onChooseEventB: (Boolean) -> Unit) {
 fun RefugeeCrisisCard(state: SlgGameState, onChooseRefugee: (String) -> Unit) {
     SlgArtHeader(
         image = R.drawable.slg_event_refugee,
-        title = "유민 800 · 성문 앞",
+        title = "이재민 800 · 통제선",
         badges = listOf("🚪 긴급" to SlgColors.Danger, "D+14" to SlgColors.Stone)
     )
     Column(
@@ -171,7 +171,7 @@ fun RefugeeCrisisCard(state: SlgGameState, onChooseRefugee: (String) -> Unit) {
         }
         if (state.refugeeChoice == null) {
             SlgChoiceCard(
-                title = "성문 개방 · 식량 배급",
+                title = "통제선 개방 · 식량 배급",
                 icon = "🚪",
                 effects = listOf(
                     Effect("🌾", "-500", SlgColors.Danger),
@@ -185,7 +185,7 @@ fun RefugeeCrisisCard(state: SlgGameState, onChooseRefugee: (String) -> Unit) {
                 onClick = { onChooseRefugee("REFUGEE_A_OPEN") }
             )
             SlgChoiceCard(
-                title = "성문 통제 · 선별 수용",
+                title = "통제선 유지 · 선별 수용",
                 icon = "🛡",
                 effects = listOf(
                     Effect("💰", "+200", SlgColors.Brass),
@@ -200,7 +200,7 @@ fun RefugeeCrisisCard(state: SlgGameState, onChooseRefugee: (String) -> Unit) {
                 SlgPill("선택 완료", SlgColors.Success, filled = true)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    if (state.isRefugeeAccepted) "성문 개방 · 유민 수용" else "성문 통제 · 선별 수용",
+                    if (state.isRefugeeAccepted) "통제선 개방 · 이재민 수용" else "통제선 유지 · 선별 수용",
                     color = SlgColors.Text,
                     fontSize = SlgType.LABEL,
                     fontWeight = FontWeight.SemiBold
@@ -209,16 +209,16 @@ fun RefugeeCrisisCard(state: SlgGameState, onChooseRefugee: (String) -> Unit) {
             ResultBox(state.refugeeResult, if (state.isRefugeeAccepted) SlgColors.Success else SlgColors.Danger)
         }
         SlgExpand(
-            summary = "성문 앞 — 원문",
-            detail = "연방 통신·물류망이 끊긴 세 번째 밤, 매탄동 성문 앞에 유민 800명이 몰려들었다. " +
-                "아이를 안은 여성이 성문을 두드린다. 「호족님, 하룻밤만이라도… 물 한 모금이면 됩니다.」",
+            summary = "통제선 앞 — 원문",
+            detail = "연방 통신·물류망이 끊긴 세 번째 밤, 관할 구역 통제선 앞에 이재민 800명이 몰려들었다. " +
+                "아이를 안은 여성이 임시 펜스를 두드린다. 「호족님, 하룻밤만이라도… 물 한 모금이면 됩니다.」",
             accent = SlgColors.Danger
         )
     }
 }
 
 /**
- * 👑 성주 승격 마일스톤 — 로드맵 트랙 + 조건 게이지 2개 + 승격 버튼
+ * 👑 연합 대표 승격 마일스톤 — 로드맵 트랙 + 조건 게이지 2개 + 승격 버튼
  */
 @Composable
 fun PromotionRoadmapCard(
@@ -281,7 +281,7 @@ fun PromotionRoadmapCard(
                     .padding(10.dp)
             ) {
                 Text(
-                    "👑 수원시 통합군주 — 로드맵 완주 · 의회 권한 +${state.councilAuthorityBonus}%",
+                    "👑 광역 통합군주 — 로드맵 완주 · 의회 권한 +${state.councilAuthorityBonus}%",
                     color = Color(0xFF1A1305),
                     fontSize = SlgType.LABEL,
                     fontWeight = FontWeight.ExtraBold

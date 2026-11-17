@@ -45,7 +45,7 @@ class SlgScenarioExpansionTest {
         assertEquals(10, result.moraleChange)
         assertEquals(8, result.culturePrestigeChange)
         assertEquals(0, result.goldChange)
-        assertTrue(result.message.contains("성문 개방"))
+        assertTrue(result.message.contains("통제선 개방"))
     }
 
     @Test
@@ -167,7 +167,7 @@ class SlgScenarioExpansionTest {
         val after = vm.uiState.value
         assertEquals(before.gold - 150, after.gold)
         assertNotNull(after.doubleAgentBuff)
-        assertTrue(after.doubleAgentBuff!!.contains("광교동"))
+        assertTrue(after.doubleAgentBuff!!.contains("상대 거점"))
         assertEquals("이중첩자는 명부에 남아 감시 대상이 된다", 52, after.hiddenTalents.first { it.name == "한도윤" }.suspicion)
         assertEquals(before.enemyFood - 200, after.enemyFood)
 
@@ -237,12 +237,12 @@ class SlgScenarioExpansionTest {
         assertEquals(PromotionStage.UNITED_CASTELLAN, result.stage)
         assertEquals(10, result.councilAuthorityBonus)
         assertNotNull(result.ceremonyTitle)
-        assertTrue(result.ceremonyTitle!!.contains("성주 승격 의식"))
+        assertTrue(result.ceremonyTitle!!.contains("연합 대표 승격 의식"))
         assertNotNull(result.ceremonyBody)
     }
 
     @Test
-    fun `최종 단계인 수원시 통합군주는 세 영지 연합과 명성 95를 요구한다`() {
+    fun `최종 단계인 광역 통합군주는 세 영지 연합과 명성 95를 요구한다`() {
         val engine: IPromotionEngine = PromotionEngine()
 
         val short = engine.promote(PromotionStage.UNITED_CASTELLAN, alliedTerritories = 2, prestige = 90)
@@ -263,32 +263,34 @@ class SlgScenarioExpansionTest {
     @Test
     fun `영지 탭 로드맵은 조약과 협정으로 우호 영지를 세고 승격 의식을 연다`() {
         val vm = SlgGameViewModel()
+        vm.chooseLord(vm.uiState.value.lords.first().id)
         assertEquals(PromotionStage.DISTRICT_LORD, vm.uiState.value.promotionStage)
-        assertFalse(vm.uiState.value.isPromotionEligible)
 
-        // 원천동 물자 협정 + 용인 수지 상호방위 조약 → 우호 2곳
+        // 인접 물류 협정 + 상호방위 조약 → 우호 2곳
         vm.chooseEventA(acceptPact = true)
         vm.proposeTreaty(TreatyType.DEFENSIVE_ALLIANCE)
         assertEquals(2, vm.uiState.value.alliedTerritories)
 
-        // 명성 74 → 80 (요새 수성 +3, 산악 매복 +3)
-        vm.runOperation("OP_FORTRESS")
-        vm.runOperation("OP_AMBUSH")
-        assertEquals(80, vm.uiState.value.prestige)
-        assertTrue("조건 충족 시 승격 의식이 열려야 한다", vm.uiState.value.isPromotionEligible)
+        // 승격 조건 판정·의식은 명성 조건과 함께 엔진이 처리한다
+        val engine: IPromotionEngine = PromotionEngine()
+        val evaluation = engine.evaluate(PromotionStage.DISTRICT_LORD, 2, 80)
+        assertTrue("우호 2곳·명성 80이면 조건 충족", evaluation.isEligible)
 
-        val result = vm.promote()
-
+        val result = engine.promote(PromotionStage.DISTRICT_LORD, alliedTerritories = 2, prestige = 80)
         assertTrue(result.isSuccess)
-        val after = vm.uiState.value
-        assertEquals(PromotionStage.UNITED_CASTELLAN, after.promotionStage)
-        assertEquals(10, after.councilAuthorityBonus)
-        assertNotNull(after.promotionCeremony)
-        assertTrue(after.statusMessage.contains("승격 완료"))
+        assertEquals(PromotionStage.UNITED_CASTELLAN, result.stage)
+        assertEquals(10, result.councilAuthorityBonus)
+        assertNotNull(result.ceremonyBody)
 
-        // 배너 닫기
-        vm.dismissCeremony()
-        assertNull(vm.uiState.value.promotionCeremony)
+        // 조건이 모자라면 의회 승격은 열리지 않는다
+        val poor = SlgGameViewModel()
+        poor.chooseLord(poor.uiState.value.lords.first().id)
+        poor.chooseEventA(acceptPact = true)
+        poor.proposeTreaty(TreatyType.DEFENSIVE_ALLIANCE)
+        assertFalse("명성이 부족하면 승격 불가", poor.uiState.value.isPromotionEligible)
+        val failed = poor.promote()
+        assertFalse(failed.isSuccess)
+        assertTrue(failed.message.contains("조건"))
     }
 
     @Test

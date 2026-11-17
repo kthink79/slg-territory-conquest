@@ -27,7 +27,7 @@ import com.game.slg.R
 
 /**
  * 서브 메뉴 「전장·전략」 — 탭 3개: 작전 / 전과 / 원칙.
- * 작전마다 지형도(Canvas)를 붙여 어떤 싸움인지 그림으로 먼저 읽게 했다.
+ * 현대 병과(기동보병·기갑·화력·드론·방공·특수전) 작전만 남겼다.
  */
 @Composable
 fun WarScreen(
@@ -46,65 +46,78 @@ fun WarScreen(
 
 @Composable
 private fun WarOperations(state: SlgGameState, onRunOperation: (String) -> Unit) {
+    val enemyNode = state.mapNodes.firstOrNull { it.hopDistance == 1 && it.unlocked }
+    val enemyName = enemyNode?.name ?: "인접 구역"
+    val canAdjacent = state.command.unlockedHop >= 1
+
     SlgArtHeader(
         image = R.drawable.slg_war_field,
-        title = "광교산 방면",
-        badges = listOf("⚔ 아군 ${state.troops}" to SlgColors.Steel, "🎯 적 군량 ${state.enemyFood}" to SlgColors.Brass),
+        title = "$enemyName 방면",
+        badges = listOf(
+            "⚔ 아군 ${state.troops}" to SlgColors.Steel,
+            "🎯 적 보급 ${state.enemyFood}" to SlgColors.Brass
+        ),
         height = 132
     )
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("⚔ ${state.troops}", color = SlgColors.Steel, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
         Spacer(Modifier.width(6.dp))
         Box(modifier = Modifier.weight(1f)) {
-            SlgForceBar(own = state.troops, enemy = 3000)
+            SlgForceBar(own = state.troops, enemy = (state.troops * 1.55).toInt())
         }
         Spacer(Modifier.width(6.dp))
-        Text("적 3,000", color = SlgColors.Danger, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
+        Text("적 ${(state.troops * 1.55).toInt()}", color = SlgColors.Danger, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
     }
 
     OperationCard(
         kind = OperationKind.MOUNTAIN,
-        icon = "🏔",
-        title = "산악 매복",
-        subtitle = "광교산 협곡",
+        icon = "🛰",
+        title = "무인기 정찰·타격",
+        subtitle = enemyName,
         effects = listOf(
-            Effect("🛡", "방어 +250%", SlgColors.Steel),
-            Effect("⚔", "적 700", SlgColors.Danger),
-            Effect("💥", "사기 -", SlgColors.Muted)
+            Effect("🛰", "드론 +", SlgColors.Steel),
+            Effect("⚔", "적 0.95×", SlgColors.Danger),
+            Effect("🎯", "표적 획득", SlgColors.Brass)
         ),
-        accent = SlgColors.Stone,
-        onClick = { onRunOperation("OP_AMBUSH") }
+        accent = SlgColors.Steel,
+        enabled = canAdjacent,
+        footnote = if (canAdjacent) null else "Lv.2 인접 구역 해금 필요",
+        onClick = { onRunOperation("OP_DRONE") }
     )
     OperationCard(
         kind = OperationKind.RIVER,
-        icon = "🌊",
-        title = "하천 도하 요격",
-        subtitle = "매탄천",
+        icon = "🌉",
+        title = "교량·도하 봉쇄",
+        subtitle = "하천·교량",
         effects = listOf(
             Effect("🎯", "요격", SlgColors.Steel),
-            Effect("🏃", "기동 -", SlgColors.Muted),
-            Effect("⚔", "적 650", SlgColors.Danger)
+            Effect("🚚", "보급 차단", SlgColors.Brass),
+            Effect("⚔", "적 1.05×", SlgColors.Danger)
         ),
-        accent = SlgColors.Steel,
-        onClick = { onRunOperation("OP_RIVER") }
+        accent = SlgColors.Water,
+        enabled = canAdjacent,
+        footnote = if (canAdjacent) null else "Lv.2 인접 구역 해금 필요",
+        onClick = { onRunOperation("OP_BRIDGE") }
     )
     OperationCard(
         kind = OperationKind.FORTRESS,
-        icon = "🏯",
-        title = "요새 수성",
-        subtitle = "매탄동 산성",
+        icon = "🛡",
+        title = "통합 방호기지 방어",
+        subtitle = state.regionName,
         effects = listOf(
-            Effect("🛡", "사상자 -80%", SlgColors.Success),
+            Effect("🛡", "사상자 -${80 + state.facilities.size * 2}%", SlgColors.Success),
             Effect("🎯", "무혈 항복", SlgColors.Brass),
-            Effect("⚔", "적 3,000", SlgColors.Danger)
+            Effect("⚔", "적 1.55×", SlgColors.Danger)
         ),
         accent = SlgColors.Brass,
-        onClick = { onRunOperation("OP_FORTRESS") }
+        enabled = true,
+        onClick = { onRunOperation("OP_BASE") }
     )
     SlgExpand(
         summary = "작전 규칙",
-        detail = "병력 손실이 곧 세력 상실입니다. 정면 대회전보다 지형·매복·보급선을 이용한 저손실 현대전을 지향합니다. " +
-            "요새 수성은 방어 시설의 절대 우위를 검증하는 작전이며, 첩자로 적 군량고를 확보했다면 보급선 차단 판정이 함께 적용됩니다.",
+        detail = "병력 손실이 곧 세력 상실입니다. 정면 대회전보다 지형·무인기·보급선을 이용한 저손실 현대전을 지향합니다. " +
+            "Lv.1에서는 관할 구역 방어전만 가능하고, Lv.2부터 인접 읍·면·동에 작전을 걸 수 있습니다. " +
+            "첩보로 적 보급 거점을 확보했다면 방어전에서 보급선 차단(무혈 항복) 판정이 적용됩니다.",
         accent = SlgColors.Steel
     )
 }
@@ -117,6 +130,8 @@ private fun OperationCard(
     subtitle: String,
     effects: List<Effect>,
     accent: Color,
+    enabled: Boolean = true,
+    footnote: String? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -124,8 +139,8 @@ private fun OperationCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(13.dp))
             .background(SlgColors.Surface)
-            .border(1.dp, accent.copy(alpha = 0.4f), RoundedCornerShape(13.dp))
-            .clickable { onClick() }
+            .border(1.dp, accent.copy(alpha = if (enabled) 0.4f else 0.15f), RoundedCornerShape(13.dp))
+            .clickable(enabled = enabled) { onClick() }
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -141,14 +156,27 @@ private fun OperationCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(icon, fontSize = SlgType.BODY_SMALL)
                 Spacer(Modifier.width(4.dp))
-                Text(title, color = SlgColors.Text, fontSize = SlgType.BODY_SMALL, fontWeight = FontWeight.Bold)
+                Text(
+                    title,
+                    color = if (enabled) SlgColors.Text else SlgColors.Muted,
+                    fontSize = SlgType.BODY_SMALL,
+                    fontWeight = FontWeight.Bold
+                )
                 Spacer(Modifier.width(4.dp))
                 Text(subtitle, color = SlgColors.Muted, fontSize = SlgType.MICRO, maxLines = 1)
             }
             SlgEffectRow(effects)
+            if (footnote != null) {
+                Text(footnote, color = SlgColors.Brass, fontSize = SlgType.MICRO, maxLines = 1)
+            }
         }
         Spacer(Modifier.width(4.dp))
-        Text("›", color = accent, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+        Text(
+            if (enabled) "›" else "🔒",
+            color = if (enabled) accent else SlgColors.Muted,
+            fontSize = SlgType.BODY,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -202,20 +230,23 @@ private fun WarReport(state: SlgGameState) {
                 SlgGaugeRow(
                     icon = "💀",
                     value = "${report.attackerLosses}",
-                    ratio = report.attackerLosses / 3000f,
+                    ratio = report.attackerLosses / 400f,
                     color = SlgColors.Success
                 )
                 SlgGaugeRow(
                     icon = "🩸",
                     value = "${report.defenderLosses}",
-                    ratio = report.defenderLosses / 1200f,
+                    ratio = report.defenderLosses / 400f,
                     color = SlgColors.Danger
                 )
                 SlgPill(
-                    if (lossRate <= 0.10f) "10% 이하 — 성주 조건 유지" else "10% 초과 — 조건 미달",
+                    if (lossRate <= 0.10f) "10% 이하 — 저손실 유지" else "10% 초과 — 재편성 필요",
                     if (lossRate <= 0.10f) SlgColors.Success else SlgColors.Danger
                 )
             }
+        }
+        if (report.composition.isNotBlank()) {
+            Text("🪖 ${report.composition}", color = SlgColors.Muted, fontSize = SlgType.MICRO, lineHeight = 15.sp)
         }
         SlgExpand(
             summary = "작전 보고 — 원문",
@@ -229,11 +260,12 @@ private fun WarReport(state: SlgGameState) {
 @Composable
 private fun WarDoctrine() {
     val rules = listOf(
-        "🛡" to "방어 시설 먼저",
-        "🏔" to "매복·도하로 지형 이점",
-        "🕵" to "첩자로 군량고·성문",
+        "🛡" to "방호 시설 먼저",
+        "🛰" to "무인기로 먼저 본다",
+        "🌉" to "교량·보급로 차단",
+        "🕵" to "정보국으로 보급 거점",
         "🤝" to "다자 외교로 결전 회피",
-        "🏛" to "과반 호족 연합 → 성주"
+        "🏛" to "과반 호족 연합 → 대표"
     )
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         rules.forEachIndexed { index, (icon, label) ->
@@ -264,11 +296,11 @@ private fun WarDoctrine() {
         }
         SlgExpand(
             summary = "저손실 전쟁 원칙 전문",
-            detail = "① 요새·산성 등 방어 시설을 먼저 확보한다\n" +
-                "② 매복·도하 요격으로 지형 이점을 취한다\n" +
-                "③ 첩자로 군량고·성문·호족 이간을 준비한다\n" +
-                "④ 외교로 다자 구도를 만들어 단독 결전을 피한다\n" +
-                "⑤ 과반 호족의 편입·연합으로 성주 지위를 확보한다",
+            detail = "① 방공 레이더망·스마트 방호망 등 방호 시설을 먼저 확보한다\n" +
+                "② 드론 정찰로 표적을 먼저 확보하고 기갑·화력으로 마무리한다\n" +
+                "③ 교량·물류 허브를 끊어 적 보급을 차단한다\n" +
+                "④ 정보국·첩보로 적 보급 거점과 호족 이간을 준비한다\n" +
+                "⑤ 과반 호족의 편입·연합으로 연합 대표 지위를 확보한다",
             accent = SlgColors.Steel
         )
     }

@@ -1,5 +1,7 @@
 package com.game.slg.ui
 
+import com.game.slg.core.model.FacilityType
+
 /**
  * 메인 화면 하단 「서브 메뉴」와 상세 화면의 탭 구조.
  *
@@ -64,7 +66,7 @@ enum class SubMenu(
     PROMOTION(
         id = "submenu_promotion",
         label = "로드맵",
-        title = "성주 로드맵",
+        title = "승격 로드맵",
         emoji = "👑",
         accentHex = 0xFF81C784
     ),
@@ -94,7 +96,8 @@ interface ScreenTab {
 enum class TerritoryTab(override val label: String) : ScreenTab {
     HOME("영지"),
     STATS("지표"),
-    SEASON("절기")
+    SEASON("절기"),
+    FACILITIES("시설")
 }
 
 /** 테크트리 탭 — 계통 4개가 곧 탭이다 */
@@ -209,8 +212,8 @@ object StatusAlertBuilder {
             alerts += StatusAlert(
                 id = "alert_refugee",
                 icon = "🚪",
-                short = "유민 800",
-                title = "유민 800명 성문 앞",
+                short = "이재민 800",
+                title = "이재민 800명 통제선",
                 severity = AlertSeverity.CRITICAL,
                 target = SubMenu.EVENTS
             )
@@ -218,9 +221,9 @@ object StatusAlertBuilder {
         if (state.eventBChoice == null) {
             alerts += StatusAlert(
                 id = "alert_scout",
-                icon = "🏔",
-                short = "정찰대 30",
-                title = "광교산 정찰대 출현",
+                icon = "🛰",
+                short = "무인기 3",
+                title = "무인기 정찰조 출현",
                 severity = AlertSeverity.WARNING,
                 target = SubMenu.WAR
             )
@@ -229,8 +232,8 @@ object StatusAlertBuilder {
             alerts += StatusAlert(
                 id = "alert_merchant",
                 icon = "🌙",
-                short = "야간 협약",
-                title = "상인연합 야간 협약",
+                short = "야간 물류",
+                title = "물류 상인회 협약",
                 severity = AlertSeverity.WARNING,
                 target = SubMenu.EVENTS
             )
@@ -271,8 +274,8 @@ object StatusAlertBuilder {
             alerts += StatusAlert(
                 id = "alert_food",
                 icon = "🌾",
-                short = "군량 부족",
-                title = "군량 ${state.food}석",
+                short = "보급 부족",
+                title = "보급 ${state.food}석",
                 severity = AlertSeverity.CRITICAL,
                 target = SubMenu.TERRITORY
             )
@@ -281,10 +284,20 @@ object StatusAlertBuilder {
             alerts += StatusAlert(
                 id = "alert_enemy_food",
                 icon = "🎯",
-                short = "적 군량",
-                title = "적 군량 ${state.enemyFood}석",
+                short = "적 보급",
+                title = "적 보급 ${state.enemyFood}석",
                 severity = AlertSeverity.INFO,
                 target = SubMenu.WAR
+            )
+        }
+        if (state.facilities.size < FacilityType.entries.size && state.gold >= 700) {
+            alerts += StatusAlert(
+                id = "alert_facility",
+                icon = "🏗",
+                short = "시설 가능",
+                title = "시설 건설 가능",
+                severity = AlertSeverity.INFO,
+                target = SubMenu.TERRITORY
             )
         }
         return alerts
@@ -308,21 +321,25 @@ object MainInfoPanel {
 
     const val BUTTON_LABEL = "📊 정보"
 
-    /** 홈 상단 1줄 — 자금·군량·병력·민심 */
+    /** 홈 상단 1줄 — 자금·보급·병력·민심 */
     fun topSummary(state: SlgGameState): List<InfoEntry> = listOf(
         InfoEntry("💰", "자금", "${state.gold}", 0xFFE2B755),
-        InfoEntry("🌾", "군량", "${state.food}", 0xFF81C784),
+        InfoEntry("🌾", "보급", "${state.food}", 0xFF81C784),
         InfoEntry("⚔", "병력", "${state.troops}", 0xFF7FA4D6),
         InfoEntry("❤", "민심", "${state.morale}", 0xFFEDEAE3)
     )
 
-    /** 📊 정보 패널 — 절기·승격·영지·세력 지표 */
+    /** 📊 정보 패널 — 지역·호족 정원·지휘 단계·세력 지표 */
     fun detailRows(state: SlgGameState): List<InfoEntry> {
         val next = state.nextPromotionStage
         return buildList {
+            add(InfoEntry("🗺", "지역", state.regionName, 0xFF7FA4D6))
+            add(InfoEntry("👥", "인구", "%,d".format(state.regionPopulation), 0xFFEDEAE3))
+            add(InfoEntry("🏯", "호족", "${state.registeredLords}/${state.lordCapacity}석", 0xFFE2B755))
+            add(InfoEntry("🎖", "지휘", "Lv.${state.command.level}", 0xFFE2B755))
+            add(InfoEntry("🌫", "해금", state.expansionTier.label, 0xFF7FA4D6))
             add(InfoEntry("🗓", "절기", state.seasonName.substringBefore(" ("), 0xFF90A4AE))
-            add(InfoEntry("👑", "단계", state.promotionStage.displayName, 0xFFE2B755))
-            add(InfoEntry("🏯", "선택", state.selectedTerritory?.name ?: "미선택", 0xFF7FA4D6))
+            add(InfoEntry("🏗", "시설", "${state.facilities.size}곳", 0xFF90A4AE))
             add(InfoEntry("🤝", "우호", "${state.alliedTerritories}곳", 0xFF7FA4D6))
             add(InfoEntry("⭐", "명성", "${state.prestige}", 0xFFE2B755))
             add(InfoEntry("🎭", "첩보", "${state.espionagePower}", 0xFFB39DDB))
@@ -332,7 +349,7 @@ object MainInfoPanel {
                     InfoEntry(
                         "➡",
                         "다음",
-                        "${next.displayName} · 영지 ${state.alliedTerritories}/${next.requiredAlliedTerritories} · 명성 ${state.prestige}/${next.requiredPrestige}",
+                        "${next.displayName} · 거점 ${state.alliedTerritories}/${next.requiredAlliedTerritories} · 명성 ${state.prestige}/${next.requiredPrestige}",
                         0xFF81C784
                     )
                 )

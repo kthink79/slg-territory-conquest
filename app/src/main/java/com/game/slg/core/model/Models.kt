@@ -2,32 +2,34 @@ package com.game.slg.core.model
 
 /**
  * 현실 지명 기반 영지 (최하 단위: 읍·면·동)
+ *
+ * 2020년대 대한민국 자치구 — 호족이 운영하는 하나의 생활권 거점이다.
  */
 data class Territory(
-    val code: String,              // 행정동 법정동 코드 (예: "4413125000" 아산시 배방읍)
-    val name: String,              // "배방읍", "온양1동", "역삼동" 등
+    val code: String,              // 행정동 법정동 코드 (예: "4420033000" 아산시 탕정면)
+    val name: String,              // "탕정면", "온양1동", "역삼1동" 등
     val province: String,          // "충청남도", "서울특별시"
     val cityCountyDistrict: String,// "아산시", "강남구"
-    val population: Int,           // 실제 현실 반영 인구수
-    val maxLords: Int,             // 인구 만 명당 1명 등 호족 슬롯
+    val population: Int,           // 실제 주민등록인구
+    val maxLords: Int,             // 호족 정원 — 인구 1,000명당 1명
     val terrain: TerrainType,      // 지형 특성
     var currentLordIds: List<String> = emptyList(),
-    var castellanId: String? = null, // 성주 ID (지역 중심 거점)
+    var castellanId: String? = null, // 대표 호족 ID (지역 중심 거점)
     var fortress: Fortress? = null,
-    val fertileScore: Double = 1.0,  // 농업 비옥도 지수 (추수 군량 생산 계수)
+    val fertileScore: Double = 1.0,  // 물류·생산 지수 (절기 보급 생산 계수)
     val adjacentCodes: List<String> = emptyList() // 인접 영지 GIS 연결 그래프
 )
 
 enum class TerrainType(val defenseBonus: Double, val mobilityPenalty: Double) {
     PLAIN(1.0, 1.0),      // 평야: 기본
-    MOUNTAIN(2.5, 0.4),   // 산악: 수성 방어 극대화, 기동 페널티
+    MOUNTAIN(2.5, 0.4),   // 산악: 방어 극대화, 기동 페널티
     RIVER(1.8, 0.6),      // 하천/수계: 도하 시 취약, 방어 유리
     COASTAL(1.3, 0.9)     // 해안: 무역 보너스, 상륙전 대응
 }
 
 /**
- * 방어 요새 시설
- * 영지 방어 시설 구축 시 수성에서 절대적 우위(사상자 80% 격감 등)를 제공
+ * 방호 시설 — 펜스·콘크리트 방벽·지하 벙커·통합 방호망.
+ * 방어 시설을 먼저 확보하면 방어 시 사상자를 최대 85%까지 줄인다.
  */
 data class Fortress(
     val level: FortressLevel,
@@ -42,12 +44,7 @@ data class Fortress(
     }
 
     val casualtyReductionRatio: Double
-        get() = when (level) {
-            FortressLevel.WOODEN_PALISADE -> 0.40 // 40% 피해 감소
-            FortressLevel.STONE_WALL -> 0.65       // 65% 피해 감소
-            FortressLevel.MOUNTAIN_FORTRESS -> 0.80 // 80% 극감 (수성 절대 우위)
-            FortressLevel.IMPREGNABLE_GATE -> 0.85  // 85% 극감
-        }
+        get() = level.casualtyReduction
 
     fun takeDamage(damage: Int) {
         durability = (durability - damage).coerceIn(0, maxDurability)
@@ -58,11 +55,11 @@ data class Fortress(
     }
 }
 
-enum class FortressLevel(val displayName: String) {
-    WOODEN_PALISADE("호족 장원 목책"),
-    STONE_WALL("석조 읍성"),
-    MOUNTAIN_FORTRESS("산성 요새"),
-    IMPREGNABLE_GATE("천혜의 관문")
+enum class FortressLevel(val displayName: String, val casualtyReduction: Double) {
+    CIVIL_FENCE("민방위 방호 펜스", 0.40),
+    CONCRETE_BARRIER("콘크리트 방벽 초소", 0.65),
+    UNDERGROUND_BUNKER("지하 지휘 벙커", 0.80),
+    INTEGRATED_NET("통합 방호망", 0.85)
 }
 
 /**
@@ -78,7 +75,7 @@ data class Lord(
     var gold: Int,
     var prestige: Int,
     var isCastellan: Boolean = false,
-    var allegianceLordId: String? = null // 종속된 상위 호족/성주 ID
+    var allegianceLordId: String? = null // 종속된 상위 호족/대표 호족 ID
 ) {
     init {
         require(troops >= 0) { "Lord troops cannot be negative" }
@@ -127,20 +124,20 @@ data class CouncilBill(
 )
 
 enum class BillType {
-    TROOP_LEVY,       // 전시 병력 차출
-    SPECIAL_TAX,      // 전시 군량 징발
-    FORTRESS_EXPAND,  // 지역 관문 요새화
-    DECLARE_WAR       // 인접 성주에 대한 선전포고
+    TROOP_LEVY,       // 예비군·경비 인력 소집
+    SPECIAL_TAX,      // 긴급 재정 조례
+    FORTRESS_EXPAND,  // 방호 시설 증설
+    DECLARE_WAR       // 인접 세력에 대한 무력 대응 결의
 }
 
 /**
  * 4계절 순환 사이클 (Four Seasons Cycle)
  */
 enum class Season(val displayName: String) {
-    SPRING("봄 (춘경 및 조세 징수)"),
-    SUMMER("여름 (치수 사업 및 풍수해)"),
-    AUTUMN("가을 (대추수 및 군량 비축)"),
-    WINTER("겨울 (혹한기 유지비 및 한파 감모)");
+    SPRING("봄 (예산 편성·지방세 징수)"),
+    SUMMER("여름 (재난 대응·치수 사업)"),
+    AUTUMN("가을 (결산·보급 비축)"),
+    WINTER("겨울 (동절기 유지비·한파 대비)");
 
     fun next(): Season = when (this) {
         SPRING -> SUMMER
@@ -151,13 +148,13 @@ enum class Season(val displayName: String) {
 }
 
 /**
- * 여름철 풍수해/치수 이벤트
+ * 여름철 집중호우·재난 대응 결과
  */
 enum class SummerDisasterType {
     NONE,
-    FLOOD_PREVENTED,  // 제방/치수 보수 성공으로 홍수 예방
-    FLOOD_DISASTER,   // 치수 미흡으로 인한 수해 피해
-    BUMPER_WEATHER    // 가뭄 없는 최적의 기후 (대풍 조짐)
+    FLOOD_PREVENTED,  // 배수·제방 정비 성공으로 침수 예방
+    FLOOD_DISASTER,   // 대응 미흡으로 인한 침수 피해
+    BUMPER_WEATHER    // 가뭄 없는 최적의 기후 (풍작 조짐)
 }
 
 /**

@@ -110,7 +110,7 @@ class MainUiNavigationTest {
     @Test
     fun `사건 탭은 세 사건과 대응한다`() {
         assertEquals(listOf("유민", "상인", "정찰대"), EventTab.entries.map { it.label })
-        assertEquals(3, TerritoryTab.entries.size)
+        assertEquals(4, TerritoryTab.entries.size)
         assertEquals(2, CouncilTab.entries.size)
         assertEquals(3, WarTab.entries.size)
         assertEquals(3, DiplomacyTab.entries.size)
@@ -120,30 +120,35 @@ class MainUiNavigationTest {
     @Test
     fun `지도에서 영지를 선택하면 상태에 반영된다`() {
         val vm = SlgGameViewModel()
+        vm.chooseLord(vm.uiState.value.lords.first().id)
+        val home = vm.uiState.value.mapNodes.first { it.isHome }
 
-        vm.selectTerritory("4111156000")
+        vm.selectTerritory(home.code)
 
-        assertEquals("4111156000", vm.uiState.value.selectedTerritoryCode)
-        assertEquals("광교동", vm.uiState.value.selectedTerritory?.name)
-        assertEquals("광교동", vm.uiState.value.selectedMapNode?.name)
+        assertEquals(home.code, vm.uiState.value.selectedTerritoryCode)
+        assertEquals("탕정면", vm.uiState.value.selectedTerritory?.name)
+        assertEquals("탕정면", vm.uiState.value.selectedMapNode?.name)
     }
 
     @Test
     fun `지도에 없는 영지는 선택되지 않는다`() {
         val vm = SlgGameViewModel()
-        vm.selectTerritory("4111156000")
+        vm.chooseLord(vm.uiState.value.lords.first().id)
+        val home = vm.uiState.value.mapNodes.first { it.isHome }
+        vm.selectTerritory(home.code)
 
         vm.selectTerritory("9999999999")
 
-        assertEquals("4111156000", vm.uiState.value.selectedTerritoryCode)
+        assertEquals(home.code, vm.uiState.value.selectedTerritoryCode)
     }
 
     @Test
     fun `첫 화면의 선택 영지는 본진이다`() {
         val vm = SlgGameViewModel()
 
-        assertEquals("4111154000", vm.uiState.value.selectedTerritoryCode)
+        assertEquals("4420033000", vm.uiState.value.selectedTerritoryCode)
         assertTrue(vm.uiState.value.selectedMapNode?.isHome == true)
+        assertEquals("탕정면", vm.uiState.value.selectedMapNode?.name)
     }
 
     @Test

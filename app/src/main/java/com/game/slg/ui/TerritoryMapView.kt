@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,17 +37,18 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.game.slg.core.map.MapNode
 import com.game.slg.core.map.MapViewport
 import com.game.slg.core.map.TerritoryMapLayout
 import com.game.slg.core.model.TerrainType
+import com.game.slg.core.region.RegionCatalog
 import kotlin.math.sqrt
 
 /**
- * 메인 화면 지도 — 내 영지(매탄동) 기준 제한 범위 + 확대/축소·이동·영지 선택.
+ * 메인 화면 지도 — 선택 지역을 중심으로 한 제한 범위 + 단계별 안개 해제.
  *
- * 지도는 화면의 주인공이다. 글자 대신 지형(산·강·성), 세력 색, 전선(점선), 병력 두께,
- * 선택 테두리로 상태를 읽게 한다. 텍스트는 이름·병력 숫자만 남겼다.
+ * 지도는 화면의 주인공이다. 해금된 거점은 세력 색과 병력 바로,
+ * 잠긴 거점은 안개(어두운 원 + 자물쇠)로 그려 다음 확장 목표를 보여 준다.
  */
 @Composable
 fun TerritoryMapPane(
@@ -59,13 +61,14 @@ fun TerritoryMapPane(
     val currentViewport by rememberUpdatedState(viewport)
     val currentOnViewportChange by rememberUpdatedState(onViewportChange)
     val currentOnSelect by rememberUpdatedState(onSelectTerritory)
+    val nodes = state.mapNodes
     val selectedCode = state.selectedTerritoryCode
 
     Box(modifier = modifier.background(SlgColors.Surface)) {
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {
+                .pointerInput(nodes) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         val vp = currentViewport
                         val width = size.width.toFloat()
@@ -79,13 +82,14 @@ fun TerritoryMapPane(
                         if (next != vp) currentOnViewportChange(next)
                     }
                 }
-                .pointerInput(Unit) {
+                .pointerInput(nodes) {
                     detectTapGestures { offset ->
                         val node = currentViewport.hitTest(
                             pointX = offset.x,
                             pointY = offset.y,
                             widthPx = size.width.toFloat(),
-                            heightPx = size.height.toFloat()
+                            heightPx = size.height.toFloat(),
+                            nodes = nodes
                         )
                         if (node != null) currentOnSelect(node.code)
                     }
@@ -93,13 +97,15 @@ fun TerritoryMapPane(
         ) {
             drawTerritoryMap(
                 viewport = viewport,
+                nodes = nodes,
                 selectedCode = selectedCode,
                 homeTroops = state.troops,
+                unlockedHop = state.unlockedHop,
                 enemyPressure = state.eventBChoice == null
             )
         }
 
-        // ── 좌상단: 표시 범위 + 단계 ──
+        // ── 좌상단: 지역 + 지휘 단계 ──
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -107,12 +113,19 @@ fun TerritoryMapPane(
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                SlgPill("🗺 매탄동 영향권", SlgColors.Brass)
-                SlgPill(state.promotionStage.displayName.substringBefore(" "), SlgColors.Steel)
+                SlgPill("🗺 ${state.regionName} 영향권", SlgColors.Brass)
+                SlgPill("Lv.${state.command.level} ${state.expansionTier.label}", SlgColors.Steel)
+            }
+            if (state.nextTier != null) {
+                Text(
+                    "다음 Lv.${state.nextTier!!.level} · ${state.nextTier!!.label}",
+                    color = SlgColors.Text.copy(alpha = 0.70f),
+                    fontSize = SlgType.MICRO
+                )
             }
         }
 
-        // ── 우상단: ＋ － 내 영지 ──
+        // ── 우상단: ＋ － 내 구역 ──
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -130,11 +143,11 @@ fun TerritoryMapPane(
                     .clickable { currentOnViewportChange(currentViewport.reset()) }
                     .padding(horizontal = 8.dp, vertical = 5.dp)
             ) {
-                Text("⤾ 내 영지", color = SlgColors.Brass, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
+                Text("⤾ 내 구역", color = SlgColors.Brass, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
             }
         }
 
-        // ── 좌하단: 세력 범례 ──
+        // ── 좌하단: 범례 ──
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -148,7 +161,8 @@ fun TerritoryMapPane(
             listOf(
                 "아군" to SlgColors.Steel,
                 "중립" to SlgColors.Violet,
-                "경계" to SlgColors.Danger
+                "경계" to SlgColors.Danger,
+                "잠김" to SlgColors.Line
             ).forEach { (label, color) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(color))
@@ -159,8 +173,10 @@ fun TerritoryMapPane(
         }
 
         // ── 우하단: 배율 · 범위 밖 ──
+        val area = state.regionArea
+        val outside = area?.let { TerritoryMapLayout.outOfRangeCount(it, state.unlockedHop) } ?: 0
         Text(
-            "${"%.1f".format(viewport.scale)}× · 밖 ${TerritoryMapLayout.outOfRangeCount()}곳",
+            "${"%.1f".format(viewport.scale)}× · 잠김 ${state.lockedNodeCount} · 밖 ${outside}곳",
             color = SlgColors.Muted,
             fontSize = SlgType.MICRO,
             modifier = Modifier
@@ -189,12 +205,14 @@ private fun MapControlButton(label: String, onClick: () -> Unit) {
 }
 
 /**
- * 지도 렌더링 — 지형지물(하천·도로·산), 영지 노드, 영향권 경계, 전선.
+ * 지도 렌더링 — 고리(해금 반경), 도로, 거점, 안개.
  */
 private fun DrawScope.drawTerritoryMap(
     viewport: MapViewport,
+    nodes: List<MapNode>,
     selectedCode: String,
     homeTroops: Int,
+    unlockedHop: Int,
     enemyPressure: Boolean
 ) {
     val width = size.width
@@ -229,27 +247,7 @@ private fun DrawScope.drawTerritoryMap(
         gy += gridStep
     }
 
-    // 산악 음영 — 광교동·용인 수지 방향 능선
-    val mountainShadow = listOf(
-        -0.95f to -0.75f, -0.72f to -0.92f, -0.35f to -0.70f,
-        0.20f to 0.45f, 0.46f to 0.86f, 0.72f to 0.52f
-    )
-    mountainShadow.forEach { (wx, wy) ->
-        val cx = sx(wx)
-        val cy = sy(wy)
-        val r = 46f * sqrt(viewport.scale)
-        drawPath(
-            androidx.compose.ui.graphics.Path().apply {
-                moveTo(cx - r, cy + r * 0.6f)
-                lineTo(cx, cy - r * 0.7f)
-                lineTo(cx + r, cy + r * 0.6f)
-                close()
-            },
-            color = Color(0xFF182634).copy(alpha = 0.75f)
-        )
-    }
-
-    // 매탄천
+    // 장식용 하천
     val river = TerritoryMapLayout.RIVER
     for (index in 0 until river.size - 1) {
         drawLine(
@@ -262,7 +260,7 @@ private fun DrawScope.drawTerritoryMap(
     }
     for (index in 0 until river.size - 1) {
         drawLine(
-            color = Color(0xFF5D93B8).copy(alpha = 0.8f),
+            color = Color(0xFF5D93B8).copy(alpha = 0.65f),
             start = Offset(sx(river[index].first), sy(river[index].second)),
             end = Offset(sx(river[index + 1].first), sy(river[index + 1].second)),
             strokeWidth = 2.2f,
@@ -270,31 +268,48 @@ private fun DrawScope.drawTerritoryMap(
         )
     }
 
-    // 본진 영향권 점선
     val homeX = sx(0f)
     val homeY = sy(0f)
-    drawCircle(
-        color = SlgColors.Brass.copy(alpha = 0.40f),
-        radius = TerritoryMapLayout.INFLUENCE_RADIUS * unit,
-        center = Offset(homeX, homeY),
-        style = Stroke(width = 1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(9f, 7f), 0f))
-    )
 
-    // 본진 → 영지 간선 도로
-    TerritoryMapLayout.localNodes().forEach { node ->
-        if (node.isHome) return@forEach
+    // 해금 반경 고리 — 지휘 단계가 지도에 그대로 보인다
+    for (hop in 0..unlockedHop) {
+        val radius = TerritoryMapLayout.ringRadius(hop)
+        if (radius <= 0f) continue
+        drawCircle(
+            color = SlgColors.Brass.copy(alpha = if (hop == unlockedHop) 0.35f else 0.16f),
+            radius = radius * unit,
+            center = Offset(homeX, homeY),
+            style = Stroke(
+                width = if (hop == unlockedHop) 1.8f else 1.2f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(9f, 7f), 0f)
+            )
+        )
+    }
+
+    // 본진 → 해금 거점 간선 (도로·보급로)
+    nodes.filter { !it.isHome && it.unlocked }.forEach { node ->
         drawLine(
-            color = SlgColors.Brass.copy(alpha = 0.26f),
+            color = SlgColors.Brass.copy(alpha = 0.24f),
             start = Offset(homeX, homeY),
             end = Offset(sx(node.worldX), sy(node.worldY)),
             strokeWidth = 1.8f,
             cap = StrokeCap.Round
         )
     }
+    // 잠긴 거점은 끊긴 점선
+    nodes.filter { !it.isHome && it.isLocked }.forEach { node ->
+        drawLine(
+            color = SlgColors.Line.copy(alpha = 0.7f),
+            start = Offset(homeX, homeY),
+            end = Offset(sx(node.worldX), sy(node.worldY)),
+            strokeWidth = 1.2f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 8f), 0f)
+        )
+    }
 
-    // 전선 — 광교동 방면 위협 (미해결 정찰대 사건)
+    // 위협 표시 — 미해결 정찰조 사건
     if (enemyPressure) {
-        val enemy = TerritoryMapLayout.node("4111156000")
+        val enemy = nodes.firstOrNull { it.hopDistance == 1 && it.unlocked }
         if (enemy != null) {
             drawLine(
                 color = SlgColors.Danger.copy(alpha = 0.75f),
@@ -317,8 +332,8 @@ private fun DrawScope.drawTerritoryMap(
         typeface = android.graphics.Typeface.DEFAULT
     }
 
-    // 영지 노드
-    val visible = viewport.visibleNodes(TerritoryMapLayout.localNodes())
+    // 거점 노드
+    val visible = viewport.visibleNodes(nodes)
     visible.forEach { node ->
         val cx = sx(node.worldX)
         val cy = sy(node.worldY)
@@ -326,13 +341,30 @@ private fun DrawScope.drawTerritoryMap(
         val relation = relationColor(node.relationLabel)
         val radius = (15f * sqrt(viewport.scale)).coerceIn(11f, 24f)
 
+        if (node.isLocked) {
+            // 안개 — 어두운 원 + 점선 테두리 + 자물쇠
+            drawCircle(Color(0xFF10151C).copy(alpha = 0.92f), radius = radius, center = Offset(cx, cy))
+            drawCircle(
+                color = SlgColors.Line.copy(alpha = 0.75f),
+                radius = radius,
+                center = Offset(cx, cy),
+                style = Stroke(width = 1.4f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3f, 3f), 0f))
+            )
+            namePaint.textSize = (11.5f * sqrt(viewport.scale)).coerceIn(10f, 15f)
+            namePaint.color = android.graphics.Color.rgb(120, 129, 143)
+            drawContext.canvas.nativeCanvas.drawText("🔒 ${node.name}", cx, cy - radius - 6f, namePaint)
+            subPaint.textSize = (9.5f * sqrt(viewport.scale)).coerceIn(8.5f, 12f)
+            subPaint.color = android.graphics.Color.rgb(105, 114, 128)
+            drawContext.canvas.nativeCanvas.drawText("Lv.${tierLevelForHop(node.hopDistance)}", cx, cy + radius + 16f, subPaint)
+            return@forEach
+        }
+
         if (selected) {
             drawCircle(SlgColors.Brass.copy(alpha = 0.26f), radius = radius + 9f, center = Offset(cx, cy))
         }
         if (node.isHome) {
             drawCircle(SlgColors.Brass.copy(alpha = 0.20f), radius = radius + 6f, center = Offset(cx, cy))
         }
-        // 세력 색 테두리 + 내부
         drawCircle(relation.copy(alpha = 0.92f), radius = radius, center = Offset(cx, cy))
         drawCircle(Color(0xFF10151C), radius = radius - 3f, center = Offset(cx, cy))
         drawCircle(
@@ -340,21 +372,22 @@ private fun DrawScope.drawTerritoryMap(
             radius = radius - 6.5f,
             center = Offset(cx, cy)
         )
-        // 본진은 성곽 아이콘(사각형 탑)
+
+        // 본진은 지휘통제소 아이콘(건물 + 안테나)
         if (node.isHome) {
             val s = radius * 0.55f
             drawRect(
                 color = Color(0xFF10151C),
-                topLeft = Offset(cx - s * 0.9f, cy - s * 0.5f),
-                size = Size(s * 1.8f, s * 1.1f)
+                topLeft = Offset(cx - s * 0.95f, cy - s * 0.15f),
+                size = Size(s * 1.9f, s * 0.9f)
             )
-            repeat(3) { i ->
-                drawRect(
-                    color = Color(0xFF10151C),
-                    topLeft = Offset(cx - s * 0.9f + i * s * 0.7f, cy - s * 0.85f),
-                    size = Size(s * 0.4f, s * 0.38f)
-                )
-            }
+            drawLine(
+                color = Color(0xFF10151C),
+                start = Offset(cx + s * 0.7f, cy - s * 0.1f),
+                end = Offset(cx + s * 0.7f, cy - s * 1.15f),
+                strokeWidth = 1.8f
+            )
+            drawCircle(Color(0xFF10151C), radius = s * 0.22f, center = Offset(cx + s * 0.7f, cy - s * 1.2f))
         }
         if (selected) {
             drawCircle(
@@ -364,8 +397,10 @@ private fun DrawScope.drawTerritoryMap(
                 style = Stroke(width = 2.2f)
             )
         }
+
         // 병력 두께 — 노드 아래 미니 바
-        val troopsRatio = (node.troops / 2000f).coerceIn(0.08f, 1f)
+        val troops = if (node.isHome) homeTroops else node.troops
+        val troopsRatio = (troops / 400f).coerceIn(0.08f, 1f)
         val barWidth = radius * 2.2f
         drawRect(
             color = Color(0xCC0C0E13),
@@ -395,7 +430,6 @@ private fun DrawScope.drawTerritoryMap(
         )
         subPaint.textSize = (9.5f * sqrt(viewport.scale)).coerceIn(8.5f, 12f)
         subPaint.color = android.graphics.Color.rgb(152, 161, 176)
-        val troops = if (node.isHome) homeTroops else node.troops
         drawContext.canvas.nativeCanvas.drawText("⚔ $troops", cx, cy + radius + 18f, subPaint)
     }
 
@@ -413,3 +447,17 @@ private fun DrawScope.drawTerritoryMap(
         size = Size(fogWidth, height)
     )
 }
+
+/** hop 거리가 열리는 최소 지휘 레벨 */
+private fun tierLevelForHop(hop: Int): Int =
+    com.game.slg.core.region.ExpansionTier.entries.firstOrNull { it.maxHop >= hop }?.level ?: 8
+
+/** 지도 거점 이름 목록 (테스트·디버그) */
+fun territoryNames(state: SlgGameState): List<String> = state.mapNodes.map { it.name }
+
+/** 현재 선택 지역의 인접 거점 이름 */
+fun neighborNames(state: SlgGameState): List<String> =
+    state.mapNodes.filter { it.hopDistance == 1 }.map { it.name }
+
+/** 데이터에 포함된 전체 시작 지역 수 */
+fun regionCount(): Int = RegionCatalog.regionCount()

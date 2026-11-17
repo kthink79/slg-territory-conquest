@@ -18,7 +18,7 @@ data class SlgUiState(
     val treasuryGold: Int = 1000,
     val treasuryGrain: Int = 2000,
     val isSupplyConnected: Boolean = true,
-    val statusLog: String = "팔도 영지전 SLG 시뮬레이터 준비 완료",
+    val statusLog: String = "단일 연방의 황혼 SLG 시뮬레이터 준비 완료",
     val treaties: List<DiplomaticTreaty> = emptyList(),
     val territories: Map<String, Territory> = emptyMap(),
     val lords: List<Lord> = emptyList()

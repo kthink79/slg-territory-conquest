@@ -3,18 +3,18 @@ package com.game.slg.core.engine
 import com.game.slg.core.model.*
 
 // =============================================================================
-// 1. 「연방 붕괴의 그림자: 광교·용인 유민 유입 딜레마」 엔진
+// 1. 「연방 붕괴의 그림자: 인접 구역 이재민 유입 딜레마」 엔진
 // =============================================================================
 
 /**
  * 유민 유입 딜레마 엔진 인터페이스
- * - 연방 통신·물류망 붕괴로 유민 800명이 매탄동 성문 앞에 몰려든 상황.
- * - 성문 개방(식량 -500 · 인구 +800 · 민심 +10 · 문화 명성 +8)
- * - 성문 통제(자금 +200 관세 · 민심 -12 · 외교 평판 -8)
+ * - 연방 통신·물류망 붕괴로 이재민 800명이 관할 구역 통제선 앞에 몰려든 상황.
+ * - 통제선 개방(보급 -500 · 인구 +800 · 민심 +10 · 문화 명성 +8)
+ * - 통제선 유지(자금 +200 통행료 · 민심 -12 · 외교 평판 -8)
  */
 interface IRefugeeCrisisEngine {
 
-    /** 성문 앞에 몰려든 유민 수 */
+    /** 통제선 앞에 몰려든 이재민 수 */
     val refugeeCount: Int
 
     /** 선택지 목록 */
@@ -50,7 +50,7 @@ class RefugeeCrisisEngine : IRefugeeCrisisEngine {
         RefugeeCrisisChoice(
             id = "REFUGEE_B_CONTROL",
             response = RefugeeResponse.CONTROL_GATE,
-            label = "성문 통제 및 선별 수용",
+            label = "통제선 유지 및 선별 수용",
             hint = "자금 +$tariffGold (관세) · 민심 -12 · 외교 평판 -8"
         )
     )
@@ -73,8 +73,8 @@ class RefugeeCrisisEngine : IRefugeeCrisisEngine {
                         choiceId = choiceId,
                         response = choice.response,
                         failureReason = "식량이 부족합니다. (필요 ${openFoodCost}석 / 보유 ${food}석)",
-                        message = "[성문 개방 불가] 배급할 식량이 부족합니다. (필요 ${openFoodCost}석 / 보유 ${food}석)\n" +
-                            "성문 통제로 선별 수용하거나 추수를 기다려야 합니다."
+                        message = "[통제선 개방 불가] 배급할 보급품이 부족합니다. (필요 ${openFoodCost}석 / 보유 ${food}석)\n" +
+                            "통제선을 유지하며 선별 수용하거나 다음 결산을 기다려야 합니다."
                     )
                 } else {
                     RefugeeCrisisResult(
@@ -85,9 +85,9 @@ class RefugeeCrisisEngine : IRefugeeCrisisEngine {
                         populationChange = acceptedPopulation,
                         moraleChange = 10,
                         culturePrestigeChange = 8,
-                        message = "[성문 개방] 매탄동 성문이 열리고 유민 ${acceptedPopulation}명이 임시 거주지로 들어왔다. " +
-                            "아이들의 울음과 밥 짓는 연기가 골목을 채운다.\n" +
-                            "\"호족님, 이 은혜는 잊지 않겠습니다.\" — 식량 -${openFoodCost}석 · 인구 +${acceptedPopulation} · " +
+                        message = "[통제선 개방] 관할 구역 통제선이 열리고 이재민 ${acceptedPopulation}명이 임시 주거 구역으로 들어왔다. " +
+                            "아이들의 울음과 임시 난방기의 열기가 주차장을 채운다.\n" +
+                            "\"호족님, 이 은혜는 잊지 않겠습니다.\" — 보급 -${openFoodCost}석 · 인구 +${acceptedPopulation} · " +
                             "민심 +10 · 문화 명성 +8"
                     )
                 }
@@ -101,8 +101,8 @@ class RefugeeCrisisEngine : IRefugeeCrisisEngine {
                     goldChange = tariffGold,
                     moraleChange = -12,
                     diplomacyChange = -8,
-                    message = "[성문 통제] 성문 앞에 검을 세우고 신분이 확인된 이들만 선별 수용했다. " +
-                        "통행 관세 ${tariffGold}G가 금고에 들어왔지만, 성벽 밖에서 밤을 새운 이들의 원망이 남았다.\n" +
+                    message = "[통제선 유지] 검문소를 세우고 신분이 확인된 이들만 선별 수용했다. " +
+                        "통행료 ${tariffGold}G가 회계 계좌에 들어왔지만, 통제선 밖에서 밤을 새운 이들의 원망이 남았다.\n" +
                         "자금 +$tariffGold · 민심 -12 · 외교 평판 -8"
                 )
             }
@@ -185,7 +185,7 @@ class HiddenTalentNightEngine : IHiddenTalentNightEngine {
                 goldChange = 400,
                 moraleChange = -8,
                 talentRemoved = true,
-                message = "[숙청 집행] 자정 무렵 매탄동 저잣거리에서 '$talentName'이(가) 끌려갔다. " +
+                message = "[경질 집행] 자정 무렵 관할 구역 중앙로에서 '$talentName'이(가) 연행됐다. " +
                     "압수한 재산은 금고로 들어왔다.\n" +
                     "자금 +400 · 민심 -8 · 인재 명부에서 제거 — 다만 골목의 눈빛이 차가워졌다."
             )
@@ -207,10 +207,10 @@ class HiddenTalentNightEngine : IHiddenTalentNightEngine {
                         goldChange = -150,
                         suspicionChange = -10,
                         espionageChange = 5,
-                        doubleAgentBuff = "광교동 정보·보급 교란 — 적 군량 -200석 · 다음 첩보 성공률 +20%",
-                        message = "[이중첩자 역파견] '$talentName'에게 위조된 신분과 150G를 쥐여 주고 광교동으로 돌려보냈다. " +
+                        doubleAgentBuff = "상대 거점 정보·보급 교란 — 적 보급 -200석 · 다음 첩보 성공률 +20%",
+                        message = "[이중첩자 재파견] '$talentName'에게 위조 신분과 150G를 쥐여 주고 상대 거점으로 돌려보냈다. " +
                             "녀석이 넘기는 서신에는 우리가 원하는 숫자만 적힐 것이다.\n" +
-                            "자금 -150 · 첩보력 +5 · 광교동 정보·보급 교란 버프 획득 (적 군량 -200석)"
+                            "자금 -150 · 첩보력 +5 · 상대 거점 정보·보급 교란 버프 획득 (적 보급 -200석)"
                     )
                 }
             }
@@ -219,12 +219,12 @@ class HiddenTalentNightEngine : IHiddenTalentNightEngine {
 }
 
 // =============================================================================
-// 3. 「성주(Castellan) 승격 마일스톤 로드맵」 엔진
+// 3. 「대표 호족 승격 마일스톤 로드맵」 엔진
 // =============================================================================
 
 /**
  * 승격 로드맵 엔진 인터페이스
- * - 읍·면·동 호족 → 과반 연합 성주 → 수원시 통합군주
+ * - 거점 호족 → 과반 연합 대표 → 광역 통합군주
  * - 인접 영지 우호/동맹 수와 명성 조건을 채우면 승격 의식을 올릴 수 있다.
  */
 interface IPromotionEngine {
@@ -257,7 +257,7 @@ class PromotionEngine : IPromotionEngine {
                 requiredPrestige = 0,
                 isEligible = false,
                 progressRatio = 1f,
-                requirementSummary = "최종 단계 — 수원시 통합군주로서 로드맵을 완주했습니다."
+                requirementSummary = "최종 단계 — 광역 통합군주로서 로드맵을 완주했습니다."
             )
         }
 
@@ -317,16 +317,16 @@ class PromotionEngine : IPromotionEngine {
             isSuccess = true,
             stage = next,
             promoted = true,
-            ceremonyTitle = if (next == PromotionStage.UNITED_CASTELLAN) "👑 성주 승격 의식" else "👑 수원시 통합군주 즉위식",
+            ceremonyTitle = if (next == PromotionStage.UNITED_CASTELLAN) "👑 연합 대표 승격 의식" else "👑 광역 통합군주 취임식",
             ceremonyBody = if (next == PromotionStage.UNITED_CASTELLAN) {
-                "매탄동 광장에 호족들이 모였다. 과반의 연합 서명이 놓이고, " +
-                    "'${current.displayName}' 이광수 호족이 성주 자리에 올랐다.\n" +
-                    "의회 권한이 확장되어 병력 차출 요구 상한이 +${next.councilAuthorityBonus}% 완화되고, " +
+                "관할 구역 시민광장에 호족들이 모였다. 과반의 연합 서명이 놓이고, " +
+                    "'${current.displayName}' 대표 호족이 연합 대표 자리에 올랐다.\n" +
+                    "의회 권한이 확장되어 경비 인력 소집 요구 상한이 +${next.councilAuthorityBonus}% 완화되고, " +
                     "특별세 안건 가결 요건이 낮아졌다."
             } else {
-                "수원시 전역의 자치구 깃발이 하나로 내려앉았다. 성주에서 통합군주로 — " +
-                    "영통·매탄·광교·수지가 하나의 행정 질서로 묶였다.\n" +
-                    "의회 권한 +${next.councilAuthorityBonus}% — 이제 전시 병력 차출을 의회 반대로 막을 수 없다."
+                "광역 전역의 자치구 깃발이 하나로 내려앉았다. 연합 대표에서 통합군주로 — " +
+                    "연결된 모든 읍·면·동이 하나의 행정 질서로 묶였다.\n" +
+                    "의회 권한 +${next.councilAuthorityBonus}% — 이제 긴급 소집을 의회 반대로 막을 수 없다."
             },
             councilAuthorityBonus = next.councilAuthorityBonus,
             message = "[승격 완료] '${current.displayName}' → '${next.displayName}' (의회 권한 +${next.councilAuthorityBonus}%)"

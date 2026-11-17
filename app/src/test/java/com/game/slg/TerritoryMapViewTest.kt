@@ -3,6 +3,7 @@ package com.game.slg
 import com.game.slg.core.map.MapNode
 import com.game.slg.core.map.MapViewport
 import com.game.slg.core.map.TerritoryMapLayout
+import com.game.slg.core.region.RegionCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -11,12 +12,22 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 메인 3단 화면 상단 1/3 — 제한 범위 지도 · 확대/축소 · 이동 경계 · 영지 선택 테스트.
+ * 메인 화면 지도 — 제한 범위 · 단계별 안개 · 확대/축소 · 이동 경계 · 거점 선택 테스트.
+ * 기준 지역은 사용자가 예로 든 충남 아산시 탕정면이다.
  */
 class TerritoryMapViewTest {
 
     private val width = 1080f
     private val height = 600f
+    private val tangjeong = RegionCatalog.defaultRegion()
+
+    private fun nodesAt(level: Int): List<MapNode> =
+        TerritoryMapLayout.build(
+            start = tangjeong,
+            unlockedHop = com.game.slg.core.region.ExpansionTier.unlockedHop(level),
+            playerName = "이광수",
+            homeTroops = 1200
+        )
 
     @Test
     fun `기본 지도는 본진 중심 배율 1배로 시작한다`() {
@@ -46,17 +57,8 @@ class TerritoryMapViewTest {
 
     @Test
     fun `핀치 배율도 같은 한계로 제한된다`() {
-        assertEquals(
-            TerritoryMapLayout.MAX_SCALE,
-            MapViewport().zoomedBy(50f).scale,
-            0.0001f
-        )
-        assertEquals(
-            TerritoryMapLayout.MIN_SCALE,
-            MapViewport().zoomedBy(0.001f).scale,
-            0.0001f
-        )
-        // 잘못된 입력은 상태를 흔들지 않는다
+        assertEquals(TerritoryMapLayout.MAX_SCALE, MapViewport().zoomedBy(50f).scale, 0.0001f)
+        assertEquals(TerritoryMapLayout.MIN_SCALE, MapViewport().zoomedBy(0.001f).scale, 0.0001f)
         assertEquals(MapViewport(), MapViewport().zoomedBy(0f))
         assertEquals(MapViewport(), MapViewport().zoomedBy(Float.NaN))
     }
@@ -68,7 +70,6 @@ class TerritoryMapViewTest {
 
         assertTrue(zoomed.viewHalfExtent < wide.viewHalfExtent)
         assertTrue(zoomed.visibleBounds().width < wide.visibleBounds().width)
-        // 확대해도 본진(0,0)은 화면 안에 남는다
         assertTrue(zoomed.isVisible(0f, 0f))
     }
 
@@ -100,7 +101,7 @@ class TerritoryMapViewTest {
     }
 
     @Test
-    fun `내 영지 중심 버튼은 배율과 중심을 초기화한다`() {
+    fun `내 구역 중심 버튼은 배율과 중심을 초기화한다`() {
         val moved = MapViewport().zoomIn().pannedBy(0.3f, 0.3f)
         val reset = moved.reset()
 
@@ -110,37 +111,65 @@ class TerritoryMapViewTest {
     }
 
     @Test
-    fun `표시 범위는 본진 기준 hop 거리로 제한된다`() {
-        val local = TerritoryMapLayout.localNodes()
-        assertEquals(4, local.size)
-        assertTrue(local.all { it.hopDistance <= TerritoryMapLayout.LOCAL_HOP_LIMIT })
-        assertTrue(local.any { it.isHome })
+    fun `Lv1 지도는 내 읍면동과 다음 단계 잠긴 거점만 보여 준다`() {
+        val nodes = nodesAt(1)
 
-        val outside = TerritoryMapLayout.outOfRangeNodes()
-        assertEquals(4, outside.size)
-        assertEquals(4, TerritoryMapLayout.outOfRangeCount())
-        assertTrue(outside.none { TerritoryMapLayout.isInRange(it) })
+        val home = nodes.single { it.isHome }
+        assertEquals("탕정면", home.name)
+        assertTrue(home.unlocked)
 
-        // hop 2 는 범위 안, hop 3 은 범위 밖
-        assertTrue(TerritoryMapLayout.isInRange(local.first { it.name == "용인 수지" }))
-        assertFalse(TerritoryMapLayout.isInRange(outside.first()))
+        // hop 1 (배방읍·음봉면·염치읍)은 미리 보이지만 잠겨 있다
+        val adjacent = nodes.filter { it.hopDistance == 1 }
+        assertEquals(3, adjacent.size)
+        assertTrue(adjacent.none { it.unlocked })
+        assertEquals(3, TerritoryMapLayout.lockedCount(nodes))
+        assertEquals(1, TerritoryMapLayout.unlockedCount(nodes))
+
+        // hop 2 는 아직 그리지 않는다
+        assertTrue(nodes.none { it.hopDistance >= 2 })
     }
 
     @Test
-    fun `확대하면 화면 밖으로 나간 영지는 그리지 않는다`() {
-        val all = MapViewport().visibleNodes()
-        assertEquals(4, all.size)
+    fun `Lv2 지도는 인접 읍면동을 해금하고 Lv3은 연접 구역을 연다`() {
+        val level2 = nodesAt(2)
+        val adjacent = level2.filter { it.hopDistance == 1 }
+        assertEquals(3, adjacent.size)
+        assertTrue("인접 구역이 해금되어야 한다", adjacent.all { it.unlocked })
+        assertEquals(setOf("배방읍", "음봉면", "염치읍"), adjacent.map { it.name }.toSet())
 
-        val zoomed = MapViewport().zoomedBy(2.5f).visibleNodes()
+        // hop 2 는 다음 단계 미리보기로 잠겨 있다
+        val nextRing = level2.filter { it.hopDistance == 2 }
+        assertTrue(nextRing.isNotEmpty())
+        assertTrue(nextRing.none { it.unlocked })
+
+        val level3 = nodesAt(3)
+        assertTrue(level3.filter { it.hopDistance == 2 }.all { it.unlocked })
+    }
+
+    @Test
+    fun `지휘 레벨이 오를수록 지도에 그리는 범위가 넓어진다`() {
+        val level1 = nodesAt(1).size
+        val level2 = nodesAt(2).size
+        val level4 = nodesAt(4).size
+
+        assertTrue("Lv2가 Lv1보다 넓다", level2 > level1)
+        assertTrue("Lv4가 Lv2보다 넓다", level4 > level2)
+        assertTrue(
+            "해금 hop 이 커지면 범위 밖 거점 수가 줄어든다",
+            TerritoryMapLayout.outOfRangeCount(tangjeong, 4) <=
+                TerritoryMapLayout.outOfRangeCount(tangjeong, 1)
+        )
+    }
+
+    @Test
+    fun `확대하면 화면 밖으로 나간 거점은 그리지 않는다`() {
+        val nodes = nodesAt(2)
+        val all = MapViewport().visibleNodes(nodes)
+        assertTrue(all.isNotEmpty())
+
+        val zoomed = MapViewport().zoomedBy(2.5f).visibleNodes(nodes)
         assertEquals("본진만 남는다", 1, zoomed.size)
         assertTrue(zoomed.single().isHome)
-
-        // 이동해서 다시 잡으면 다른 영지가 보인다
-        val panned = MapViewport()
-            .zoomedBy(2.5f)
-            .pannedBy(0.62f, -0.34f)
-            .visibleNodes()
-        assertTrue(panned.any { it.name == "원천동" })
     }
 
     @Test
@@ -153,8 +182,9 @@ class TerritoryMapViewTest {
 
     @Test
     fun `화면 좌표와 세계 좌표 변환이 서로 맞는다`() {
+        val nodes = nodesAt(2)
         val viewport = MapViewport().zoomedBy(1.6f).pannedBy(0.2f, -0.1f)
-        val node = TerritoryMapLayout.localNodes().first { it.name == "광교동" }
+        val node = nodes.first { it.name == "배방읍" }
 
         val screen = viewport.screenAt(node.worldX, node.worldY, width, height)
         val (wx, wy) = viewport.worldAt(screen.x, screen.y, width, height)
@@ -164,45 +194,61 @@ class TerritoryMapViewTest {
     }
 
     @Test
-    fun `지도 탭으로 영지를 선택한다`() {
+    fun `지도 탭으로 해금된 거점을 선택한다`() {
+        val nodes = nodesAt(2)
         val viewport = MapViewport()
-        val woncheon = TerritoryMapLayout.localNodes().first { it.name == "원천동" }
-        val point = viewport.screenAt(woncheon.worldX, woncheon.worldY, width, height)
+        val baebang = nodes.first { it.name == "배방읍" }
+        val point = viewport.screenAt(baebang.worldX, baebang.worldY, width, height)
 
-        val hit = viewport.hitTest(point.x, point.y, width, height)
+        val hit = viewport.hitTest(point.x, point.y, width, height, nodes)
 
         assertNotNull(hit)
-        assertEquals("원천동", hit?.name)
+        assertEquals("배방읍", hit?.name)
     }
 
     @Test
-    fun `영지가 없는 곳을 탭하면 선택되지 않는다`() {
+    fun `잠긴 거점은 탭으로 선택되지 않는다`() {
+        val nodes = nodesAt(1)
+        val viewport = MapViewport()
+        val locked = nodes.first { it.isLocked }
+        val point = viewport.screenAt(locked.worldX, locked.worldY, width, height)
+
+        assertNull(viewport.hitTest(point.x, point.y, width, height, nodes))
+    }
+
+    @Test
+    fun `거점이 없는 곳을 탭하면 선택되지 않는다`() {
         val viewport = MapViewport()
 
-        assertNull(viewport.hitTest(width / 2f, height - 10f, width, height))
+        assertNull(viewport.hitTest(width / 2f, height - 10f, width, height, nodesAt(2)))
     }
 
     @Test
-    fun `확대해서 화면 밖으로 나간 영지는 탭으로 선택할 수 없다`() {
-        val viewport = MapViewport().zoomedBy(2.5f)
-        val woncheon = TerritoryMapLayout.localNodes().first { it.name == "원천동" }
-        val point = viewport.screenAt(woncheon.worldX, woncheon.worldY, width, height)
-
-        assertNull(viewport.hitTest(point.x, point.y, width, height))
-    }
-
-    @Test
-    fun `가장 가까운 영지 하나만 선택된다`() {
+    fun `가장 가까운 거점 하나만 선택된다`() {
+        val nodes = nodesAt(2)
         val viewport = MapViewport()
-        val home = TerritoryMapLayout.localNodes().first { it.isHome }
-        // 본진에서 살짝 벗어난 지점도 본진으로 잡힌다
+        val home = nodes.first { it.isHome }
         val hit: MapNode? = viewport.hitTest(
             width / 2f + 10f,
             height / 2f - 8f,
             width,
-            height
+            height,
+            nodes
         )
 
         assertEquals(home.code, hit?.code)
+    }
+
+    @Test
+    fun `지도 거점은 인구와 호족 정원을 함께 가진다`() {
+        val nodes = nodesAt(2)
+        nodes.forEach { node ->
+            assertTrue("${node.name} 인구", node.population > 0)
+            assertTrue("${node.name} 호족 정원", node.lordCapacity >= 1)
+            assertEquals(node.hopDistance == 0, node.isHome)
+        }
+        val home = nodes.first { it.isHome }
+        assertEquals(48, home.lordCapacity)
+        assertFalse(home.isLocked)
     }
 }

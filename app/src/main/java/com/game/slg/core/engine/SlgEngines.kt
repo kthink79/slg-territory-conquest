@@ -80,12 +80,12 @@ interface IDiplomacyEngine {
 }
 
 /**
- * 성주-호족 의회 및 전시 병력 차출·반란 엔진
+ * 대표 호족-호족 의회 및 예비군 소집·반란 엔진
  */
 class CouncilEngine : CouncilEngineContract {
 
     /**
-     * 성주가 지역 정책(병력 차출 등)을 호족 의회에 상정
+     * 대표 호족이 지역 정책(경비 인력 소집 등)을 호족 의회에 상정
      */
     override fun voteOnBill(bill: CouncilBill, lords: List<Lord>): CouncilBill {
         var favor = 0
@@ -111,7 +111,7 @@ class CouncilEngine : CouncilEngineContract {
         bill.votesAgainst = against
         bill.isPassed = favor > against
 
-        // 반대표가 65% 이상일 경우 다른 호족들과 연합해 성주에 반란을 일으킬 수 있음 (호족이 없을 경우 방지)
+        // 반대표가 65% 이상일 경우 다른 호족들과 연합해 대표 호족에 대한 불복·반란을 일으킬 수 있음 (호족이 없을 경우 방지)
         if (lords.isNotEmpty() && (against.toDouble() / lords.size >= 0.65)) {
             bill.isRebellionTriggered = true
         } else {
@@ -176,13 +176,13 @@ data class CoupResult(
 )
 
 /**
- * 방어 요새 수성 우위 & GIS 지형 단판 대회전 엔진
+ * 방호 시설 방어 우위 & GIS 지형 단판 대회전 엔진 (구형 수성 엔진)
  */
 class CombatEngine : CombatEngineContract {
 
     /**
-     * 공성전 및 요새 수성 전투 시뮬레이션
-     * - 방어 시설(목책·석성·산성) 구축 시 수성군 사상자 최대 80% 격감
+     * 거점 방어전 시뮬레이션 (현대 병과 엔진 ModernBattleEngine의 이전 버전)
+     * - 방호 시설(방호 펜스·콘크리트 벽·지하 벙커) 구축 시 방어군 사상자 최대 80% 격감
      * - 보급선 단절 시 공격군 사기 저하 및 무혈 항복 유도
      */
     override fun resolveSiege(
@@ -206,7 +206,7 @@ class CombatEngine : CombatEngineContract {
         val reductionRatio = fortress?.casualtyReductionRatio ?: 0.0
         val terrainBonus = territory.terrain.defenseBonus
 
-        // 수성군 실효 전투력 (요새 + 지형 보너스 적용)
+        // 방어군 실효 전투력 (방호 시설 + 지형 보너스 적용)
         val effectiveDefenderPower = defenders * terrainBonus * (1.0 + (fortress?.durability?.toDouble() ?: 0.0) / 1000.0)
         val effectiveAttackerPower = attackers.toDouble()
 
@@ -216,7 +216,7 @@ class CombatEngine : CombatEngineContract {
         val actualDefenderLosses = Math.round(rawDefenderLosses * (1.0 - reductionRatio)).toInt().coerceIn(0, defenders)
         val attackerLosses = Math.round(defenders * terrainBonus * 0.7).toInt().coerceIn(0, attackers)
 
-        // 다중 턴 공성전 시 요새 내구도 감소 반영 (요새가 있고 공격자가 있을 경우)
+        // 다중 턴 공방전 시 방호 시설 내구도 감소 반영
         if (fortress != null && fortress.durability > 0 && attackers > 0) {
             val siegeDamage = (attackers * 0.1).toInt().coerceAtLeast(10)
             fortress.takeDamage(siegeDamage)
@@ -228,9 +228,9 @@ class CombatEngine : CombatEngineContract {
             attackerLosses = attackerLosses,
             defenderLosses = actualDefenderLosses,
             message = if (defenderWon) {
-                "요새 방어망과 지형지물을 활용해 적의 대공세를 격퇴했습니다! (사상자 ${(reductionRatio * 100).toInt()}% 방어 격감)"
+                "통합 방호망과 지형지물을 활용해 적의 대공세를 격퇴했습니다! (사상자 ${(reductionRatio * 100).toInt()}% 방어 격감)"
             } else {
-                "성벽이 돌파되어 거점을 상실했습니다."
+                "방호선이 돌파되어 거점을 상실했습니다."
             }
         )
     }
@@ -265,11 +265,11 @@ class SeasonEngine : ISeasonEngine {
 
         return when (currentSeason) {
             Season.SPRING -> {
-                // 봄: 춘경 및 조세 징수. 인구당 0.05골드 + 호족 인두세 각 100골드
+                // 봄: 예산 편성·지방세 징수. 인구당 0.05골드 + 호족별 100골드
                 val populationTax = (territory.population * 0.05).toInt()
                 val lordTax = lords.size * 100
                 val totalGoldRevenue = populationTax + lordTax
-                // 영지 내 호족들에게 골드 균등 또는 총액 분배 (대표 호족/성주 증액)
+                // 영지 내 호족들에게 자금 균등 배분
                 if (lords.isNotEmpty()) {
                     val share = totalGoldRevenue / lords.size
                     lords.forEach { it.gold += share }
@@ -279,12 +279,12 @@ class SeasonEngine : ISeasonEngine {
                     season = Season.SPRING,
                     goldChange = totalGoldRevenue,
                     grainChange = 0,
-                    message = "봄 춘경 조세 징수 완료: 영지 인구(${territory.population}명) 및 호족(${lords.size}명)으로부터 ${totalGoldRevenue} 금화 징수."
+                    message = "봄 지방세 징수 완료: 관할 인구(${territory.population}명)와 호족(${lords.size}명)에게서 ${totalGoldRevenue} 자금을 확보했습니다."
                 )
             }
 
             Season.SUMMER -> {
-                // 여름: 치수 사업 / 제방 보수 및 풍수해 이벤트
+                // 여름: 재난 대응·배수 사업 및 집중호우 이벤트
                 val rng = if (randomSeed != null) java.util.Random(randomSeed) else java.util.Random()
                 val dice = rng.nextInt(100)
 
@@ -304,9 +304,9 @@ class SeasonEngine : ISeasonEngine {
                         grainChange = grainBonus,
                         disasterType = disaster,
                         message = if (isBumper) {
-                            "여름 치수 제방 정비 완료 및 최적의 기후: 홍수를 완벽 예방하고 호우를 관개용수로 활용 (+${grainBonus} 군량)."
+                            "여름 재난 대응 완료 및 최적의 기후: 배수로와 제방을 정비해 침수를 막고 보급품을 확보했습니다 (+${grainBonus} 보급)."
                         } else {
-                            "여름 치수 정비 완료: 격류를 막아내어 농경지 침수 피해를 전면 방지했습니다."
+                            "여름 재난 대응 완료: 집중호우를 배수로로 흘려보내 저지대 침수 피해를 막았습니다."
                         }
                     )
                 } else {
@@ -320,7 +320,7 @@ class SeasonEngine : ISeasonEngine {
                             goldChange = -400,
                             grainChange = -loss,
                             disasterType = SummerDisasterType.FLOOD_DISASTER,
-                            message = "여름 치수 미흡으로 제방 결괴: 대홍수로 농경지와 가옥 침수 (-${loss} 군량 피해)."
+                            message = "여름 재난 대응 미흡: 집중호우로 저지대와 물류 창고가 침수되었습니다 (-${loss} 보급 피해)."
                         )
                     } else {
                         SeasonActionResult(
@@ -328,14 +328,14 @@ class SeasonEngine : ISeasonEngine {
                             goldChange = 0,
                             grainChange = 0,
                             disasterType = SummerDisasterType.NONE,
-                            message = "여름 무사 통과: 제방 정비가 미흡했으나 천행으로 큰 비 없이 지나갔습니다."
+                            message = "여름 무사 통과: 배수 정비가 미흡했지만 큰비 없이 지나갔습니다."
                         )
                     }
                 }
             }
 
             Season.AUTUMN -> {
-                // 가을: 대추수. 기본 인구 생산량 * 비옥도(fertileScore)
+                // 가을: 결산·보급 비축. 인구 생산량 * 물류 지수
                 val baseHarvest = (territory.population * 0.15).toInt()
                 val totalHarvestGrain = (baseHarvest * territory.fertileScore).toInt()
 
@@ -348,18 +348,18 @@ class SeasonEngine : ISeasonEngine {
                     season = Season.AUTUMN,
                     goldChange = 0,
                     grainChange = totalHarvestGrain,
-                    message = "가을 대추수 풍년: 비옥도(${territory.fertileScore}) 반영 총 ${totalHarvestGrain} 군량 수확 비축 완료."
+                    message = "가을 결산 완료: 물류 지수(${territory.fertileScore})를 반영해 ${totalHarvestGrain} 보급품을 비축했습니다."
                 )
             }
 
             Season.WINTER -> {
-                // 겨울: 혹한기 병력 유지비 (1인당 1 군량 소모) 및 군량 부족 시 동사/탈영 감모
+                // 겨울: 동절기 유지비 (1인당 1 보급 소모) 및 보급 부족 시 이탈·감모
                 val requiredGrain = (totalTroops * 1.0).toInt()
                 val currentTotalGrain = lords.sumOf { it.grain }
                 var attritionLosses = 0
 
                 if (currentTotalGrain >= requiredGrain) {
-                    // 군량 충분: 유지비 균등 차감
+                    // 보급 충분: 유지비 균등 차감
                     var remainingDeduct = requiredGrain
                     for (lord in lords) {
                         val deduct = (lord.grain.toDouble() / currentTotalGrain * requiredGrain).toInt().coerceAtMost(lord.grain)
@@ -375,10 +375,10 @@ class SeasonEngine : ISeasonEngine {
                         goldChange = 0,
                         grainChange = -requiredGrain,
                         winterAttritionLosses = 0,
-                        message = "혹한기 군량 보급 완료: 병력 유지비 ${requiredGrain} 군량을 성공적으로 소모했습니다."
+                        message = "동절기 보급 완료: 인력 유지비 ${requiredGrain} 보급품을 소모했습니다."
                     )
                 } else {
-                    // 군량 부족: 전 군량 소진 및 부족분에 따른 한파 감모(겨울 탈영 및 아사)
+                    // 보급 부족: 전 보급 소진 및 부족분에 따른 동절기 이탈
                     val shortage = requiredGrain - currentTotalGrain
                     lords.forEach { it.grain = 0 }
                     attritionLosses = (shortage * 0.5).toInt().coerceAtLeast(1)
@@ -398,7 +398,7 @@ class SeasonEngine : ISeasonEngine {
                         goldChange = 0,
                         grainChange = -currentTotalGrain,
                         winterAttritionLosses = attritionLosses,
-                        message = "혹한기 군량 고갈 발생! 혹한 속 동사 및 탈영으로 병력 ${attritionLosses}명이 감모되었습니다."
+                        message = "동절기 보급 고갈! 난방·연료 부족으로 인력 ${attritionLosses}명이 이탈했습니다."
                     )
                 }
             }
@@ -409,7 +409,7 @@ class SeasonEngine : ISeasonEngine {
 /**
  * GIS 보급선 & 병참 수송 엔진 (LogisticsEngine)
  * - 隣接 영지 그래프 연결성 검증 (Adjacent territory graph connectivity verification).
- * - 수송대 호송 (후방에서 전방 거점으로 금화 및 군량 보급).
+ * - 물류 수송대 (후방 거점에서 전방 거점으로 자금·보급품 수송).
  * - 중간 거점 적 점령 시 보급선 단절, 사기 급감 및 무혈 항복(bloodless surrender) 유도.
  */
 class LogisticsEngine : ILogisticsEngine {
@@ -510,7 +510,7 @@ class LogisticsEngine : ILogisticsEngine {
                 success = true,
                 deliveredGold = convoy.gold,
                 deliveredGrain = convoy.grain,
-                message = "보급로를 통해 금화 ${convoy.gold}, 군량 ${convoy.grain}이 전방에 안전하게 도착했습니다."
+                message = "물류 보급로를 통해 자금 ${convoy.gold}, 보급품 ${convoy.grain}이 전방에 안전하게 도착했습니다."
             )
         } else {
             // 보급로 차단: 수송대 적에게 나포/소실
@@ -636,7 +636,7 @@ class DiplomacyEngine : IDiplomacyEngine {
                     EspionageResult(
                         success = true,
                         opType = opType,
-                        intelGathered = "적장 ${targetLord.name} 군세: 병력 ${targetLord.troops}명, 군량 ${targetLord.grain}, 금화 ${targetLord.gold}, 영지 비옥도 ${targetTerritory.fertileScore}",
+                        intelGathered = "상대 세력 ${targetLord.name}: 병력 ${targetLord.troops}명, 보급 ${targetLord.grain}, 자금 ${targetLord.gold}, 물류 지수 ${targetTerritory.fertileScore}",
                         message = "${agent.name} 첩보 공작 성공: 적군의 핵심 군사 기밀을 입수했습니다."
                     )
                 }

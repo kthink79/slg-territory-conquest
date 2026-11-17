@@ -63,7 +63,7 @@ private fun TreatyPanel(
     }
 
     SlgChoiceCard(
-        title = "불가침 — 원천동 상인회",
+        title = "불가침 — 인접 물류 상인회",
         icon = "📜",
         effects = listOf(
             Effect("⏳", "4턴", SlgColors.Steel),
@@ -74,7 +74,7 @@ private fun TreatyPanel(
         onClick = { onProposeTreaty(TreatyType.NON_AGGRESSION_PACT) }
     )
     SlgChoiceCard(
-        title = "상호방위 — 용인 수지",
+        title = "상호방위 — 이웃 자치구",
         icon = "🛡",
         effects = listOf(
             Effect("⏳", "3턴", SlgColors.Steel),
@@ -85,7 +85,7 @@ private fun TreatyPanel(
         onClick = { onProposeTreaty(TreatyType.DEFENSIVE_ALLIANCE) }
     )
     SlgChoiceCard(
-        title = "속국 조공 — 광교 호족연합",
+        title = "속국 조공 — 경계 세력 연합",
         icon = "👑",
         effects = listOf(
             Effect("⏳", "6턴", SlgColors.Steel),
@@ -138,7 +138,7 @@ private fun TreatyPanel(
             )
             SlgExpand(
                 summary = "명분 없이 선전포고하면?",
-                detail = "명성 -40과 외교 -20의 페널티가 적용됩니다. 국경 침범·조약 파기·군량고 무단 축조 " +
+                detail = "명성 -40과 외교 -20의 페널티가 적용됩니다. 통제선 침범·조약 파기·보급 거점 무단 축조 " +
                     "같은 사건을 확보해 명분을 만들어야 합니다.",
                 accent = SlgColors.Danger
             )
@@ -162,7 +162,7 @@ private fun EspionagePanel(state: SlgGameState, onEspionage: (EspionageOpType) -
         )
     }
     SlgChoiceCard(
-        title = "군량고 방화",
+        title = "보급 거점 교란",
         icon = "🔥",
         effects = listOf(
             Effect("🌾", "적 -300", SlgColors.Success),
@@ -172,7 +172,7 @@ private fun EspionagePanel(state: SlgGameState, onEspionage: (EspionageOpType) -
         onClick = { onEspionage(EspionageOpType.INSTIGATE_DISSENT) }
     )
     SlgChoiceCard(
-        title = "이간계 — 호족 분열",
+        title = "정보 공작 — 호족 분열",
         icon = "🕸",
         effects = listOf(
             Effect("🎭", "사기 교란", SlgColors.Violet),
@@ -182,11 +182,11 @@ private fun EspionagePanel(state: SlgGameState, onEspionage: (EspionageOpType) -
         onClick = { onEspionage(EspionageOpType.INSTIGATE_DISSENT) }
     )
     SlgChoiceCard(
-        title = "정찰 — 군세 파악",
+        title = "정찰 — 세력 파악",
         icon = "📜",
         effects = listOf(
-            Effect("🎯", "병력·군량", SlgColors.Steel),
-            Effect("🎯", "비옥도", SlgColors.Steel)
+            Effect("🎯", "병력·보급", SlgColors.Steel),
+            Effect("🎯", "물류 지수", SlgColors.Steel)
         ),
         accent = SlgColors.Steel,
         onClick = { onEspionage(EspionageOpType.GATHER_INTEL) }
@@ -196,8 +196,8 @@ private fun EspionagePanel(state: SlgGameState, onEspionage: (EspionageOpType) -
     }
     SlgExpand(
         summary = "첩자 공작 규칙",
-        detail = "공작은 매 절기 1회씩 성공 판정이 있습니다. 군량고 방화는 적 군량 -300, " +
-            "이간계는 호족 반란을 유도하고, 정찰은 적 병력·군량·비옥도를 드러냅니다.",
+        detail = "공작은 매 절기 1회씩 성공 판정이 있습니다. 보급 거점 교란은 적 보급 -300, " +
+            "정보 공작은 호족 불복을 유도하고, 정찰은 적 병력·보급·물류 지수를 드러냅니다.",
         accent = SlgColors.Violet
     )
 }
@@ -284,7 +284,7 @@ private fun TalentPanel(
     }
 
     if (state.nightMeetingTalentName != null && state.nightMeetingChoice == null) {
-        SlgSectionCard(title = "자정 · 매탄천 다리", badge = "3지선다", accent = SlgColors.Violet) {
+        SlgSectionCard(title = "자정 · 하천 산책로", badge = "3지선다", accent = SlgColors.Violet) {
             Text(
                 "'${state.nightMeetingTalentName}'이(가) 비밀 서신을 손에 쥐고 나타났다.",
                 color = SlgColors.Text,
@@ -303,7 +303,7 @@ private fun TalentPanel(
                 onClick = { onResolveNightMeeting(NightMeetingChoice.RECRUIT) }
             )
             SlgChoiceCard(
-                title = "숙청 — 재산 몰수",
+                title = "경질 — 자산 압수",
                 icon = "⚔",
                 effects = listOf(
                     Effect("💰", "+400", SlgColors.Brass),
@@ -317,7 +317,7 @@ private fun TalentPanel(
                 icon = "🕸",
                 effects = listOf(
                     Effect("💰", "-150", SlgColors.Danger),
-                    Effect("🎭", "광교 교란", SlgColors.Violet)
+                    Effect("🎭", "상대 교란", SlgColors.Violet)
                 ),
                 accent = SlgColors.Violet,
                 enabled = state.gold >= 150,

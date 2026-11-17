@@ -302,9 +302,9 @@ fun PromotionScreen(
             PromotionTab.PATH -> {
                 SlgSectionCard(title = "승격 경로", accent = SlgColors.Brass) {
                     listOf(
-                        Triple("🏯", "읍·면·동 호족", "매탄동 본진에서 시작"),
-                        Triple("🏛", "과민 연합 성주", "우호·동맹 영지 2 · 명성 80"),
-                        Triple("👑", "수원시 통합군주", "우호·동맹 영지 3 · 명성 95")
+                        Triple("🏯", "거점 호족", "${state.regionName}에서 시작"),
+                        Triple("🏛", "연합 대표", "우호 거점 2곳 · 명성 80"),
+                        Triple("👑", "광역 통합군주", "우호 거점 3곳 · 명성 95")
                     ).forEach { (icon, title, caption) ->
                         Row(
                             modifier = Modifier
@@ -329,8 +329,8 @@ fun PromotionScreen(
                     }
                     SlgExpand(
                         summary = "우호·동맹 영지를 얻는 방법",
-                        detail = "① 원천동 야간 물자 협정(사건 탭 「상인」) ② 광교동 속국 조공 조약 " +
-                            "③ 용인 수지 상호방위 조약 — 조약은 「외교」 화면에서 체결합니다.",
+                        detail = "① 인접 물류 상인회 야간 협정(사건 탭 「상인」) ② 경계 세력 속국 조공 조약 " +
+                            "③ 이웃 자치구 상호방위 조약 — 조약은 「외교」 화면에서 체결합니다.",
                         accent = SlgColors.Steel
                     )
                 }

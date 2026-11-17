@@ -41,7 +41,7 @@ class SlgEngineTest {
             maxLords = 8,
             terrain = TerrainType.MOUNTAIN,
             fortress = Fortress(
-                level = FortressLevel.MOUNTAIN_FORTRESS,
+                level = FortressLevel.UNDERGROUND_BUNKER,
                 durability = 1000,
                 maxDurability = 1000,
                 garrisonTroops = 1500
@@ -56,7 +56,7 @@ class SlgEngineTest {
         )
 
         assertTrue("요새와 지형 이점으로 수성군이 승리해야 함", result.defenderWon)
-        // 4000 * 0.25 = 1000 raw losses. MOUNTAIN_FORTRESS gives 80% reduction: 1000 * 0.2 = 200
+        // 4000 * 0.25 = 1000 raw losses. UNDERGROUND_BUNKER gives 80% reduction: 1000 * 0.2 = 200
         assertEquals(200, result.defenderLosses)
         assertTrue("수성군 사상자가 80% 격감되어야 함", result.defenderLosses <= 250)
     }
@@ -64,10 +64,10 @@ class SlgEngineTest {
     @Test
     fun testAllFortressLevelsCasualtyReductionRatios() {
         val levels = listOf(
-            FortressLevel.WOODEN_PALISADE to 0.40,
-            FortressLevel.STONE_WALL to 0.65,
-            FortressLevel.MOUNTAIN_FORTRESS to 0.80,
-            FortressLevel.IMPREGNABLE_GATE to 0.85
+            FortressLevel.CIVIL_FENCE to 0.40,
+            FortressLevel.CONCRETE_BARRIER to 0.65,
+            FortressLevel.UNDERGROUND_BUNKER to 0.80,
+            FortressLevel.INTEGRATED_NET to 0.85
         )
 
         for ((level, expectedRatio) in levels) {
@@ -124,7 +124,7 @@ class SlgEngineTest {
     @Test
     fun testMultiTurnSiegeAttritionAndFortressDegradation() {
         val fortress = Fortress(
-            level = FortressLevel.STONE_WALL,
+            level = FortressLevel.CONCRETE_BARRIER,
             durability = 600,
             maxDurability = 1000,
             garrisonTroops = 2000

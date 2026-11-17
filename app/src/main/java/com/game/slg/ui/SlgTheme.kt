@@ -77,6 +77,9 @@ fun relationColor(label: String): Color = when (label) {
     Relation.ALLIED.label -> SlgColors.Steel
     Relation.NEUTRAL_MERCHANT.label -> SlgColors.Violet
     Relation.WARY.label -> SlgColors.Danger
+    Relation.CIVIC.label -> SlgColors.Success
+    Relation.LOCKED.label -> SlgColors.Line
+    Relation.MOUNTAIN_GATE.label -> SlgColors.Stone
     else -> SlgColors.Stone
 }
 

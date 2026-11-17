@@ -30,13 +30,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.game.slg.R
+import com.game.slg.core.engine.BuildValidation
+import com.game.slg.core.map.TerritoryMapLayout
+import com.game.slg.core.model.FacilityCategory
+import com.game.slg.core.model.FacilityType
 import com.game.slg.core.model.TerrainType
 
 /**
- * 서브 메뉴 「영지·내정」 — 탭 3개: 영지 / 지표 / 절기.
- *
- * 첫 탭은 본진 일러스트 + 레이더 차트, 둘째 탭은 인접 행정구역 카드,
- * 셋째 탭은 절기 바퀴와 정산만 보여 준다. 긴 설명은 「?」로 접었다.
+ * 서브 메뉴 「영지·내정」 — 탭 4개: 영지 / 지표 / 절기 / 시설.
  */
 @Composable
 fun TerritoryScreen(
@@ -44,7 +45,8 @@ fun TerritoryScreen(
     onAdvanceSeason: () -> Unit,
     onDismissCeremony: () -> Unit,
     tabIndex: Int = 0,
-    onSelectTerritory: (String) -> Unit = {}
+    onSelectTerritory: (String) -> Unit = {},
+    onBuildFacility: (FacilityType) -> BuildValidation = { BuildValidation(false, 0) }
 ) {
     SlgScreenFrame {
         PromotionCeremonyBanner(state = state, onDismissCeremony = onDismissCeremony)
@@ -52,13 +54,14 @@ fun TerritoryScreen(
             TerritoryTab.HOME -> TerritoryOverview(state)
             TerritoryTab.STATS -> TerritoryStats(state, onSelectTerritory)
             TerritoryTab.SEASON -> SeasonPanel(state, onAdvanceSeason)
+            TerritoryTab.FACILITIES -> FacilityPanel(state, onBuildFacility)
         }
     }
 }
 
 @Composable
 private fun TerritoryOverview(state: SlgGameState) {
-    // 본진 일러스트 + 지휘관
+    // 관할 구역 일러스트 + 지휘관
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -67,16 +70,14 @@ private fun TerritoryOverview(state: SlgGameState) {
     ) {
         Image(
             painter = painterResource(R.drawable.slg_city_maetan),
-            contentDescription = "매탄동 본진",
+            contentDescription = "관할 구역",
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(listOf(Color(0x22000000), Color(0xE60C0E13)))
-                )
+                .background(Brush.verticalGradient(listOf(Color(0x22000000), Color(0xE60C0E13))))
         )
         Column(
             modifier = Modifier
@@ -85,12 +86,12 @@ private fun TerritoryOverview(state: SlgGameState) {
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                SlgPill("본진", SlgColors.Brass, filled = true)
+                SlgPill("내 거점", SlgColors.Brass, filled = true)
                 SlgPill(state.seasonName.substringBefore(" ("), SlgColors.Steel)
-                SlgPill("호족 5석", SlgColors.Stone)
+                SlgPill("Lv.${state.command.level}", SlgColors.Success)
             }
             Text(
-                "경기도 수원시 영통구 매탄동",
+                state.regionFullName,
                 color = SlgColors.Text,
                 fontSize = SlgType.TITLE,
                 fontWeight = FontWeight.ExtraBold
@@ -104,7 +105,12 @@ private fun TerritoryOverview(state: SlgGameState) {
         ) {
             Column(horizontalAlignment = Alignment.End) {
                 Text("지휘관", color = SlgColors.Muted, fontSize = SlgType.MICRO)
-                Text("이광수 호족", color = SlgColors.Brass, fontSize = SlgType.LABEL, fontWeight = FontWeight.Bold)
+                Text(
+                    "${state.playerLord?.name ?: "이광수"} 호족",
+                    color = SlgColors.Brass,
+                    fontSize = SlgType.LABEL,
+                    fontWeight = FontWeight.Bold
+                )
             }
             Spacer(Modifier.width(6.dp))
             Image(
@@ -117,6 +123,47 @@ private fun TerritoryOverview(state: SlgGameState) {
                     .border(1.5.dp, SlgColors.Brass, CircleShape)
             )
         }
+    }
+
+    // 지역·호족 정원
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SlgColors.Surface)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("관할 구역", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            SlgPill("🏯 ${state.lordCapacity}석", SlgColors.Brass)
+        }
+        SlgStatBar(
+            ratio = state.registeredLords.toFloat() / state.lordCapacity.coerceAtLeast(1),
+            color = SlgColors.Brass,
+            height = 5
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            SlgSummaryChip("👥", "${state.regionPopulation}", SlgColors.Text, Modifier.weight(1f))
+            SlgSummaryChip("🤖", "AI ${state.aiLordCount}", SlgColors.Steel, Modifier.weight(1f))
+            SlgSummaryChip("📐", "1,000명/석", SlgColors.Brass, Modifier.weight(1f))
+        }
+        Text(
+            "인구 ${state.regionPopulation}명 ÷ 1,000 = 호족 ${state.lordCapacity}석 · 인계 ${state.registeredLords}석 · " +
+                "나머지 ${state.aiLordCount}석은 AI 운영",
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO,
+            lineHeight = 15.sp
+        )
+        SlgPill(state.expansionTier.label, SlgColors.Steel, filled = true)
+        Text(
+            "${state.expansionTier.detail} — 지휘 Lv.${state.command.level} " +
+                "(다음 Lv.까지 ${state.command.xpRemaining} XP)",
+            color = SlgColors.Text.copy(alpha = 0.85f),
+            fontSize = SlgType.MICRO,
+            lineHeight = 15.sp
+        )
     }
 
     // 통치 지표 레이더
@@ -155,65 +202,81 @@ private fun TerritoryOverview(state: SlgGameState) {
 @Composable
 private fun TerritoryStats(state: SlgGameState, onSelectTerritory: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        SlgWorld.TERRITORIES.forEach { territory ->
-            val accent = relationColor(territory.relation.label)
-            val selected = territory.code == state.selectedTerritoryCode
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(if (selected) accent.copy(alpha = 0.12f) else SlgColors.Surface)
-                    .border(
-                        1.dp,
-                        if (selected) accent.copy(alpha = 0.7f) else SlgColors.Line.copy(alpha = 0.6f),
-                        RoundedCornerShape(11.dp)
-                    )
-                    .clickable { onSelectTerritory(territory.code) }
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SlgPill("해금 ${state.unlockedNodeCount}", SlgColors.Success)
+            Spacer(Modifier.width(5.dp))
+            SlgPill("잠김 ${state.lockedNodeCount}", SlgColors.Muted)
+            Spacer(Modifier.weight(1f))
+            Text("Lv.${state.command.level} ${state.expansionTier.label}", color = SlgColors.Brass, fontSize = SlgType.MICRO)
+        }
+        state.mapNodes
+            .sortedWith(compareBy({ it.hopDistance }, { -it.population }))
+            .forEach { node ->
+                val accent = if (node.isLocked) SlgColors.Line else relationColor(node.relationLabel)
+                val selected = node.code == state.selectedTerritoryCode
+                Row(
                     modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(accent.copy(alpha = 0.18f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(territory.terrain.emoji(), fontSize = 15.sp)
-                }
-                Spacer(Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            territory.name,
-                            color = SlgColors.Text,
-                            fontSize = SlgType.BODY_SMALL,
-                            fontWeight = FontWeight.Bold
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(if (selected) accent.copy(alpha = 0.12f) else SlgColors.Surface)
+                        .border(
+                            1.dp,
+                            if (selected) accent.copy(alpha = 0.7f) else SlgColors.Line.copy(alpha = 0.6f),
+                            RoundedCornerShape(11.dp)
                         )
-                        Spacer(Modifier.width(5.dp))
-                        SlgPill(territory.relation.label, accent)
+                        .clickable { onSelectTerritory(node.code) }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(accent.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(if (node.isLocked) "🔒" else node.terrain.emoji(), fontSize = 14.sp)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("👥 ${territory.population}", color = SlgColors.Muted, fontSize = SlgType.MICRO)
-                        Spacer(Modifier.width(7.dp))
-                        Box(modifier = Modifier.width(56.dp)) {
-                            SlgStatBar(
-                                ratio = territory.troops / 2000f,
-                                color = accent,
-                                height = 4
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                node.name,
+                                color = if (node.isLocked) SlgColors.Muted else SlgColors.Text,
+                                fontSize = SlgType.BODY_SMALL,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.width(5.dp))
+                            SlgPill(
+                                if (node.isLocked) "Lv.${tierLevelForHopPublic(node.hopDistance)} 해금" else node.relationLabel,
+                                accent
                             )
                         }
-                        Spacer(Modifier.width(4.dp))
-                        Text("⚔ ${territory.troops}", color = accent, fontSize = SlgType.MICRO)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("👥 ${node.population}", color = SlgColors.Muted, fontSize = SlgType.MICRO)
+                            Spacer(Modifier.width(7.dp))
+                            Text("🏯 ${node.lordCapacity}석", color = SlgColors.Muted, fontSize = SlgType.MICRO)
+                            Spacer(Modifier.width(7.dp))
+                            Text(
+                                "⚔ ${if (node.isHome) state.troops else node.troops}",
+                                color = accent,
+                                fontSize = SlgType.MICRO
+                            )
+                        }
                     }
+                    if (selected) SlgPill("선택", SlgColors.Brass, filled = true)
                 }
-                if (selected) SlgPill("선택", SlgColors.Brass, filled = true)
             }
-        }
         SlgExpand(
             summary = "이 지역의 사정 — 원문",
             detail = state.selectedTerritory?.note ?: "지도에서 영지를 탭하면 상세가 바뀝니다.",
             accent = SlgColors.Brass
+        )
+        SlgExpand(
+            summary = "해금 규칙",
+            detail = "Lv.1 관할 구역(내 읍·면·동) → Lv.2 인접 읍·면·동 → Lv.3 연접 구역 → Lv.4 시·군 전역 → " +
+                "Lv.6 광역 생활권 → Lv.8 전국 연결망. 작전·절기·의회·시설로 경험치를 얻습니다.",
+            accent = SlgColors.Steel
         )
     }
 }
@@ -239,14 +302,14 @@ private fun SeasonPanel(state: SlgGameState, onAdvanceSeason: () -> Unit) {
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    "다음 절기에 조세·추수·유지비가 정산됩니다.",
+                    "다음 절기에 지방세·결산·유지비가 정산됩니다.",
                     color = SlgColors.Muted,
                     fontSize = SlgType.MICRO,
                     maxLines = 2
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    SlgPill("🌱 봄 조세", SlgColors.Success)
-                    SlgPill("☀ 여름 치수", SlgColors.Water)
+                    SlgPill("🌱 예산", SlgColors.Success)
+                    SlgPill("☀ 재난", SlgColors.Water)
                 }
             }
         }
@@ -254,8 +317,8 @@ private fun SeasonPanel(state: SlgGameState, onAdvanceSeason: () -> Unit) {
             title = "다음 절기 진행",
             icon = "🌾",
             effects = listOf(
-                Effect("💰", "조세", SlgColors.Brass),
-                Effect("🌾", "추수", SlgColors.Success),
+                Effect("💰", "세수", SlgColors.Brass),
+                Effect("🌾", "결산", SlgColors.Success),
                 Effect("🛠", "유지비", SlgColors.Muted)
             ),
             accent = SlgColors.Success,
@@ -263,12 +326,91 @@ private fun SeasonPanel(state: SlgGameState, onAdvanceSeason: () -> Unit) {
         )
         SlgExpand(
             summary = "절기 규칙",
-            detail = "봄 조세 → 여름 치수·풍수해 → 가을 대추수 → 겨울 혹한기 유지비 순으로 4계절이 돕니다. " +
-                "여름에는 치수 사업을 반드시 마쳐야 홍수 피해를 막을 수 있습니다.",
+            detail = "봄 지방세 → 여름 재난 대응·집중호우 → 가을 결산·보급 비축 → 겨울 동절기 유지비 순으로 4계절이 돕니다. " +
+                "여름에는 배수·제방 정비를 마쳐야 침수 피해를 막을 수 있고, 물류 허브를 지으면 절기 보급이 12% 늘어납니다.",
             accent = SlgColors.Success
         )
         SlgLogBox(state.log, maxLines = 3)
     }
+}
+
+/** 시설 — 지휘통제실·드론 격납고·방공 레이더망·물류 허브·스마트 방호망 등 */
+@Composable
+private fun FacilityPanel(
+    state: SlgGameState,
+    onBuildFacility: (FacilityType) -> BuildValidation
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SlgColors.Surface)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("현대 시설", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            SlgPill("${state.facilities.size}/${FacilityType.entries.size} 건설", SlgColors.Brass)
+        }
+        SlgStatBar(
+            ratio = state.facilities.size.toFloat() / FacilityType.entries.size.coerceAtLeast(1),
+            color = SlgColors.Brass,
+            height = 5
+        )
+        Text(
+            "자금 ${state.gold}G · 시설은 1회 건설로 효과가 계속 적용됩니다.",
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO
+        )
+    }
+
+    FacilityCategory.entries.forEach { category ->
+        SlgSectionCard(title = category.label, badge = "${FacilityType.byCategory(category).count { state.facilities.contains(it) }}건", accent = SlgColors.Steel) {
+            FacilityType.byCategory(category).forEach { facility ->
+                val owned = state.facilities.contains(facility)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (owned) SlgColors.Brass.copy(alpha = 0.12f) else SlgColors.SurfaceAlt)
+                        .clickable(enabled = !owned && state.gold >= facility.cost) { onBuildFacility(facility) }
+                        .padding(horizontal = 9.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(facility.icon, fontSize = SlgType.TITLE)
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            facility.displayName,
+                            color = if (owned) SlgColors.Brass else SlgColors.Text,
+                            fontSize = SlgType.LABEL,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(facility.effectLabel, color = SlgColors.Muted, fontSize = SlgType.MICRO)
+                    }
+                    SlgPill(
+                        if (owned) "건설됨" else "${facility.cost}G",
+                        when {
+                            owned -> SlgColors.Success
+                            state.gold >= facility.cost -> SlgColors.Brass
+                            else -> SlgColors.Muted
+                        },
+                        filled = owned
+                    )
+                }
+            }
+        }
+    }
+
+    SlgExpand(
+        summary = "시설 효과 정리",
+        detail = "지휘통제실 작전 경험 +10% · 드론 격납고 드론 전투력 +15% · 방공 레이더망 방어 +10%·첩보 +5 · " +
+            "물류 허브 절기 보급 +12% · 스마트 방호망 사상자 -8% · 통신·사이버 정보국 첩보 +10 · " +
+            "민방위 지원센터 민심 +6 · 야전 의무지원대 작전 후 병력 +5%.",
+        accent = SlgColors.Brass
+    )
+    SlgLogBox(state.log, maxLines = 3)
 }
 
 /** 지형 이모지 */
@@ -278,6 +420,10 @@ fun TerrainType.emoji(): String = when (this) {
     TerrainType.COASTAL -> "〜"
     else -> "▦"
 }
+
+/** hop 거리가 열리는 최소 지휘 레벨 */
+fun tierLevelForHopPublic(hop: Int): Int =
+    com.game.slg.core.region.ExpansionTier.entries.firstOrNull { it.maxHop >= hop }?.level ?: 8
 
 /** 현재 절기 → 바퀴 인덱스 (봄 0 · 여름 1 · 가을 2 · 겨울 3) */
 fun SlgGameState.seasonWheelIndex(): Int = when {
