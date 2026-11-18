@@ -158,7 +158,7 @@ private fun HomeTopBar(
             items(ResourceKind.hudOrder, key = { it.name }) { kind ->
                 SlgSummaryChip(
                     icon = kind.icon,
-                    value = comma(
+                    value = compact(
                         ResourceBoosts.valueOf(kind, state.gold, state.food, state.population, state.troops)
                     ),
                     color = Color(kind.accentHex),
@@ -595,6 +595,14 @@ fun SlgInfoOverlay(
 
 /** 1,234 형식 */
 private fun comma(value: Int): String = "%,d".format(value)
+
+/** HUD 칩용 짧은 표기 — 10,000 이상은 "4.9만" 처럼 줄여 네 칩이 한 줄에 들어간다 */
+private fun compact(value: Int): String {
+    if (value < 10_000) return comma(value)
+    val man = value / 10_000.0
+    val text = "%.1f".format(man)
+    return (if (text.endsWith(".0")) text.dropLast(2) else text) + "만"
+}
 
 /**
  * 재원을 눌렀을 때 올라오는 바텀시트.
