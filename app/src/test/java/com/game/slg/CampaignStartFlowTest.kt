@@ -1,5 +1,6 @@
 package com.game.slg
 
+import com.game.slg.core.economy.ResourceBalance
 import com.game.slg.core.region.AiLordGenerator
 import com.game.slg.core.save.InMemoryCampaignStore
 import com.game.slg.core.region.RegionCatalog
@@ -75,9 +76,9 @@ class CampaignStartFlowTest {
         assertEquals(target.id, state.playerLordId)
         assertEquals(1, state.registeredLords)
         assertEquals(47, state.aiLordCount)
-        assertEquals(target.troops, state.troops)
-        assertEquals(target.gold, state.gold)
-        assertEquals(target.grain, state.food)
+        assertEquals(target.troops + ResourceBalance.FOUNDING_TROOPS, state.troops)
+        assertEquals(target.gold + ResourceBalance.FOUNDING_GOLD, state.gold)
+        assertEquals(target.grain + ResourceBalance.FOUNDING_FOOD, state.food)
         assertEquals(target.prestige, state.prestige)
         assertTrue(state.lords.first { it.id == target.id }.isPlayer)
         assertEquals("이광수", state.lords.first { it.id == target.id }.name)

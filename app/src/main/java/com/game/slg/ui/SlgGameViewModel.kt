@@ -20,6 +20,10 @@ import com.game.slg.core.engine.ModernBattleResult
 import com.game.slg.core.engine.PromotionEngine
 import com.game.slg.core.engine.RefugeeCrisisEngine
 import com.game.slg.core.engine.SeasonEngine
+import com.game.slg.core.economy.BoostKind
+import com.game.slg.core.economy.BoostTarget
+import com.game.slg.core.economy.ResourceBalance
+import com.game.slg.core.economy.ResourceBoosts
 import com.game.slg.core.hero.Hero
 import com.game.slg.core.hero.HeroBonus
 import com.game.slg.core.hero.HeroEngine
@@ -237,9 +241,9 @@ data class SlgGameState(
     // ── 기본 지표 ──
     val seasonName: String = "봄 (예산 편성·지방세 징수)",
     val population: Int = 48604,
-    val gold: Int = 4200,
-    val food: Int = 8600,
-    val troops: Int = 1200,
+    val gold: Int = ResourceBalance.START_GOLD,
+    val food: Int = ResourceBalance.START_FOOD,
+    val troops: Int = ResourceBalance.START_TROOPS,
     val morale: Int = 62,
     val prestige: Int = 74,
     val diplomacy: Int = 55,
@@ -278,6 +282,10 @@ data class SlgGameState(
     // ── 영웅(인재) ──
     val heroes: HeroRosterState = HeroRosterState.initial(),
     val heroMessage: String? = null,
+    // ── 재원 탭 서브 메뉴 (식량·골드·인구수·병력) ──
+    val resourceMessage: String? = null,
+    /** 이번 절기에 재원 증가 방법을 쓴 횟수 — 절기를 넘기면 초기화된다 */
+    val boostUses: Map<String, Int> = emptyMap(),
     // ── 지역 연합 · 스폰 보호 ──
     val union: RegionUnion = RegionUnion()
 ) {
@@ -626,19 +634,27 @@ class SlgGameViewModel(
                 selectedLordId = lordId,
                 lords = updatedLords,
                 registeredLords = 1,
-                gold = chosen.gold,
-                food = chosen.grain,
-                troops = chosen.troops,
                 prestige = chosen.prestige,
+                // 초반 재원 부족 완화 — 인계분에 창업 지원(자금 8,000G · 식량 16,000석 · 병력 1,200명)을 더한다
+                gold = chosen.gold + ResourceBalance.FOUNDING_GOLD,
+                food = chosen.grain + ResourceBalance.FOUNDING_FOOD,
+                troops = chosen.troops + ResourceBalance.FOUNDING_TROOPS,
                 morale = (55 + chosen.prestige / 5).coerceIn(0, 100),
                 command = command,
                 unlockedHop = command.unlockedHop,
-                mapNodes = TerritoryMapLayout.build(region, command.unlockedHop, playerName, chosen.troops),
+                mapNodes = TerritoryMapLayout.build(
+                    region,
+                    command.unlockedHop,
+                    playerName,
+                    chosen.troops + ResourceBalance.FOUNDING_TROOPS
+                ),
                 selectedTerritoryCode = s.regionCode,
                 heroes = HeroRosterState.initial(),
                 heroMessage = "기본 영웅 3명과 함께 시작합니다 — 한서연[내정] · 윤도현[기술] · 차명숙[상업]",
                 union = RegionUnionEngine.open(s.regionCode, s.regionName),
-                statusMessage = "[인계 완료] ${chosen.stronghold} — ${chosen.name} 리더의 거점을 이어받았습니다.",
+                statusMessage = "[인계 완료] ${chosen.stronghold} — ${chosen.name} 리더의 거점을 이어받았습니다. " +
+                    "창업 지원 자금 ${comma(ResourceBalance.FOUNDING_GOLD)}G · 식량 ${comma(ResourceBalance.FOUNDING_FOOD)}석 · " +
+                    "병력 ${comma(ResourceBalance.FOUNDING_TROOPS)}명.",
                 log = (s.log + "[인계] ${s.regionFullName} ${chosen.stronghold}의 ${chosen.name} 리더 세력을 인계받았다. " +
                     "Lv.1 관할 구역부터 시작합니다." +
                     "[지역 연합] 같은 지역 AI 리더 ${s.lordCapacity - 1}명과 자동 연합 · 스폰 보호 " +
@@ -704,7 +720,8 @@ class SlgGameViewModel(
             val territory = buildTerritory(
                 area = s.regionArea ?: RegionCatalog.defaultRegion(),
                 fortress = homeFortress(s),
-                fertileScore = 1.0 + economy
+                fertileScore = 1.0 + economy,
+                population = s.population
             )
             val result = seasonEngine.processSeasonalCycle(
                 currentSeason = season,
@@ -718,16 +735,21 @@ class SlgGameViewModel(
             val heroBonus = s.heroBonus
             val heroGold = (result.goldChange.coerceAtLeast(0) * heroBonus.goldPercent) / 100
             val heroGrain = (grainGain.coerceAtLeast(0) * heroBonus.foodPercent) / 100
+            // 초반 재원 부족 완화 — 절기마다 인구에 비례한 기본 수급을 더한다
+            val baseGold = ResourceBalance.seasonGold(s.population)
+            val baseFood = ResourceBalance.seasonFood(s.population, s.facilities)
             val (unionNext, unionMessage) = RegionUnionEngine.onTurnPassed(s.union)
             val before = s.command
             val gained = before.gainXp(CommandProgress.XP_SEASON)
             val heroNote = if (heroBonus.isEmpty) "" else "\n[영웅] 배치 보너스 — ${heroBonus.summary()}"
-            val message = "[절기 순환: ${season.displayName}] ${result.message}" + heroNote
+            val baseNote = "\n[수급] 기본 수급 — 자금 +${comma(baseGold)}G · 식량 +${comma(baseFood)}석"
+            val message = "[절기 순환: ${season.displayName}] ${result.message}" + heroNote + baseNote
             season = nextSeason
             s.copy(
                 seasonName = nextSeason.displayName,
-                gold = (playerLord.gold + heroGold).coerceAtLeast(0),
-                food = (playerLord.grain + (grainGain - result.grainChange) + heroGrain).coerceAtLeast(0),
+                gold = (playerLord.gold + heroGold + baseGold).coerceAtLeast(0),
+                food = (playerLord.grain + (grainGain - result.grainChange) + heroGrain + baseFood).coerceAtLeast(0),
+                boostUses = emptyMap(),
                 union = unionNext,
                 command = gained,
                 unlockedHop = gained.unlockedHop,
@@ -1401,6 +1423,91 @@ class SlgGameViewModel(
         persist()
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // 재원 탭 서브 메뉴 — 식량 · 골드 · 인구수 · 병력
+    // ──────────────────────────────────────────────────────────────
+
+    /** 이번 절기에 이 방법을 쓴 횟수 */
+    fun boostUsesOf(actionId: String): Int = _uiState.value.boostUses[actionId] ?: 0
+
+    /**
+     * 재원 증가 방법 실행 — 즉시 실행은 상태를 바꾸고,
+     * 화면이 필요한 항목은 해당 탭으로, 절기 항목은 절기를 넘긴다.
+     */
+    fun boostResource(actionId: String) {
+        val action = ResourceBoosts.byId(actionId)
+            ?: return
+        when (action.kind) {
+            BoostKind.NAVIGATE -> {
+                val (tab, sub) = boostTargetOf(action.target)
+                _uiState.update { it.copy(resourceMessage = null) }
+                openTab(tab, sub)
+            }
+
+            BoostKind.SEASON -> {
+                _uiState.update { it.copy(resourceMessage = null) }
+                advanceSeason()
+            }
+
+            BoostKind.INSTANT -> {
+                val s = _uiState.value
+                val used = s.boostUses[action.id] ?: 0
+                val outcome = ResourceBoosts.execute(
+                    actionId = action.id,
+                    gold = s.gold,
+                    food = s.food,
+                    population = s.population,
+                    troops = s.troops,
+                    morale = s.morale,
+                    usedThisSeason = used
+                )
+                _uiState.update { st ->
+                    if (!outcome.ok) {
+                        st.copy(resourceMessage = outcome.message, statusMessage = outcome.message)
+                    } else {
+                        st.copy(
+                            gold = (st.gold + outcome.goldDelta).coerceAtLeast(0),
+                            food = (st.food + outcome.foodDelta).coerceAtLeast(0),
+                            population = (st.population + outcome.populationDelta).coerceAtLeast(0),
+                            troops = (st.troops + outcome.troopsDelta).coerceAtLeast(0),
+                            morale = (st.morale + outcome.moraleDelta).coerceIn(0, 100),
+                            boostUses = st.boostUses + (action.id to used + 1),
+                            resourceMessage = outcome.message,
+                            statusMessage = outcome.message,
+                            log = (st.log + outcome.message).takeLast(8),
+                            mapNodes = if (outcome.troopsDelta == 0) st.mapNodes else {
+                                TerritoryMapLayout.build(
+                                    start = st.regionArea ?: RegionCatalog.defaultRegion(),
+                                    unlockedHop = st.unlockedHop,
+                                    playerName = st.playerLord?.name ?: "이광수",
+                                    homeTroops = (st.troops + outcome.troopsDelta).coerceAtLeast(0)
+                                )
+                            }
+                        )
+                    }
+                }
+                persist()
+            }
+        }
+    }
+
+    /** 재원 증가 방법 → 화면 이동 대상 */
+    private fun boostTargetOf(target: BoostTarget?): Pair<MainTab, Int> = when (target) {
+        BoostTarget.TECH -> MainTab.DOMAIN to DomainTab.TECH.ordinal
+        BoostTarget.HERO_PLACE -> MainTab.HERO to HeroTab.PLACE.ordinal
+        BoostTarget.HERO_RECRUIT -> MainTab.HERO to HeroTab.RECRUIT.ordinal
+        BoostTarget.FACILITIES -> MainTab.DOMAIN to DomainTab.FACILITIES.ordinal
+        BoostTarget.EVENTS -> MainTab.DOMAIN to DomainTab.EVENTS.ordinal
+        BoostTarget.COUNCIL -> MainTab.DOMAIN to DomainTab.COUNCIL.ordinal
+        BoostTarget.PROMOTION -> MainTab.DOMAIN to DomainTab.PROMOTION.ordinal
+        BoostTarget.SEASON_VIEW -> MainTab.DOMAIN to DomainTab.SEASON.ordinal
+        BoostTarget.WAR_OPS -> MainTab.WAR to WarTab.OPS.ordinal
+        null -> MainTab.MAP to 0
+    }
+
+    /** 재원 시트 숫자 표기 */
+    private fun comma(value: Int): String = "%,d".format(value)
+
     /** 영웅 탭에서 빈 슬롯을 대기 영웅으로 채운다 */
     fun autoFillHeroSlots() {
         val filled = HeroEngine.fillEmptySlots(_uiState.value.heroes)
@@ -1637,13 +1744,14 @@ class SlgGameViewModel(
     private fun buildTerritory(
         area: RegionArea,
         fortress: Fortress?,
-        fertileScore: Double = 1.0
+        fertileScore: Double = 1.0,
+        population: Int = area.population
     ): Territory = Territory(
         code = area.code,
         name = area.name,
         province = area.province,
         cityCountyDistrict = listOf(area.city, area.district).filter { it.isNotBlank() }.joinToString(" "),
-        population = area.population,
+        population = population.coerceAtLeast(1),
         maxLords = area.lordCapacity,
         terrain = area.terrain,
         fortress = fortress,

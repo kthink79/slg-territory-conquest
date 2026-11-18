@@ -165,7 +165,8 @@ private fun PlaySurface(
                     onOpenTab = { tab, sub -> viewModel.openTab(tab, sub) },
                     onAdvanceSeason = { viewModel.advanceSeason() },
                     onOpenInfo = { onInfoOpenChange(true) },
-                    onDismissLevelUp = { viewModel.dismissLevelUp() }
+                    onDismissLevelUp = { viewModel.dismissLevelUp() },
+                    onBoost = { viewModel.boostResource(it) }
                 )
             } else {
                 SlgTabSurface(

@@ -359,12 +359,12 @@ object MainInfoPanel {
 
     const val BUTTON_LABEL = "📊 정보"
 
-    /** 홈 상단 1줄 — 자금·보급·병력·민심 */
+    /** 홈 상단 1줄 — 골드·식량·인구수·병력 (각각 눌러 늘리는 서브 메뉴가 열린다) */
     fun topSummary(state: SlgGameState): List<InfoEntry> = listOf(
-        InfoEntry("💰", "자금", "${state.gold}", 0xFFE2B755),
-        InfoEntry("🌾", "보급", "${state.food}", 0xFF81C784),
-        InfoEntry("⚔", "병력", "${state.troops}", 0xFF7FA4D6),
-        InfoEntry("❤", "민심", "${state.morale}", 0xFFEDEAE3)
+        InfoEntry("💰", "골드", "${state.gold}", 0xFFE2B755),
+        InfoEntry("🌾", "식량", "${state.food}", 0xFF81C784),
+        InfoEntry("👥", "인구수", "${state.population}", 0xFFEDEAE3),
+        InfoEntry("⚔", "병력", "${state.troops}", 0xFF7FA4D6)
     )
 
     /** 📊 정보 패널 — 지역·리더 정원·지휘 단계·세력 지표 */
@@ -380,6 +380,7 @@ object MainInfoPanel {
             add(InfoEntry("🏗", "시설", "${state.facilities.size}곳", 0xFF90A4AE))
             add(InfoEntry("🤝", "우호", "${state.alliedTerritories}곳", 0xFF7FA4D6))
             add(InfoEntry("⭐", "명성", "${state.prestige}", 0xFFE2B755))
+            add(InfoEntry("❤", "민심", "${state.morale}", 0xFFEDEAE3))
             add(InfoEntry("🎭", "첩보", "${state.espionagePower}", 0xFFB39DDB))
             add(InfoEntry("🎯", "적량", "${state.enemyFood}", 0xFFE57373))
             add(

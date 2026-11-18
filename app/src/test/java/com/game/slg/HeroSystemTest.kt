@@ -16,21 +16,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 현대 영웅(인재) 시스템 — 카탈로그 10명 · 기본 3명 · 탐색/설득/고용 · 슬롯 배치 보너스.
+ * 현대 영웅(인재) 시스템 — 카탈로그 230명 · 기본 3명 · 탐색/설득/고용 · 슬롯 배치 보너스.
  */
 class HeroSystemTest {
 
     // ── 카탈로그 ──────────────────────────────────────────────
 
     @Test
-    fun `영웅은 초상화 10장과 1대1로 맞물린다`() {
-        assertEquals(10, HeroRoster.ALL.size)
+    fun `영웅 230명이 초상화 230장과 1대1로 맞물린다`() {
+        assertEquals(230, HeroRoster.ALL.size)
         assertEquals(
-            (1..10).map { "slg_hero_%02d".format(it) },
+            (1..230).map { "slg_hero_" + it.toString().padStart(3, '0') },
             HeroRoster.PORTRAIT_NAMES
         )
-        assertEquals(10, HeroRoster.ALL.map { it.id }.distinct().size)
-        assertEquals(10, HeroRoster.ALL.map { it.name }.distinct().size)
+        assertEquals(230, HeroRoster.ALL.map { it.id }.distinct().size)
+        assertEquals(230, HeroRoster.ALL.map { it.name }.distinct().size)
     }
 
     @Test
@@ -40,7 +40,7 @@ class HeroSystemTest {
                 "한서연", "윤도현", "차명숙", "강태식", "송기환",
                 "배도윤", "임하경", "백지현", "구영철", "유하린"
             ),
-            HeroRoster.ALL.map { it.name }
+            HeroRoster.ALL.take(10).map { it.name }
         )
         assertEquals(HeroRole.ADMIN, HeroRoster.byName("한서연")!!.role)
         assertEquals(HeroRole.TECH, HeroRoster.byName("윤도현")!!.role)
@@ -90,10 +90,10 @@ class HeroSystemTest {
     }
 
     @Test
-    fun `나머지 7명은 미탐색 상태로 영입 대상이다`() {
+    fun `나머지 227명은 미탐색 상태로 영입 대상이다`() {
         val roster = HeroRosterState.initial()
 
-        assertEquals(7, roster.recruitables.size)
+        assertEquals(227, roster.recruitables.size)
         roster.recruitables.forEach { hero ->
             assertEquals(HeroStage.UNDISCOVERED, roster.recordOf(hero.id).stage)
             assertEquals(0, roster.recordOf(hero.id).affinity)
@@ -120,29 +120,29 @@ class HeroSystemTest {
     fun `탐색은 자금 200G를 쓰고 호감도를 올린다`() {
         val roster = HeroRosterState.initial()
 
-        val result = HeroEngine.scout(roster, "hero_04", gold = 1000)
+        val result = HeroEngine.scout(roster, "hero_004", gold = 1000)
 
         assertTrue(result.success)
         assertEquals(-HeroRoster.SCOUT_COST, result.goldDelta)
-        assertEquals(HeroStage.SCOUTED, result.roster.recordOf("hero_04").stage)
-        assertEquals(HeroRoster.SCOUT_AFFINITY, result.roster.recordOf("hero_04").affinity)
+        assertEquals(HeroStage.SCOUTED, result.roster.recordOf("hero_004").stage)
+        assertEquals(HeroRoster.SCOUT_AFFINITY, result.roster.recordOf("hero_004").affinity)
         assertTrue(result.message.contains("강태식"))
     }
 
     @Test
     fun `자금이 모자라면 탐색할 수 없다`() {
-        val result = HeroEngine.scout(HeroRosterState.initial(), "hero_04", gold = 100)
+        val result = HeroEngine.scout(HeroRosterState.initial(), "hero_004", gold = 100)
 
         assertFalse(result.success)
         assertEquals(0, result.goldDelta)
-        assertEquals(HeroStage.UNDISCOVERED, result.roster.recordOf("hero_04").stage)
+        assertEquals(HeroStage.UNDISCOVERED, result.roster.recordOf("hero_004").stage)
         assertTrue(result.message.contains("자금"))
     }
 
     @Test
     fun `같은 영웅을 두 번 탐색할 수 없다`() {
-        val first = HeroEngine.scout(HeroRosterState.initial(), "hero_04", 1000)
-        val second = HeroEngine.scout(first.roster, "hero_04", 1000)
+        val first = HeroEngine.scout(HeroRosterState.initial(), "hero_004", 1000)
+        val second = HeroEngine.scout(first.roster, "hero_004", 1000)
 
         assertFalse(second.success)
         assertTrue(second.message.contains("이미 탐색"))
@@ -150,7 +150,7 @@ class HeroSystemTest {
 
     @Test
     fun `보유 영웅은 탐색 대상이 아니다`() {
-        val result = HeroEngine.scout(HeroRosterState.initial(), "hero_01", 1000)
+        val result = HeroEngine.scout(HeroRosterState.initial(), "hero_001", 1000)
 
         assertFalse(result.success)
         assertTrue(result.message.contains("이미 우리 리더"))
@@ -158,7 +158,7 @@ class HeroSystemTest {
 
     @Test
     fun `탐색 없이 설득할 수 없다`() {
-        val result = HeroEngine.persuade(HeroRosterState.initial(), "hero_04", prestige = 90)
+        val result = HeroEngine.persuade(HeroRosterState.initial(), "hero_004", prestige = 90)
 
         assertFalse(result.success)
         assertTrue(result.message.contains("탐색"))
@@ -166,34 +166,34 @@ class HeroSystemTest {
 
     @Test
     fun `명성이 모자라면 설득에 실패하고 호감도만 오른다`() {
-        val scouted = HeroEngine.scout(HeroRosterState.initial(), "hero_04", 1000).roster
-        val before = scouted.recordOf("hero_04").affinity
+        val scouted = HeroEngine.scout(HeroRosterState.initial(), "hero_004", 1000).roster
+        val before = scouted.recordOf("hero_004").affinity
 
-        val result = HeroEngine.persuade(scouted, "hero_04", prestige = 10)
+        val result = HeroEngine.persuade(scouted, "hero_004", prestige = 10)
 
         assertFalse(result.success)
-        assertEquals(HeroStage.SCOUTED, result.roster.recordOf("hero_04").stage)
-        assertEquals(before + HeroRoster.PERSUADE_FAIL_AFFINITY, result.roster.recordOf("hero_04").affinity)
+        assertEquals(HeroStage.SCOUTED, result.roster.recordOf("hero_004").stage)
+        assertEquals(before + HeroRoster.PERSUADE_FAIL_AFFINITY, result.roster.recordOf("hero_004").affinity)
         assertTrue(result.message.contains("48"))
     }
 
     @Test
     fun `명성이 충분하면 설득에 성공한다`() {
-        val scouted = HeroEngine.scout(HeroRosterState.initial(), "hero_04", 1000).roster
+        val scouted = HeroEngine.scout(HeroRosterState.initial(), "hero_004", 1000).roster
 
-        val result = HeroEngine.persuade(scouted, "hero_04", prestige = 55)
+        val result = HeroEngine.persuade(scouted, "hero_004", prestige = 55)
 
         assertTrue(result.success)
-        assertEquals(HeroStage.PERSUADED, result.roster.recordOf("hero_04").stage)
-        assertEquals(HeroRoster.PERSUADED_AFFINITY, result.roster.recordOf("hero_04").affinity)
+        assertEquals(HeroStage.PERSUADED, result.roster.recordOf("hero_004").stage)
+        assertEquals(HeroRoster.PERSUADED_AFFINITY, result.roster.recordOf("hero_004").affinity)
     }
 
     @Test
     fun `외교 영웅의 설득력이 필요 명성을 낮춘다`() {
-        val scouted = HeroEngine.scout(HeroRosterState.initial(), "hero_04", 1000).roster
+        val scouted = HeroEngine.scout(HeroRosterState.initial(), "hero_004", 1000).roster
 
-        val without = HeroEngine.persuade(scouted, "hero_04", prestige = 45, diplomacyBonus = 0)
-        val with = HeroEngine.persuade(scouted, "hero_04", prestige = 45, diplomacyBonus = 12)
+        val without = HeroEngine.persuade(scouted, "hero_004", prestige = 45, diplomacyBonus = 0)
+        val with = HeroEngine.persuade(scouted, "hero_004", prestige = 45, diplomacyBonus = 12)
 
         assertFalse(without.success)
         assertTrue(with.success)
@@ -201,9 +201,9 @@ class HeroSystemTest {
 
     @Test
     fun `설득 전에는 고용할 수 없다`() {
-        val scouted = HeroEngine.scout(HeroRosterState.initial(), "hero_04", 1000).roster
+        val scouted = HeroEngine.scout(HeroRosterState.initial(), "hero_004", 1000).roster
 
-        val result = HeroEngine.hire(scouted, "hero_04", gold = 5000)
+        val result = HeroEngine.hire(scouted, "hero_004", gold = 5000)
 
         assertFalse(result.success)
         assertTrue(result.message.contains("설득"))
@@ -211,25 +211,25 @@ class HeroSystemTest {
 
     @Test
     fun `고용은 자금을 쓰고 빈 슬롯에 자동 배치된다`() {
-        val roster = HeroEngine.scout(HeroRosterState.initial(), "hero_04", 1000).roster
-        val persuaded = HeroEngine.persuade(roster, "hero_04", prestige = 60).roster
+        val roster = HeroEngine.scout(HeroRosterState.initial(), "hero_004", 1000).roster
+        val persuaded = HeroEngine.persuade(roster, "hero_004", prestige = 60).roster
 
-        val result = HeroEngine.hire(persuaded, "hero_04", gold = 2000)
+        val result = HeroEngine.hire(persuaded, "hero_004", gold = 2000)
 
         assertTrue(result.success)
-        assertEquals(-HeroRoster.byId("hero_04")!!.hireCost, result.goldDelta)
-        assertEquals(HeroStage.HIRED, result.roster.recordOf("hero_04").stage)
-        assertEquals(HeroRole.OPS, result.roster.recordOf("hero_04").assignedRole)
+        assertEquals(-HeroRoster.byId("hero_004")!!.hireCost, result.goldDelta)
+        assertEquals(HeroStage.HIRED, result.roster.recordOf("hero_004").stage)
+        assertEquals(HeroRole.OPS, result.roster.recordOf("hero_004").assignedRole)
         assertEquals(4, result.roster.ownedCount)
         assertEquals(12, result.roster.activeBonus().combatPercent)
     }
 
     @Test
     fun `자금이 모자라면 고용할 수 없다`() {
-        val roster = HeroEngine.scout(HeroRosterState.initial(), "hero_04", 1000).roster
-        val persuaded = HeroEngine.persuade(roster, "hero_04", prestige = 60).roster
+        val roster = HeroEngine.scout(HeroRosterState.initial(), "hero_004", 1000).roster
+        val persuaded = HeroEngine.persuade(roster, "hero_004", prestige = 60).roster
 
-        val result = HeroEngine.hire(persuaded, "hero_04", gold = 100)
+        val result = HeroEngine.hire(persuaded, "hero_004", gold = 100)
 
         assertFalse(result.success)
         assertEquals(3, result.roster.ownedCount)
@@ -240,30 +240,30 @@ class HeroSystemTest {
         var roster = HeroRosterState.initial()
         var gold = 3000
 
-        val scouted = HeroEngine.scout(roster, "hero_10", gold)
+        val scouted = HeroEngine.scout(roster, "hero_010", gold)
         roster = scouted.roster
         gold += scouted.goldDelta
         assertTrue(scouted.success)
 
-        val persuaded = HeroEngine.persuade(roster, "hero_10", prestige = 90)
+        val persuaded = HeroEngine.persuade(roster, "hero_010", prestige = 90)
         roster = persuaded.roster
         assertTrue(persuaded.success)
 
-        val hired = HeroEngine.hire(roster, "hero_10", gold)
+        val hired = HeroEngine.hire(roster, "hero_010", gold)
         roster = hired.roster
         gold += hired.goldDelta
 
         assertTrue(hired.success)
         assertEquals(4, roster.ownedCount)
         assertEquals(15, roster.activeBonus().intelBonus)
-        assertEquals(3000 - 200 - HeroRoster.byId("hero_10")!!.hireCost, gold)
+        assertEquals(3000 - 200 - HeroRoster.byId("hero_010")!!.hireCost, gold)
     }
 
     // ── 슬롯 배치 ──────────────────────────────────────────────
 
     @Test
     fun `역할이 다르면 배치할 수 없다`() {
-        val result = HeroEngine.assign(HeroRosterState.initial(), "hero_01", HeroRole.OPS)
+        val result = HeroEngine.assign(HeroRosterState.initial(), "hero_001", HeroRole.OPS)
 
         assertFalse(result.success)
         assertTrue(result.message.contains("내정"))
@@ -271,7 +271,7 @@ class HeroSystemTest {
 
     @Test
     fun `보유하지 않은 영웅은 배치할 수 없다`() {
-        val result = HeroEngine.assign(HeroRosterState.initial(), "hero_04", HeroRole.OPS)
+        val result = HeroEngine.assign(HeroRosterState.initial(), "hero_004", HeroRole.OPS)
 
         assertFalse(result.success)
     }
@@ -279,7 +279,7 @@ class HeroSystemTest {
     @Test
     fun `슬롯에서 내리면 보너스가 빠진다`() {
         val initial = HeroRosterState.initial()
-        val result = HeroEngine.unassign(initial, "hero_02")
+        val result = HeroEngine.unassign(initial, "hero_002")
 
         assertTrue(result.success)
         assertEquals(2, result.roster.placedCount)
@@ -289,33 +289,33 @@ class HeroSystemTest {
 
     @Test
     fun `같은 역할의 영웅을 앉히면 기존 영웅은 대기로 내려간다`() {
-        val hired = HeroEngine.scout(HeroRosterState.initial(), "hero_08", 3000).roster
-            .let { HeroEngine.persuade(it, "hero_08", prestige = 90).roster }
-            .let { HeroEngine.hire(it, "hero_08", gold = 3000).roster }
+        val hired = HeroEngine.scout(HeroRosterState.initial(), "hero_008", 3000).roster
+            .let { HeroEngine.persuade(it, "hero_008", prestige = 90).roster }
+            .let { HeroEngine.hire(it, "hero_008", gold = 3000).roster }
 
         // 윤도현이 기술 슬롯에 있으므로 백지현은 대기 상태로 고용된다
-        assertNull(hired.recordOf("hero_08").assignedRole)
+        assertNull(hired.recordOf("hero_008").assignedRole)
 
-        val assigned = HeroEngine.assign(hired, "hero_08", HeroRole.TECH)
+        val assigned = HeroEngine.assign(hired, "hero_008", HeroRole.TECH)
 
         assertTrue(assigned.success)
-        assertEquals("hero_08", assigned.roster.heroIn(HeroRole.TECH)?.id)
-        assertNull(assigned.roster.recordOf("hero_02").assignedRole)
+        assertEquals("hero_008", assigned.roster.heroIn(HeroRole.TECH)?.id)
+        assertNull(assigned.roster.recordOf("hero_002").assignedRole)
         assertEquals(10, assigned.roster.activeBonus().researchDiscountPercent)
     }
 
     @Test
     fun `빈 슬롯 자동 채우기는 대기 영웅을 앉힌다`() {
-        val hired = HeroEngine.scout(HeroRosterState.initial(), "hero_04", 3000).roster
-            .let { HeroEngine.persuade(it, "hero_04", prestige = 90).roster }
-            .let { HeroEngine.hire(it, "hero_04", gold = 3000).roster }
+        val hired = HeroEngine.scout(HeroRosterState.initial(), "hero_004", 3000).roster
+            .let { HeroEngine.persuade(it, "hero_004", prestige = 90).roster }
+            .let { HeroEngine.hire(it, "hero_004", gold = 3000).roster }
 
-        val removed = HeroEngine.unassign(hired, "hero_04").roster
-        assertNull(removed.recordOf("hero_04").assignedRole)
+        val removed = HeroEngine.unassign(hired, "hero_004").roster
+        assertNull(removed.recordOf("hero_004").assignedRole)
 
         val filled = HeroEngine.fillEmptySlots(removed)
 
-        assertEquals("hero_04", filled.heroIn(HeroRole.OPS)?.id)
+        assertEquals("hero_004", filled.heroIn(HeroRole.OPS)?.id)
         assertEquals(4, filled.placedCount)
     }
 
@@ -340,11 +340,11 @@ class HeroSystemTest {
         vm.chooseEventA(acceptPact = false) // 자금 +900
         val before = vm.uiState.value
 
-        vm.scoutHero("hero_10")
+        vm.scoutHero("hero_010")
 
         val after = vm.uiState.value
         assertEquals(before.gold - HeroRoster.SCOUT_COST, after.gold)
-        assertEquals(HeroStage.SCOUTED, after.heroes.recordOf("hero_10").stage)
+        assertEquals(HeroStage.SCOUTED, after.heroes.recordOf("hero_010").stage)
         assertEquals(after.statusMessage, after.heroMessage)
     }
 
@@ -368,7 +368,7 @@ class HeroSystemTest {
         val vm = SlgGameViewModel()
         vm.chooseLord(vm.uiState.value.lords.first().id)
         vm.chooseEventA(acceptPact = false)
-        vm.unassignHero("hero_02")
+        vm.unassignHero("hero_002")
         val before = vm.uiState.value
         assertEquals(0, before.heroBonus.researchDiscountPercent)
 
@@ -385,19 +385,19 @@ class HeroSystemTest {
         first.chooseEventA(acceptPact = false) // 자금 +900
         first.chooseEventB(ambush = true) // 자금 +250
         repeat(15) { first.runOperation("OP_BASE") } // 스폰 보호 방어로 명성 +1씩
-        val hero = HeroRoster.byId("hero_05")!!
+        val hero = HeroRoster.byId("hero_005")!!
         assertTrue(first.uiState.value.prestige >= hero.requiredPrestige)
 
-        first.scoutHero("hero_05")
-        first.persuadeHero("hero_05")
-        first.hireHero("hero_05")
+        first.scoutHero("hero_005")
+        first.persuadeHero("hero_005")
+        first.hireHero("hero_005")
         assertEquals(4, first.uiState.value.heroes.ownedCount)
 
         val restored = SlgGameViewModel(store = store)
         val state = restored.uiState.value
 
         assertEquals(4, state.heroes.ownedCount)
-        assertEquals(HeroStage.HIRED, state.heroes.recordOf("hero_05").stage)
+        assertEquals(HeroStage.HIRED, state.heroes.recordOf("hero_005").stage)
         assertEquals(4, state.heroes.records.size)
         assertEquals(state.heroes.ownedCount, HeroRosterState.fromSaves(
             owned = state.heroes.ownedHeroes.map { it.id }.toSet(),
@@ -410,23 +410,35 @@ class HeroSystemTest {
     @Test
     fun `저장 기록에 없는 영웅 id 는 버린다`() {
         val roster = HeroRosterState.fromSaves(
-            owned = setOf("hero_01", "hero_99"),
-            placed = mapOf("hero_01" to "ADMIN", "hero_99" to "OPS")
+            owned = setOf("hero_001", "hero_999"),
+            placed = mapOf("hero_001" to "ADMIN", "hero_999" to "OPS")
         )
 
         assertEquals(1, roster.ownedCount)
         assertEquals("한서연", roster.ownedHeroes.first().name)
-        assertEquals(HeroRole.ADMIN, roster.recordOf("hero_01").assignedRole)
+        assertEquals(HeroRole.ADMIN, roster.recordOf("hero_001").assignedRole)
+    }
+
+    @Test
+    fun `예전 저장값의 2자리 영웅 id 도 3자리로 맞춰 복원한다`() {
+        val roster = HeroRosterState.fromSaves(
+            owned = setOf("hero_02", "hero_10"),
+            placed = mapOf("hero_02" to "TECH")
+        )
+
+        assertEquals(2, roster.ownedCount)
+        assertEquals("윤도현", roster.ownedHeroes.first().name)
+        assertEquals(HeroRole.TECH, roster.recordOf("hero_002").assignedRole)
     }
 
     @Test
     fun `영웅 기록은 단계와 호감도를 보존한다`() {
-        val record = HeroRecord(id = "hero_04", stage = HeroStage.PERSUADED, affinity = 78)
-        val roster = HeroRosterState(mapOf("hero_04" to record))
+        val record = HeroRecord(id = "hero_004", stage = HeroStage.PERSUADED, affinity = 78)
+        val roster = HeroRosterState(mapOf("hero_004" to record))
 
-        assertFalse(roster.recordOf("hero_04").owned)
-        assertEquals(HeroStage.PERSUADED, roster.recordOf("hero_04").stage)
-        assertEquals(78, roster.recordOf("hero_04").affinity)
+        assertFalse(roster.recordOf("hero_004").owned)
+        assertEquals(HeroStage.PERSUADED, roster.recordOf("hero_004").stage)
+        assertEquals(78, roster.recordOf("hero_004").affinity)
         assertEquals(0, roster.ownedCount)
     }
 }

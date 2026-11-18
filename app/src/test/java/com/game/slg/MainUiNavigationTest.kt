@@ -275,12 +275,13 @@ class MainUiNavigationTest {
     }
 
     @Test
-    fun `상단 1줄은 자원 3종만 보여 주고 상세 정보는 정보 패널로 간다`() {
+    fun `상단 1줄은 재원 4종만 보여 주고 상세 정보는 정보 패널로 간다`() {
         val state = SlgGameViewModel().uiState.value
         val top = MainInfoPanel.topSummary(state)
         val detail = MainInfoPanel.detailRows(state)
 
         assertEquals(4, top.size)
+        assertEquals(listOf("골드", "식량", "인구수", "병력"), top.map { it.label })
         assertTrue(top.all { it.value.length <= 7 })
         assertTrue(detail.size >= 7)
         assertTrue(detail.all { it.label.length <= 3 })

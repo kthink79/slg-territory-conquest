@@ -14,10 +14,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.game.slg.R
 import com.game.slg.core.hero.Hero
+import com.game.slg.core.hero.HeroGrade
 import com.game.slg.core.hero.HeroRole
 import com.game.slg.core.hero.HeroRoster
 import com.game.slg.core.hero.HeroStage
@@ -36,7 +43,7 @@ import com.game.slg.core.hero.HeroStage
 /**
  * 영웅 탭 — 보유 영웅 배치(배치)와 미보유 영웅 영입(영입).
  *
- * 초상화 10장(2:3)은 `drawable-nodpi/slg_hero_01~10.jpg` 로 탑재되어 있고,
+ * 초상화 230장(2:3)은 `drawable-nodpi/slg_hero_001~230.jpg` 로 탑재되어 있고,
  * 카드에서는 `ContentScale.Fit` 으로 잘리지 않게 보여 준다.
  */
 @Composable
@@ -57,18 +64,18 @@ fun HeroScreen(
     }
 }
 
-/** 초상화 리소스 — 10장 고정 */
-fun heroPortraitRes(heroId: String): Int = when (heroId) {
-    "hero_01" -> R.drawable.slg_hero_01
-    "hero_02" -> R.drawable.slg_hero_02
-    "hero_03" -> R.drawable.slg_hero_03
-    "hero_04" -> R.drawable.slg_hero_04
-    "hero_05" -> R.drawable.slg_hero_05
-    "hero_06" -> R.drawable.slg_hero_06
-    "hero_07" -> R.drawable.slg_hero_07
-    "hero_08" -> R.drawable.slg_hero_08
-    "hero_09" -> R.drawable.slg_hero_09
-    else -> R.drawable.slg_hero_10
+/** 초상화 리소스 — slg_hero_001 ~ slg_hero_230 (drawable-nodpi, 540x810 JPEG) */
+private val portraitResIds: Map<String, Int> by lazy {
+    R.drawable::class.java.fields
+        .filter { it.name.startsWith("slg_hero_") }
+        .associate { it.name to it.getInt(null) }
+}
+
+/** 영웅 id(`hero_07` · `hero_007`)를 3자리 초상화 이름으로 맞춘다 */
+fun heroPortraitRes(heroId: String): Int {
+    val number = heroId.substringAfterLast('_').toIntOrNull() ?: return R.drawable.slg_event_scout
+    return portraitResIds["slg_hero_" + number.toString().padStart(3, '0')]
+        ?: R.drawable.slg_event_scout
 }
 
 /** 2:3 세로 초상화 — 잘리지 않게 Fit */
@@ -104,6 +111,7 @@ private fun HeroPlaceSection(
 ) {
     val roster = state.heroes
     val bonus = state.heroBonus
+    var unplacedShown by remember { mutableStateOf(12) }
 
     SlgSectionCard(
         title = "배치 보너스",
@@ -142,7 +150,7 @@ private fun HeroPlaceSection(
             badge = "${roster.unplaced.size}명",
             accent = SlgColors.Success
         ) {
-            roster.unplaced.forEach { hero ->
+            roster.unplaced.take(unplacedShown).forEach { hero ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -186,6 +194,24 @@ private fun HeroPlaceSection(
                 fontSize = SlgType.MICRO,
                 lineHeight = SlgLine.MICRO
             )
+            if (roster.unplaced.size > unplacedShown) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SlgColors.Surface)
+                        .clickable { unplacedShown += 12 }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "더 보기 — 대기 ${roster.unplaced.size - unplacedShown}명",
+                        color = SlgColors.Success,
+                        fontSize = SlgType.MICRO,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
         }
     }
 
@@ -270,6 +296,9 @@ private fun HeroSlotRow(state: SlgGameState, role: HeroRole, onUnassign: (String
 // 영입 — 탐색 → 설득 → 고용
 // ────────────────────────────────────────────────────────────────
 
+/** 영입 화면에 한 번에 보여 주는 카드 수 — 230명 로스터를 페이지로 나눈다 */
+private const val RECRUIT_PAGE = 8
+
 @Composable
 private fun HeroRecruitSection(
     state: SlgGameState,
@@ -280,6 +309,14 @@ private fun HeroRecruitSection(
     val roster = state.heroes
     val diplomacy = state.heroBonus.diplomacyBonus
     val recruitables = roster.recruitables
+    var roleFilter by remember { mutableStateOf<HeroRole?>(null) }
+    var gradeFilter by remember { mutableStateOf<HeroGrade?>(null) }
+    var shown by remember { mutableStateOf(RECRUIT_PAGE) }
+
+    val filtered = recruitables
+        .filter { roleFilter == null || it.role == roleFilter }
+        .filter { gradeFilter == null || it.grade == gradeFilter }
+        .sortedWith(compareByDescending<Hero> { it.grade.rank }.thenByDescending { it.stats.total })
 
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         SlgSummaryChip("💰", "${state.gold}", SlgColors.Brass, Modifier.weight(1f))
@@ -292,7 +329,7 @@ private fun HeroRecruitSection(
         detail = "① 탐색 ${HeroRoster.SCOUT_COST}G — 신상과 접점을 확인하고 호감도 ${HeroRoster.SCOUT_AFFINITY}을 얻습니다.\n" +
             "② 설득 — 명성(＋외교 영웅 설득력)이 필요 명성 이상이면 성공합니다.\n" +
             "③ 고용 — 자금을 지급하면 보유 영웅이 되고, 빈 슬롯에 자동 배치됩니다.\n" +
-            "설득에 실패해도 호감도가 오르므로 명성을 쌓아 다시 시도할 수 있습니다.",
+            "현대 영웅 ${HeroRoster.ALL.size}명이 모두 탐색·설득·고용 대상입니다. 등급(SSR/SR/R/N)과 능력치가 높을수록 조건이 높습니다.",
         accent = SlgColors.Violet
     )
 
@@ -301,9 +338,13 @@ private fun HeroRecruitSection(
     }
 
     if (recruitables.isEmpty()) {
-        SlgSectionCard(title = "영입 완료", badge = "10명 보유", accent = SlgColors.Success) {
+        SlgSectionCard(
+            title = "영입 완료",
+            badge = "${HeroRoster.ALL.size}명 보유",
+            accent = SlgColors.Success
+        ) {
             Text(
-                "10명의 영웅을 모두 영입했습니다. 배치 탭에서 슬롯을 바꿔 보세요.",
+                "${HeroRoster.ALL.size}명의 영웅을 모두 영입했습니다. 배치 탭에서 슬롯을 바꿔 보세요.",
                 color = SlgColors.Text,
                 fontSize = SlgType.BODY_SMALL
             )
@@ -311,7 +352,72 @@ private fun HeroRecruitSection(
         return
     }
 
-    recruitables.forEach { hero ->
+    SlgSectionCard(
+        title = "영입 대상",
+        badge = "${filtered.size}/${recruitables.size}명",
+        accent = SlgColors.Violet
+    ) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            item {
+                HeroFilterChip(
+                    label = "전체 역할",
+                    selected = roleFilter == null,
+                    accent = SlgColors.Violet
+                ) {
+                    roleFilter = null
+                    shown = RECRUIT_PAGE
+                }
+            }
+            items(HeroRole.entries.toList(), key = { it.name }) { role ->
+                HeroFilterChip(
+                    label = "${role.emoji} ${role.label}",
+                    selected = roleFilter == role,
+                    accent = Color(role.accentHex)
+                ) {
+                    roleFilter = role
+                    shown = RECRUIT_PAGE
+                }
+            }
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            item {
+                HeroFilterChip(
+                    label = "전체 등급",
+                    selected = gradeFilter == null,
+                    accent = SlgColors.Violet
+                ) {
+                    gradeFilter = null
+                    shown = RECRUIT_PAGE
+                }
+            }
+            items(HeroGrade.entries.toList(), key = { it.name }) { grade ->
+                HeroFilterChip(
+                    label = grade.label,
+                    selected = gradeFilter == grade,
+                    accent = Color(grade.accentHex)
+                ) {
+                    gradeFilter = grade
+                    shown = RECRUIT_PAGE
+                }
+            }
+        }
+        Text(
+            "등급·능력치가 높은 순서로 보여 줍니다.",
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO
+        )
+    }
+
+    if (filtered.isEmpty()) {
+        Text(
+            "조건에 맞는 영웅이 없습니다. 필터를 바꿔 보세요.",
+            color = SlgColors.Muted,
+            fontSize = SlgType.BODY_SMALL
+        )
+        return
+    }
+
+    filtered.take(shown).forEach { hero ->
         RecruitCard(
             hero = hero,
             state = state,
@@ -320,6 +426,55 @@ private fun HeroRecruitSection(
             onScout = onScout,
             onPersuade = onPersuade,
             onHire = onHire
+        )
+    }
+
+    if (filtered.size > shown) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(SlgColors.SurfaceAlt)
+                .clickable { shown += RECRUIT_PAGE }
+                .padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "더 보기 — 남은 ${filtered.size - shown}명",
+                color = SlgColors.Violet,
+                fontSize = SlgType.BODY_SMALL,
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+    }
+}
+
+/** 역할·등급 필터 칩 */
+@Composable
+private fun HeroFilterChip(
+    label: String,
+    selected: Boolean,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) accent.copy(alpha = 0.24f) else SlgColors.SurfaceAlt)
+            .border(
+                1.dp,
+                if (selected) accent.copy(alpha = 0.8f) else SlgColors.Line,
+                RoundedCornerShape(50)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            label,
+            color = if (selected) accent else SlgColors.Muted,
+            fontSize = SlgType.MICRO,
+            fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+            maxLines = 1
         )
     }
 }
@@ -353,8 +508,21 @@ private fun RecruitCard(
                     Text(hero.name, color = SlgColors.Text, fontSize = SlgType.TITLE, fontWeight = FontWeight.ExtraBold)
                     Spacer(Modifier.width(6.dp))
                     SlgPill("${hero.role.emoji} ${hero.role.label}", accent)
+                    Spacer(Modifier.width(4.dp))
+                    SlgPill(hero.grade.label, Color(hero.grade.accentHex))
                 }
-                Text(hero.title, color = SlgColors.Muted, fontSize = SlgType.MICRO)
+                Text(
+                    "${hero.title} · ${hero.profileLine}",
+                    color = SlgColors.Muted,
+                    fontSize = SlgType.MICRO
+                )
+                Text(
+                    hero.statLine,
+                    color = SlgColors.Steel,
+                    fontSize = SlgType.MICRO,
+                    maxLines = 2,
+                    lineHeight = SlgLine.MICRO
+                )
                 Text(
                     hero.effectLabel,
                     color = accent,
@@ -363,6 +531,13 @@ private fun RecruitCard(
                     lineHeight = SlgLine.MICRO
                 )
                 if (discovered) {
+                    Text(
+                        "특기 · ${hero.specialty}",
+                        color = SlgColors.Text.copy(alpha = 0.85f),
+                        fontSize = SlgType.MICRO,
+                        lineHeight = SlgLine.MICRO,
+                        maxLines = 2
+                    )
                     Text(
                         "“${hero.quote}”",
                         color = SlgColors.Text.copy(alpha = 0.85f),

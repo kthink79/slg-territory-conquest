@@ -23,12 +23,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.game.slg.core.economy.ResourceBalance
+import com.game.slg.core.economy.ResourceBoostAction
+import com.game.slg.core.economy.ResourceBoosts
+import com.game.slg.core.economy.ResourceKind
 import com.game.slg.core.map.MapViewport
 import com.game.slg.core.model.PromotionStage
 
@@ -70,40 +78,68 @@ fun SlgMainScreen(
     onOpenTab: (MainTab, Int) -> Unit,
     onAdvanceSeason: () -> Unit,
     onOpenInfo: () -> Unit,
-    onDismissLevelUp: () -> Unit = {}
+    onDismissLevelUp: () -> Unit = {},
+    onBoost: (String) -> Unit = {}
 ) {
     val alerts = StatusAlertBuilder.build(state)
-    Column(modifier = Modifier.fillMaxSize().background(SlgColors.Background)) {
-        HomeTopBar(state = state, alertCount = alerts.size, onOpenInfo = onOpenInfo)
-
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            TerritoryMapPane(
-                modifier = Modifier.fillMaxSize(),
+    var boostSheet by remember { mutableStateOf<ResourceKind?>(null) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().background(SlgColors.Background)) {
+            HomeTopBar(
                 state = state,
-                viewport = viewport,
-                onViewportChange = onViewportChange,
-                onSelectTerritory = onSelectTerritory
+                alertCount = alerts.size,
+                onOpenInfo = onOpenInfo,
+                onResourceTap = { boostSheet = it }
             )
-            if (state.levelUpMessage != null) {
-                LevelUpBanner(
-                    message = state.levelUpMessage,
-                    onDismiss = onDismissLevelUp
+
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                TerritoryMapPane(
+                    modifier = Modifier.fillMaxSize(),
+                    state = state,
+                    viewport = viewport,
+                    onViewportChange = onViewportChange,
+                    onSelectTerritory = onSelectTerritory
                 )
+                if (state.levelUpMessage != null) {
+                    LevelUpBanner(
+                        message = state.levelUpMessage,
+                        onDismiss = onDismissLevelUp
+                    )
+                }
             }
+
+            HomeStatusStrip(
+                state = state,
+                alerts = alerts,
+                onOpenTab = onOpenTab,
+                onAdvanceSeason = onAdvanceSeason
+            )
         }
 
-        HomeStatusStrip(
-            state = state,
-            alerts = alerts,
-            onOpenTab = onOpenTab,
-            onAdvanceSeason = onAdvanceSeason
-        )
+        boostSheet?.let { kind ->
+            ResourceBoostSheet(
+                state = state,
+                kind = kind,
+                onClose = { boostSheet = null },
+                onAction = { id ->
+                    onBoost(id)
+                    // 화면 이동·절기 항목은 시트를 닫고, 즉시 실행은 결과 문구를 보여 준다
+                    val action = ResourceBoosts.byId(id)
+                    if (action == null || !action.isInstant) boostSheet = null
+                }
+            )
+        }
     }
 }
 
-/** 상단 1줄 — 자원 요약 칩 + 지역 연합 배지 + 📊 정보 버튼 */
+/** 상단 1줄 — 재원 4종(골드·식량·인구수·병력) 칩 + 📊 정보 버튼 */
 @Composable
-private fun HomeTopBar(state: SlgGameState, alertCount: Int, onOpenInfo: () -> Unit) {
+private fun HomeTopBar(
+    state: SlgGameState,
+    alertCount: Int,
+    onOpenInfo: () -> Unit,
+    onResourceTap: (ResourceKind) -> Unit
+) {
     val urgent = StatusAlertBuilder.build(state).any { it.severity == AlertSeverity.CRITICAL }
     Row(
         modifier = Modifier
@@ -114,14 +150,23 @@ private fun HomeTopBar(state: SlgGameState, alertCount: Int, onOpenInfo: () -> U
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        MainInfoPanel.topSummary(state).take(3).forEach { entry ->
-            SlgSummaryChip(
-                icon = entry.icon,
-                value = entry.value,
-                color = Color(entry.toneHex)
-            )
+        LazyRow(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items(ResourceKind.hudOrder, key = { it.name }) { kind ->
+                SlgSummaryChip(
+                    icon = kind.icon,
+                    value = comma(
+                        ResourceBoosts.valueOf(kind, state.gold, state.food, state.population, state.troops)
+                    ),
+                    color = Color(kind.accentHex),
+                    onClick = { onResourceTap(kind) }
+                )
+            }
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(2.dp))
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
@@ -540,6 +585,183 @@ fun SlgInfoOverlay(
             )
 
             SlgLogBox(state.log, maxLines = 3)
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 재원 탭 서브 메뉴 — 식량 · 골드 · 인구수 · 병력
+// ────────────────────────────────────────────────────────────────────────
+
+/** 1,234 형식 */
+private fun comma(value: Int): String = "%,d".format(value)
+
+/**
+ * 재원을 눌렀을 때 올라오는 바텀시트.
+ * 지금 게임에 실제로 있는 시스템(교역·징집·정착 지원·세수·기술·영웅·시설·사건·승격)만 보여 주고,
+ * 바로 실행되는 항목은 [onAction]으로 상태를 바꾼다.
+ */
+@Composable
+private fun ResourceBoostSheet(
+    state: SlgGameState,
+    kind: ResourceKind,
+    onClose: () -> Unit,
+    onAction: (String) -> Unit
+) {
+    val accent = Color(kind.accentHex)
+    val current = ResourceBoosts.valueOf(kind, state.gold, state.food, state.population, state.troops)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xB306080C))
+            .clickable { onClose() },
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.86f)
+                .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                .background(SlgColors.Surface)
+                .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                .clickable { }
+                .verticalScroll(rememberScrollState())
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${kind.icon} ${kind.label} 늘리기",
+                    color = SlgColors.Text,
+                    fontSize = SlgType.TITLE,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Spacer(Modifier.width(6.dp))
+                SlgPill("현재 ${comma(current)}", accent)
+                Spacer(Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(SlgColors.SurfaceAlt)
+                        .clickable { onClose() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("✕", color = SlgColors.Text, fontSize = SlgType.BODY_SMALL, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Text(
+                when (kind) {
+                    ResourceKind.GOLD -> ResourceBalance.incomeLabel(state.population, state.facilities) +
+                        "\n교역·세수는 지금 바로, 기술·영웅·시설은 화면에서 키웁니다."
+                    ResourceKind.FOOD -> ResourceBalance.incomeLabel(state.population, state.facilities) +
+                        "\n가을 수확과 물류 허브를 붙이면 절기 수급이 더 커집니다."
+                    ResourceKind.POPULATION -> "인구는 정착 지원·이재민 수용·승격으로 늘고, 늘어난 인구가 세수와 수확의 기준이 됩니다."
+                    ResourceKind.TROOPS -> "병력은 모집(즉시)·징집 표결(의회)·작전 영웅 배치로 늘립니다. 겨울에는 유지비가 듭니다."
+                },
+                color = SlgColors.Muted,
+                fontSize = SlgType.MICRO,
+                lineHeight = SlgLine.MICRO
+            )
+
+            if (state.resourceMessage != null) {
+                ResultBox(state.resourceMessage, accent)
+            }
+
+            ResourceBoosts.of(kind).forEach { action ->
+                val used = state.boostUses[action.id] ?: 0
+                val blocked = if (action.isInstant) {
+                    ResourceBoosts.availability(action, state.gold, state.food, used)
+                } else {
+                    null
+                }
+                BoostActionRow(
+                    action = action,
+                    accent = accent,
+                    blockedReason = blocked,
+                    usageLabel = ResourceBoosts.usageLabel(action, used),
+                    onClick = { onAction(action.id) }
+                )
+            }
+
+            Text(
+                "이번 절기 사용 횟수는 절기를 넘기면 초기화됩니다. 이동 항목은 해당 화면에서 처리합니다.",
+                color = SlgColors.Muted,
+                fontSize = SlgType.MICRO,
+                lineHeight = SlgLine.MICRO
+            )
+        }
+    }
+}
+
+@Composable
+private fun BoostActionRow(
+    action: ResourceBoostAction,
+    accent: Color,
+    blockedReason: String?,
+    usageLabel: String?,
+    onClick: () -> Unit
+) {
+    val enabled = blockedReason == null
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(SlgColors.SurfaceAlt)
+            .border(
+                1.dp,
+                if (enabled) accent.copy(alpha = 0.4f) else SlgColors.Line,
+                RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(action.icon, fontSize = SlgType.BODY)
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                action.title,
+                color = SlgColors.Text,
+                fontSize = SlgType.BODY_SMALL,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                action.effect,
+                color = if (enabled) accent else SlgColors.Muted,
+                fontSize = SlgType.MICRO,
+                fontWeight = FontWeight.Bold,
+                lineHeight = SlgLine.MICRO
+            )
+            Text(
+                blockedReason ?: action.detail,
+                color = SlgColors.Muted,
+                fontSize = SlgType.MICRO,
+                lineHeight = SlgLine.MICRO,
+                maxLines = 3
+            )
+            if (usageLabel != null) {
+                Text(usageLabel, color = SlgColors.Steel, fontSize = SlgType.MICRO)
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (enabled) accent.copy(alpha = 0.92f) else SlgColors.Surface)
+                .clickable(enabled = enabled) { onClick() }
+                .padding(horizontal = 12.dp, vertical = 9.dp)
+        ) {
+            Text(
+                when {
+                    !enabled -> "불가"
+                    action.isInstant -> "실행"
+                    else -> "이동 ›"
+                },
+                color = if (enabled) Color(0xFF10131A) else SlgColors.Muted,
+                fontSize = SlgType.MICRO,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1
+            )
         }
     }
 }
