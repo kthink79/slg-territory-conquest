@@ -446,19 +446,17 @@ private fun ManpowerPanel(
             fontSize = SlgType.MICRO,
             lineHeight = SlgLine.MICRO
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(300, 600, 900).forEach { size ->
-                SlgChoiceCard(
-                    title = "${size}명",
-                    icon = "⚔",
-                    effects = listOf(
-                        Effect("💰", "${"%,d".format(MercenaryEngine.hireCostOf(size))}G", SlgColors.Brass),
-                        Effect("📆", "유지 ${"%,d".format(MercenaryEngine.upkeepOf(size))}G", SlgColors.Muted)
-                    ),
-                    accent = if (mercSize == size) SlgColors.Brass else SlgColors.Line,
-                    onClick = { mercSize = size }
-                )
-            }
+        listOf(300, 600, 900).forEach { size ->
+            SlgChoiceCard(
+                title = "용병 ${size}명 계약 조건",
+                icon = "⚔",
+                effects = listOf(
+                    Effect("💰", "고용 ${"%,d".format(MercenaryEngine.hireCostOf(size))}G", SlgColors.Brass),
+                    Effect("📆", "유지 ${"%,d".format(MercenaryEngine.upkeepOf(size))}G/절기", SlgColors.Muted)
+                ),
+                accent = if (mercSize == size) SlgColors.Brass else SlgColors.Line,
+                onClick = { mercSize = size }
+            )
         }
         SlgChoiceCard(
             title = "용병 ${mercSize}명 고용",

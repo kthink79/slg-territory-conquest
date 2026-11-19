@@ -350,22 +350,20 @@ private fun HeroRecruitSection(
                 fontSize = SlgType.MICRO,
                 lineHeight = SlgLine.MICRO
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                SlgChoiceCard(
-                    title = "합류 수락",
-                    icon = "🤝",
-                    effects = listOf(Effect("✓", "무상 합류", SlgColors.Success)),
-                    accent = SlgColors.Success,
-                    onClick = onAcceptVisit
-                )
-                SlgChoiceCard(
-                    title = "거절",
-                    icon = "✋",
-                    effects = listOf(Effect("⭐", "-1", SlgColors.Danger)),
-                    accent = SlgColors.Muted,
-                    onClick = onDeclineVisit
-                )
-            }
+            SlgChoiceCard(
+                title = "합류 수락",
+                icon = "🤝",
+                effects = listOf(Effect("✓", "무상 합류", SlgColors.Success)),
+                accent = SlgColors.Success,
+                onClick = onAcceptVisit
+            )
+            SlgChoiceCard(
+                title = "거절",
+                icon = "✋",
+                effects = listOf(Effect("⭐", "-1", SlgColors.Danger)),
+                accent = SlgColors.Muted,
+                onClick = onDeclineVisit
+            )
         }
     }
 
