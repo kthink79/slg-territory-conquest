@@ -369,3 +369,41 @@ class EmpireRestoreConsistencyTest {
         assertTrue(restored.openFactions.none { it.territoryCode == faction.territoryCode })
     }
 }
+
+/**
+ * 장기 운영 스모크 테스트 — 여러 절기를 넘기고 흡수·일임·용병·작전을 섞어도
+ * 자원이 음수가 되지 않고 정규 상한이 지켜지는지 본다.
+ */
+class EmpireSoakTest {
+
+    @Test
+    fun `20절기를 운영해도 자원이 음수가 되지 않고 정규 상한이 지켜진다`() {
+        val vm = SlgGameViewModel()
+        vm.chooseLord(vm.uiState.value.lords.first().id)
+
+        repeat(20) { turn ->
+            if (turn % 4 == 0) {
+                vm.uiState.value.openFactions.firstOrNull()?.let { faction ->
+                    vm.attemptAbsorption(AbsorptionMethod.CONQUEST, faction.id)
+                }
+            }
+            vm.uiState.value.territories
+                .filter { it.needsViceroy }
+                .forEachIndexed { index, territory ->
+                    val hero = vm.uiState.value.heroes.ownedHeroes.getOrNull(index)
+                    if (hero != null) vm.assignViceroy(hero.id, territory.code)
+                }
+            if (turn % 5 == 0) vm.hireMercenary(300)
+            vm.runOperation("OP_BASE")
+            vm.advanceSeason()
+
+            val s = vm.uiState.value
+            assertTrue("자금 ${s.gold}", s.gold >= 0)
+            assertTrue("식량 ${s.food}", s.food >= 0)
+            assertTrue("병력 ${s.troops}", s.troops >= 0)
+            assertTrue("정규 ${s.troops} ≤ 상한 ${s.troopCap}", s.troops <= s.troopCap)
+            assertTrue("용병 ${s.mercenaryTroops}", s.mercenaryTroops >= 0)
+            assertTrue("영지 ${s.territories.size}", s.territories.isNotEmpty())
+        }
+    }
+}
