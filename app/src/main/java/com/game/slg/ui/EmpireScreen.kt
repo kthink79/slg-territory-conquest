@@ -114,7 +114,8 @@ private fun AbsorptionPanel(
     }
 
     val ctx = state.empireContext()
-    state.openFactions.take(8).forEach { faction ->
+    var shownFactions by remember { mutableStateOf(6) }
+    state.openFactions.take(shownFactions).forEach { faction ->
         SlgSectionCard(
             title = "${faction.name} 리더",
             badge = faction.relation.label,
@@ -176,6 +177,25 @@ private fun AbsorptionPanel(
                     accent = SlgColors.Muted
                 )
             }
+        }
+    }
+
+    if (state.openFactions.size > shownFactions) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(SlgColors.SurfaceAlt)
+                .clickable { shownFactions += 6 }
+                .padding(vertical = 11.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "더 보기 — 남은 세력 ${state.openFactions.size - shownFactions}곳",
+                color = SlgColors.Brass,
+                fontSize = SlgType.BODY_SMALL,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
     }
 

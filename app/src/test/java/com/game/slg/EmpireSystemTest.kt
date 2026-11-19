@@ -350,3 +350,22 @@ class EmpireSaveRestoreTest {
         assertEquals(1, restored.weaponTech.levelOf(com.game.slg.core.engine.WeaponTech.DRONE))
     }
 }
+
+class EmpireRestoreConsistencyTest {
+
+    @Test
+    fun `복원하면 편입한 세력은 다시 열린 세력으로 돌아오지 않는다`() {
+        val store = com.game.slg.core.save.InMemoryCampaignStore()
+        val first = SlgGameViewModel(store = store)
+        first.chooseLord(first.uiState.value.lords.first().id)
+        val faction = first.uiState.value.openFactions.first()
+        first.attemptAbsorption(AbsorptionMethod.CONQUEST, faction.id)
+        val absorbedCount = first.uiState.value.incorporatedCount
+        assertTrue(absorbedCount >= 1)
+
+        val restored = SlgGameViewModel(store = store).uiState.value
+
+        assertEquals(absorbedCount, restored.incorporatedCount)
+        assertTrue(restored.openFactions.none { it.territoryCode == faction.territoryCode })
+    }
+}

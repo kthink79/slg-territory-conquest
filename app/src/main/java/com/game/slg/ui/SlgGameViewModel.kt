@@ -566,6 +566,24 @@ class SlgGameViewModel(
         val stage = PromotionStage.entries.firstOrNull { it.name == restore.promotionStage }
             ?: PromotionStage.DISTRICT_LORD
         val command = CommandProgress(restore.level.coerceIn(1, CommandProgress.MAX_LEVEL), restore.xp)
+        val restoredTerritories = restore.territories.mapNotNull { decodeTerritory(it) }
+            .ifEmpty { listOf(homeTerritory(startRegion, restore.troops)) }
+        val restoredCodes = restoredTerritories.map { it.code }.toSet()
+        val restoredFactions = factionsOf(startRegion, startLords, lord.id).map { faction ->
+            val owned = restoredTerritories.firstOrNull { it.code == faction.territoryCode }
+            if (owned == null) faction
+            else faction.copy(
+                incorporated = true,
+                absorbedBy = owned.absorbedBy,
+                relation = when (owned.status) {
+                    TerritoryStatus.DIRECT -> FactionRelation.VASSAL
+                    TerritoryStatus.VASSAL -> FactionRelation.VASSAL
+                    TerritoryStatus.AUTONOMOUS -> FactionRelation.AUTONOMOUS
+                },
+                tributePerSeason = owned.tributePerSeason,
+                troops = owned.troops
+            )
+        }
         return base.copy(
             stage = GameStage.PLAY,
             introSeen = true,
@@ -608,12 +626,9 @@ class SlgGameViewModel(
                 regionName = startRegion.name,
                 remainingTurns = restore.spawnTurns.coerceIn(0, RegionUnion.DEFAULT_TURNS)
             ),
-            territories = restore.territories.mapNotNull { decodeTerritory(it) }.ifEmpty {
-                listOf(homeTerritory(startRegion, restore.troops))
-            },
-            selectedManagedCode = restore.territories.mapNotNull { decodeTerritory(it) }.firstOrNull()?.code
-                ?: startRegion.code,
-            factions = factionsOf(startRegion, startLords, lord.id),
+            territories = restoredTerritories,
+            selectedManagedCode = restoredTerritories.firstOrNull()?.code ?: startRegion.code,
+            factions = restoredFactions,
             mercenaries = restore.mercenaries.mapNotNull { decodeMercenary(it) },
             weaponTech = WeaponTechState(
                 restore.weaponTech.mapNotNull { (name, level) ->
