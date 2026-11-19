@@ -12,30 +12,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 현대 영웅 230명 로스터 정합성 — 2026-11-18 일괄 탑재분.
+ * 현대 영웅 240명 로스터 정합성 — 2026-11-19 231~240번 추가분.
  *
- * 구글 드라이브 `SLG_현대영웅_케릭터` 의 통합 로스터(roster_001_230.json)를
+ * 구글 드라이브 `SLG_현대영웅_케릭터` 의 통합 로스터(roster_001_240.json)를
  * 게임 카탈로그로 옮겼을 때 번호·이름·역할·등급·능력치·특기·초상화가 어긋나지 않는지 본다.
  */
-class HeroRoster230Test {
+class HeroRoster240Test {
 
     @Test
-    fun `로스터는 1번부터 230번까지 빈 번호 없이 이어진다`() {
-        assertEquals(230, HeroRoster.ALL.size)
+    fun `로스터는 1번부터 240번까지 빈 번호 없이 이어진다`() {
+        assertEquals(240, HeroRoster.ALL.size)
         assertEquals(
-            (1..230).toList(),
+            (1..240).toList(),
             HeroRoster.ALL.map { it.number }
         )
         assertEquals(
-            (1..230).map { "hero_" + it.toString().padStart(3, '0') },
+            (1..240).map { "hero_" + it.toString().padStart(3, '0') },
             HeroRoster.ALL.map { it.id }
         )
     }
 
     @Test
-    fun `이름은 230명 모두 다르다`() {
+    fun `이름은 240명 모두 다르다`() {
         val names = HeroRoster.ALL.map { it.name }
-        assertEquals(230, names.distinct().size)
+        assertEquals(240, names.distinct().size)
         assertTrue(names.all { it.isNotBlank() })
     }
 
@@ -57,29 +57,55 @@ class HeroRoster230Test {
     }
 
     @Test
-    fun `등급 분포와 역할 분포가 로스터와 같다`() {
+    fun `등급 분포와 역할 분포가 240명 로스터와 같다`() {
         val byGrade = HeroRoster.ALL.groupingBy { it.grade }.eachCount()
-        assertEquals(28, byGrade[HeroGrade.SSR])
-        assertEquals(65, byGrade[HeroGrade.SR])
-        assertEquals(97, byGrade[HeroGrade.R])
-        assertEquals(40, byGrade[HeroGrade.N])
+        assertEquals(30, byGrade[HeroGrade.SSR])
+        assertEquals(69, byGrade[HeroGrade.SR])
+        assertEquals(100, byGrade[HeroGrade.R])
+        assertEquals(41, byGrade[HeroGrade.N])
 
         val byRole = HeroRoster.ALL.groupingBy { it.role }.eachCount()
-        assertEquals(45, byRole[HeroRole.ADMIN])
-        assertEquals(53, byRole[HeroRole.TECH])
-        assertEquals(46, byRole[HeroRole.COMMERCE])
-        assertEquals(46, byRole[HeroRole.OPS])
-        assertEquals(36, byRole[HeroRole.DIPLOMACY])
+        assertEquals(46, byRole[HeroRole.ADMIN])
+        assertEquals(56, byRole[HeroRole.TECH])
+        assertEquals(48, byRole[HeroRole.COMMERCE])
+        assertEquals(48, byRole[HeroRole.OPS])
+        assertEquals(38, byRole[HeroRole.DIPLOMACY])
         assertEquals(4, byRole[HeroRole.INTEL])
     }
 
     @Test
-    fun `초상화는 230장이 모두 다른 리소스 이름으로 이어진다`() {
+    fun `초상화는 240장이 모두 다른 리소스 이름으로 이어진다`() {
         val portraits = HeroRoster.PORTRAIT_NAMES
-        assertEquals(230, portraits.size)
-        assertEquals(230, portraits.distinct().size)
+        assertEquals(240, portraits.size)
+        assertEquals(240, portraits.distinct().size)
         assertEquals("slg_hero_001", portraits.first())
-        assertEquals("slg_hero_230", portraits.last())
+        assertEquals("slg_hero_240", portraits.last())
+    }
+
+    @Test
+    fun `231~240번은 로스터의 이름 역할 등급 능력치를 그대로 갖는다`() {
+        val expected = mapOf(
+            231 to listOf("도재훈", HeroRole.OPS, HeroGrade.SSR, 93),
+            232 to listOf("백하영", HeroRole.TECH, HeroGrade.SR, 88),
+            233 to listOf("권이현", HeroRole.COMMERCE, HeroGrade.R, 78),
+            234 to listOf("노유정", HeroRole.ADMIN, HeroGrade.SR, 86),
+            235 to listOf("서재우", HeroRole.TECH, HeroGrade.SR, 90),
+            236 to listOf("하지수", HeroRole.DIPLOMACY, HeroGrade.R, 84),
+            237 to listOf("명재훈", HeroRole.COMMERCE, HeroGrade.N, 70),
+            238 to listOf("유하윤", HeroRole.OPS, HeroGrade.R, 78),
+            239 to listOf("신도경", HeroRole.DIPLOMACY, HeroGrade.SSR, 92),
+            240 to listOf("채민서", HeroRole.TECH, HeroGrade.SR, 86)
+        )
+        expected.forEach { (no, values) ->
+            val hero = HeroRoster.byId("hero_" + no.toString().padStart(3, '0'))
+            assertNotNull("$no 번 영웅 없음", hero)
+            assertEquals(values[0], hero!!.name)
+            assertEquals(values[1], hero.role)
+            assertEquals(values[2], hero.grade)
+            assertEquals(values[3], hero.stats.primaryOf(hero.role))
+            assertTrue(hero.effectLabel.isNotBlank())
+            assertEquals("slg_hero_" + no.toString().padStart(3, '0'), hero.portraitName)
+        }
     }
 
     @Test
@@ -118,7 +144,7 @@ class HeroRoster230Test {
     @Test
     fun `새 영웅도 탐색 설득 고용 3단계로 영입된다`() {
         val roster = HeroRosterState.initial()
-        val target = HeroRoster.byId("hero_230")!!
+        val target = HeroRoster.byId("hero_240")!!
         assertNotNull(target)
 
         val scouted = HeroEngine.scout(roster, target.id, gold = 5_000)

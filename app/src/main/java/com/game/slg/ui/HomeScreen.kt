@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -141,31 +142,59 @@ private fun HomeTopBar(
     onResourceTap: (ResourceKind) -> Unit
 ) {
     val urgent = StatusAlertBuilder.build(state).any { it.severity == AlertSeverity.CRITICAL }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(HomeLayout.TOP_BAR.dp)
-            .background(Color(0xFF0E1218))
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
-    ) {
-        LazyRow(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        // 좁은 화면은 재원 칩을 2줄로 나누고, 넓은 화면은 한 줄에 놓는다(HUD 열 수 자동 보정)
+        val stacked = maxWidth < 390.dp
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF0E1218))
+                .padding(horizontal = 8.dp, vertical = if (stacked) 4.dp else 0.dp)
+                .height(if (stacked) 74.dp else HomeLayout.TOP_BAR.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            items(ResourceKind.hudOrder, key = { it.name }) { kind ->
-                SlgSummaryChip(
-                    icon = kind.icon,
-                    value = compact(
-                        ResourceBoosts.valueOf(kind, state.gold, state.food, state.population, state.troops)
-                    ),
-                    color = Color(kind.accentHex),
-                    onClick = { onResourceTap(kind) }
-                )
+            if (stacked) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    ResourceKind.hudOrder.chunked(2).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            row.forEach { kind ->
+                                SlgSummaryChip(
+                                    icon = kind.icon,
+                                    value = compact(
+                                        ResourceBoosts.valueOf(
+                                            kind, state.gold, state.food, state.population, state.troops
+                                        )
+                                    ),
+                                    color = Color(kind.accentHex),
+                                    onClick = { onResourceTap(kind) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(ResourceKind.hudOrder, key = { it.name }) { kind ->
+                        SlgSummaryChip(
+                            icon = kind.icon,
+                            value = compact(
+                                ResourceBoosts.valueOf(kind, state.gold, state.food, state.population, state.troops)
+                            ),
+                            color = Color(kind.accentHex),
+                            onClick = { onResourceTap(kind) }
+                        )
+                    }
+                }
             }
-        }
         Spacer(Modifier.width(2.dp))
         Box(
             modifier = Modifier
@@ -198,6 +227,7 @@ private fun HomeTopBar(
                     )
                 }
             }
+        }
         }
     }
 }
@@ -426,7 +456,7 @@ fun SlgInfoOverlay(
                 )
                 Text(
                     if (state.union.active) {
-                        "같은 지역 AI 리더 ${state.unionPartnerCount}명과 자동 연합 상태입니다. " +
+                        "같은 지역 리더 ${state.unionPartnerCount}명과 자동 연합 상태입니다. " +
                             "지역 안에서는 교전이 없고, 외부 구역의 침공도 보호막이 막습니다. " +
                             "절기를 진행할 때마다 1턴씩 줄어듭니다."
                     } else {
@@ -557,7 +587,7 @@ fun SlgInfoOverlay(
                 summary = "지역·리더 규칙",
                 detail = "${state.regionFullName} · 인구 ${state.regionPopulation}명\n" +
                     "리더 정원 = 인구 ÷ 1,000 = ${state.lordCapacity}석 (현재 ${state.registeredLords}석 인계)\n" +
-                    "AI 리더 ${state.aiLordCount}명이 같은 구역에서 계속 운영됩니다.\n" +
+                    "다른 리더 ${state.aiLordCount}명이 같은 구역에서 계속 운영됩니다.\n" +
                     "지휘 Lv.1 관할 구역 → Lv.2 인접 읍·면·동 → Lv.3 연접 구역 → Lv.4 시·군 전역 → Lv.6 광역 생활권",
                 accent = SlgColors.Steel
             )

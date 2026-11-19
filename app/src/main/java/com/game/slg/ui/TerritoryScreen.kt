@@ -146,12 +146,12 @@ private fun TerritoryOverview(state: SlgGameState) {
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             SlgSummaryChip("👥", "${state.regionPopulation}", SlgColors.Text, Modifier.weight(1f))
-            SlgSummaryChip("🤖", "AI ${state.aiLordCount}", SlgColors.Steel, Modifier.weight(1f))
+            SlgSummaryChip("🏙", "리더 ${state.aiLordCount}", SlgColors.Steel, Modifier.weight(1f))
             SlgSummaryChip("📐", "1,000명/석", SlgColors.Brass, Modifier.weight(1f))
         }
         Text(
             "인구 ${state.regionPopulation}명 ÷ 1,000 = 리더 ${state.lordCapacity}석 · 인계 ${state.registeredLords}석 · " +
-                "나머지 ${state.aiLordCount}석은 AI 운영",
+                "나머지 ${state.aiLordCount}석은 다른 리더 운영",
             color = SlgColors.Muted,
             fontSize = SlgType.MICRO,
             lineHeight = SlgLine.MICRO

@@ -24,12 +24,37 @@ import com.game.slg.core.economy.BoostKind
 import com.game.slg.core.economy.BoostTarget
 import com.game.slg.core.economy.ResourceBalance
 import com.game.slg.core.economy.ResourceBoosts
+import com.game.slg.core.empire.AbsorptionEngine
+import com.game.slg.core.empire.AbsorptionMethod
+import com.game.slg.core.empire.AbsorptionOutcome
+import com.game.slg.core.empire.EmpireContext
+import com.game.slg.core.empire.EmpireEngine
+import com.game.slg.core.empire.EmpireSeasonResult
+import com.game.slg.core.empire.Faction
+import com.game.slg.core.empire.FactionRelation
+import com.game.slg.core.empire.HeroCareer
+import com.game.slg.core.hero.LordNeed
+import com.game.slg.core.empire.ManagedTerritory
+import com.game.slg.core.empire.ManpowerEngine
+import com.game.slg.core.empire.MercenaryBand
+import com.game.slg.core.empire.MercenaryEngine
+import com.game.slg.core.empire.TerritoryStatus
+import com.game.slg.core.engine.BattleStrategy
+import com.game.slg.core.engine.StrategyBattleEngine
+import com.game.slg.core.engine.StrategyBattleResult
+import com.game.slg.core.engine.WeaponTech
+import com.game.slg.core.engine.WeaponTechState
+import com.game.slg.core.hero.HeroDiscoveryEngine
+import com.game.slg.core.hero.HeroEmploymentEngine
+import com.game.slg.core.hero.HeroVisit
+import com.game.slg.core.empire.EmploymentRequest
 import com.game.slg.core.hero.Hero
 import com.game.slg.core.hero.HeroBonus
 import com.game.slg.core.hero.HeroEngine
 import com.game.slg.core.hero.HeroRole
 import com.game.slg.core.hero.HeroRoster
 import com.game.slg.core.hero.HeroRosterState
+import com.game.slg.core.hero.HeroStage
 import com.game.slg.core.map.MapNode
 import com.game.slg.core.map.TerritoryMapLayout
 import com.game.slg.core.model.BillType
@@ -130,7 +155,16 @@ data class OperationReport(
     val verdict: String,
     val targetName: String = "",
     val composition: String = "",
-    val requiredLevel: Int = 1
+    val requiredLevel: Int = 1,
+    /** 전략 상성 한 줄 — "기갑 예형 > 정면 종심" */
+    val strategyLabel: String = "",
+    /** 교환비 — "6.2 : 1" */
+    val exchangeLabel: String = "",
+    /** 전투 계산 근거 3~6줄 */
+    val breakdown: List<String> = emptyList(),
+    /** 아군·적 손실률 (%) */
+    val ownLossPercent: Int = 0,
+    val enemyLossPercent: Int = 0
 )
 
 /** 외교 조약 표시용 */
@@ -156,6 +190,12 @@ enum class GameStage(val title: String) {
     REGION_SELECT("지역 선택"),
     LORD_SELECT("리더 선택"),
     PLAY("플레이")
+}
+
+/** 시작 방식 — 리더로 시작 / 영웅으로 시작 */
+enum class StartMode(val label: String, val detail: String) {
+    LORD("리더로 시작", "지역 리더 하나를 인계받아 영지를 운영합니다."),
+    HERO("영웅으로 시작", "재야 영웅으로 시작해 리더에게 등용을 청합니다. 상대는 유저일 수도, 아닐 수도 있습니다.")
 }
 
 /** 리더 명부 1줄 — AI 리더과 플레이어가 같은 형식으로 보인다 */
@@ -287,7 +327,28 @@ data class SlgGameState(
     /** 이번 절기에 재원 증가 방법을 쓴 횟수 — 절기를 넘기면 초기화된다 */
     val boostUses: Map<String, Int> = emptyMap(),
     // ── 지역 연합 · 스폰 보호 ──
-    val union: RegionUnion = RegionUnion()
+    val union: RegionUnion = RegionUnion(),
+    // ── 영토 운영: 편입 영지 · 일임 · 용병 ──
+    val territories: List<ManagedTerritory> = emptyList(),
+    val selectedManagedCode: String = "",
+    val factions: List<Faction> = emptyList(),
+    val mercenaries: List<MercenaryBand> = emptyList(),
+    val empireMessage: String? = null,
+    val lastAbsorption: AbsorptionOutcome? = null,
+    // ── 전략 · 무기 기술 ──
+    val weaponTech: WeaponTechState = WeaponTechState(),
+    val battleStrategy: BattleStrategy = BattleStrategy.FRONTAL,
+    val strategyMessage: String? = null,
+    val lastStrategy: StrategyBattleResult? = null,
+    // ── 영웅 탐색 · 방문 합류 ──
+    val heroVisit: HeroVisit? = null,
+    val heroVisitMessage: String? = null,
+    val heroSearchMessage: String? = null,
+    // ── 영웅으로 시작 ──
+    val startMode: StartMode = StartMode.LORD,
+    val pendingHeroPick: String? = null,
+    val heroCareer: HeroCareer? = null,
+    val pendingEmployment: EmploymentRequest? = null
 ) {
     /** 배치된 영웅이 주는 실제 보너스 */
     val heroBonus: HeroBonus
@@ -358,6 +419,78 @@ data class SlgGameState(
     val alliedNames: List<String>
         get() = treaties.map { it.partner }.distinct()
 
+    // ── 영토 운영 파생값 ────────────────────────────────────────
+
+    /** 편입 영지 전체 인구 — 정규 병력 상한의 기준 */
+    val totalTerritoryPopulation: Int
+        get() = territories.sumOf { it.population }.coerceAtLeast(population)
+
+    /** 정규 병력 상한 — 전체 인구의 5% */
+    val troopCap: Int
+        get() = ManpowerEngine.capOf(totalTerritoryPopulation)
+
+    val mercenaryTroops: Int
+        get() = mercenaries.sumOf { it.troops }
+
+    /** 정규 + 용병 */
+    val totalTroops: Int
+        get() = troops + mercenaryTroops
+
+    /** 속국·자치령 포함 총력 (전투 보너스의 근거) */
+    val empirePower: Int
+        get() = ManpowerEngine.totalPower(territories, troops, mercenaryTroops)
+
+    /** 연방·속국이 많을수록 커지는 전투 보너스 (%) */
+    val coalitionBonusPercent: Int
+        get() = EmpireEngine.coalitionBonusPercent(territories)
+
+    val selectedManaged: ManagedTerritory?
+        get() = territories.firstOrNull { it.code == selectedManagedCode }
+            ?: territories.firstOrNull { it.status == TerritoryStatus.DIRECT }
+            ?: territories.firstOrNull()
+
+    /** 아직 편입하지 않은 세력 */
+    val openFactions: List<Faction>
+        get() = factions.filter { !it.incorporated }
+
+    /** 편입한 세력 수 */
+    val incorporatedCount: Int
+        get() = factions.count { it.incorporated }
+
+    val absorbedCount: Int
+        get() = territories.count { it.absorbedBy != "인계" }
+
+    /** 우리 세력의 처지 — 흡수 판정에 쓰는 값 */
+    fun empireContext(): EmpireContext = EmpireContext(
+        troops = totalTroops,
+        prestige = prestige,
+        gold = gold,
+        food = food,
+        morale = morale,
+        diplomacy = diplomacy,
+        espionagePower = espionagePower,
+        diplomacyHeroBonus = heroBonus.diplomacyBonus,
+        opsHeroBonus = heroBonus.combatPercent,
+        seasonName = seasonName,
+        regionName = regionName
+    )
+
+    /** 절기 예상 세수 (영지 + 조공) */
+    val projectedTax: Int
+        get() = EmpireEngine.projectedTax(territories, factions)
+
+    /** 아직 만나지 못한 영웅 수 — 목록에는 실루엣으로 나온다 */
+    val undiscoveredHeroCount: Int
+        get() = HeroDiscoveryEngine.undiscoveredCount(heroes)
+
+    /** 보유·만난 영웅 */
+    val knownHeroes: List<Hero>
+        get() = HeroDiscoveryEngine.knownHeroes(heroes)
+
+    /** 영웅 스타트 모드인지 */
+    val isHeroStart: Boolean
+        get() = startMode == StartMode.HERO && !isCampaignStarted && pendingHeroPick != null
+
     companion object {
         const val NIGHT_MEETING_SUSPICION: Int = 50
     }
@@ -416,6 +549,9 @@ class SlgGameViewModel(
             ),
             selectedTerritoryCode = startRegion.code,
             heroes = HeroRosterState(),
+            territories = listOf(homeTerritory(startRegion, 1_200)),
+            selectedManagedCode = startRegion.code,
+            factions = factionsOf(startRegion, startLords),
             union = RegionUnion(
                 regionCode = startRegion.code,
                 regionName = startRegion.name,
@@ -472,6 +608,31 @@ class SlgGameViewModel(
                 regionName = startRegion.name,
                 remainingTurns = restore.spawnTurns.coerceIn(0, RegionUnion.DEFAULT_TURNS)
             ),
+            territories = restore.territories.mapNotNull { decodeTerritory(it) }.ifEmpty {
+                listOf(homeTerritory(startRegion, restore.troops))
+            },
+            selectedManagedCode = restore.territories.mapNotNull { decodeTerritory(it) }.firstOrNull()?.code
+                ?: startRegion.code,
+            factions = factionsOf(startRegion, startLords, lord.id),
+            mercenaries = restore.mercenaries.mapNotNull { decodeMercenary(it) },
+            weaponTech = WeaponTechState(
+                restore.weaponTech.mapNotNull { (name, level) ->
+                    WeaponTech.entries.firstOrNull { it.name == name }?.let { it to level }
+                }.toMap()
+            ),
+            startMode = if (restore.startMode == StartMode.HERO.name) StartMode.HERO else StartMode.LORD,
+            heroCareer = restore.heroCareer?.let { career ->
+                HeroCareer(
+                    heroId = career.substringBefore('|'),
+                    heroName = career.substringAfter('|').substringBefore('|'),
+                    employerLordId = "ai_${startRegion.code}_1",
+                    employerLordName = career.split('|').getOrNull(2) ?: "리더",
+                    employerTerritory = startRegion.name,
+                    loyalty = career.split('|').getOrNull(3)?.toIntOrNull() ?: 70,
+                    merit = career.split('|').getOrNull(4)?.toIntOrNull() ?: 0,
+                    privateTroops = career.split('|').getOrNull(5)?.toIntOrNull() ?: 0
+                )
+            },
             statusMessage = "[이어서] ${startRegion.fullName} · Lv.${command.level} ${command.tier.label} — 저장된 진행을 불러왔습니다.",
             log = listOf("[이어서] ${startRegion.fullName}에서 플레이를 재개했습니다.")
         )
@@ -505,8 +666,64 @@ class SlgGameViewModel(
                         state.heroes.recordOf(hero.id).assignedRole?.let { hero.id to it.name }
                     }
                     .toMap(),
-                heroAffinity = state.heroes.ownedHeroes.associate { it.id to state.heroes.recordOf(it.id).affinity }
+                heroAffinity = state.heroes.ownedHeroes.associate { it.id to state.heroes.recordOf(it.id).affinity },
+                territories = state.territories.map { encodeTerritory(it) },
+                mercenaries = state.mercenaries.map { encodeMercenary(it) },
+                weaponTech = state.weaponTech.levels.mapKeys { it.key.name },
+                startMode = state.startMode.name,
+                heroCareer = state.heroCareer?.let {
+                    "${it.heroId}|${it.heroName}|${it.employerLordName}|${it.loyalty}|${it.merit}|${it.privateTroops}"
+                }
             )
+        )
+    }
+
+    private fun encodeTerritory(t: ManagedTerritory): String = listOf(
+        t.code, t.name, t.population.toString(), t.status.name, t.morale.toString(),
+        t.development.toString(), t.troops.toString(), t.food.toString(), t.gold.toString(),
+        t.defense.toString(), t.viceroyHeroId ?: "", t.viceroyName ?: "", t.viceroyRole ?: "",
+        t.tributePerSeason.toString(), t.absorbedBy
+    ).joinToString("|")
+
+    private fun decodeTerritory(raw: String): ManagedTerritory? {
+        val p = raw.split('|')
+        if (p.size < 10) return null
+        val status = TerritoryStatus.entries.firstOrNull { it.name == p[3] } ?: TerritoryStatus.DIRECT
+        return ManagedTerritory(
+            code = p[0],
+            name = p[1],
+            population = p[2].toIntOrNull() ?: 0,
+            status = status,
+            morale = p[4].toIntOrNull() ?: 55,
+            development = p[5].toIntOrNull() ?: 20,
+            troops = p[6].toIntOrNull() ?: 0,
+            food = p[7].toIntOrNull() ?: 0,
+            gold = p[8].toIntOrNull() ?: 0,
+            defense = p[9].toIntOrNull() ?: 30,
+            viceroyHeroId = p.getOrNull(10)?.takeIf { it.isNotBlank() },
+            viceroyName = p.getOrNull(11)?.takeIf { it.isNotBlank() },
+            viceroyRole = p.getOrNull(12)?.takeIf { it.isNotBlank() },
+            tributePerSeason = p.getOrNull(13)?.toIntOrNull() ?: 0,
+            absorbedBy = p.getOrNull(14) ?: "인계"
+        )
+    }
+
+    private fun encodeMercenary(band: MercenaryBand): String = listOf(
+        band.id, band.name, band.troops.toString(), band.hireCost.toString(),
+        band.upkeepPerSeason.toString(), band.contractSeasons.toString(), band.origin
+    ).joinToString("|")
+
+    private fun decodeMercenary(raw: String): MercenaryBand? {
+        val p = raw.split('|')
+        if (p.size < 6) return null
+        return MercenaryBand(
+            id = p[0],
+            name = p[1],
+            troops = p[2].toIntOrNull() ?: 0,
+            hireCost = p[3].toIntOrNull() ?: 0,
+            upkeepPerSeason = p[4].toIntOrNull() ?: 0,
+            contractSeasons = p[5].toIntOrNull() ?: 4,
+            origin = p.getOrNull(6) ?: "용병단"
         )
     }
 
@@ -533,6 +750,9 @@ class SlgGameViewModel(
             mapNodes = TerritoryMapLayout.build(region, 0, "이광수", 0),
             selectedTerritoryCode = region.code,
             heroes = HeroRosterState(),
+            territories = listOf(homeTerritory(region, 0)),
+            selectedManagedCode = region.code,
+            factions = factionsOf(region, lords),
             union = RegionUnion(regionCode = region.code, regionName = region.name, remainingTurns = 0),
             statusMessage = "[새 게임] 시작 지역을 다시 선택하세요.",
             log = listOf("[새 게임] 새 지역에서 다시 시작합니다.")
@@ -594,6 +814,9 @@ class SlgGameViewModel(
                 mapNodes = TerritoryMapLayout.build(region, 0, "이광수", 0),
                 selectedTerritoryCode = region.code,
                 heroes = HeroRosterState(),
+                territories = listOf(homeTerritory(region, 0)),
+                selectedManagedCode = region.code,
+                factions = factionsOf(region, lords),
                 union = RegionUnion(regionCode = region.code, regionName = region.name, remainingTurns = 0),
                 statusMessage = "[지역 선택] ${region.fullName} — 인구 ${region.population}명 · 리더 ${region.lordCapacity}석",
                 log = listOf("[D+14] ${region.fullName}에 ${region.lordCapacity}명의 리더이 각자 거점을 세웠다.")
@@ -650,6 +873,11 @@ class SlgGameViewModel(
                 ),
                 selectedTerritoryCode = s.regionCode,
                 heroes = HeroRosterState.initial(),
+                territories = listOf(
+                    homeTerritory(region, chosen.troops + ResourceBalance.FOUNDING_TROOPS)
+                ),
+                selectedManagedCode = region.code,
+                factions = factionsOf(region, AiLordGenerator.generate(region), lordId),
                 heroMessage = "기본 영웅 3명과 함께 시작합니다 — 한서연[내정] · 윤도현[기술] · 차명숙[상업]",
                 union = RegionUnionEngine.open(s.regionCode, s.regionName),
                 statusMessage = "[인계 완료] ${chosen.stronghold} — ${chosen.name} 리더의 거점을 이어받았습니다. " +
@@ -657,7 +885,7 @@ class SlgGameViewModel(
                     "병력 ${comma(ResourceBalance.FOUNDING_TROOPS)}명.",
                 log = (s.log + "[인계] ${s.regionFullName} ${chosen.stronghold}의 ${chosen.name} 리더 세력을 인계받았다. " +
                     "Lv.1 관할 구역부터 시작합니다." +
-                    "[지역 연합] 같은 지역 AI 리더 ${s.lordCapacity - 1}명과 자동 연합 · 스폰 보호 " +
+                    "[지역 연합] 같은 지역 리더 ${s.lordCapacity - 1}명과 자동 연합 · 스폰 보호 " +
                     "${RegionUnion.DEFAULT_TURNS}턴 시작.").takeLast(8)
             )
         }
@@ -743,12 +971,50 @@ class SlgGameViewModel(
             val gained = before.gainXp(CommandProgress.XP_SEASON)
             val heroNote = if (heroBonus.isEmpty) "" else "\n[영웅] 배치 보너스 — ${heroBonus.summary()}"
             val baseNote = "\n[수급] 기본 수급 — 자금 +${comma(baseGold)}G · 식량 +${comma(baseFood)}석"
-            val message = "[절기 순환: ${season.displayName}] ${result.message}" + heroNote + baseNote
+
+            // ── 영토 운영 정산 — 일임 태수 · 속국 조공 · 용병 유지비 ──
+            val heroStats = s.heroes.ownedHeroes.associate { it.id to it.stats }
+            val empire = EmpireEngine.processSeason(
+                territories = s.territories,
+                factions = s.factions,
+                regularTroops = s.troops,
+                seasonName = season.displayName,
+                heroStats = heroStats
+            )
+            val goldBeforeMerc = playerLord.gold + heroGold + baseGold + empire.goldGain
+            val mercMaintenance = MercenaryEngine.maintain(s.mercenaries, goldBeforeMerc)
+            val mercNote = mercMaintenance.message?.let { "\n$it" } ?: ""
+            val empireNote = if (empire.lines.isEmpty()) "" else "\n" + empire.lines.joinToString("\n")
+            val capPopulation = empire.population.coerceAtLeast(s.population)
+            val cap = ManpowerEngine.capOf(capPopulation)
+            val levies = empire.troopGain.coerceAtMost((cap - s.troops).coerceAtLeast(0))
+            val newTroops = (playerLord.troops + levies).coerceAtMost(cap)
+            val message = "[절기 순환: ${season.displayName}] ${result.message}" + heroNote + baseNote +
+                empireNote + mercNote
             season = nextSeason
+
+            // 다음 절기에 찾아올 영웅 — 명성·민심·절기 조건을 만족하면 방문 이벤트가 열린다
+            val visitSeed = (s.union.remainingTurns * 31L + nextSeason.ordinal * 7L + s.territories.size * 13L)
+            val visit = if (s.heroVisit == null) {
+                HeroDiscoveryEngine.visitCandidate(
+                    roster = s.heroes,
+                    prestige = s.prestige,
+                    morale = s.morale,
+                    season = nextSeason.displayName,
+                    seed = visitSeed,
+                    regionName = s.regionName
+                )
+            } else s.heroVisit
+
             s.copy(
                 seasonName = nextSeason.displayName,
-                gold = (playerLord.gold + heroGold + baseGold).coerceAtLeast(0),
-                food = (playerLord.grain + (grainGain - result.grainChange) + heroGrain + baseFood).coerceAtLeast(0),
+                gold = (goldBeforeMerc - mercMaintenance.paid).coerceAtLeast(0),
+                food = (playerLord.grain + (grainGain - result.grainChange) + heroGrain + baseFood + empire.foodGain)
+                    .coerceAtLeast(0),
+                troops = newTroops,
+                territories = empire.territories,
+                mercenaries = mercMaintenance.bands,
+                heroVisit = visit,
                 boostUses = emptyMap(),
                 union = unionNext,
                 command = gained,
@@ -1032,8 +1298,11 @@ class SlgGameViewModel(
             val targetTerrain = target?.terrain ?: TerrainType.PLAIN
             val homeTerrain = s.homeNode?.terrain ?: TerrainType.PLAIN
 
+            // 정규 + 용병을 함께 편성한다 (용병은 정규 상한과 별도)
             val own = facilityEngine.reinforced(
-                ForceComposition.standard((s.troops * (1.0 + s.heroBonus.combatPercent / 100.0)).toInt()),
+                ForceComposition.standard(
+                    (s.totalTroops * (1.0 + s.heroBonus.combatPercent / 100.0)).toInt()
+                ),
                 s.facilities
             )
             val enemyMultiplier = when (operationId) {
@@ -1041,7 +1310,7 @@ class SlgGameViewModel(
                 "OP_BRIDGE" -> 1.05
                 else -> 1.55
             }
-            val enemyTroops = (s.troops * enemyMultiplier).toInt().coerceAtLeast(60)
+            val enemyTroops = (s.totalTroops * enemyMultiplier).toInt().coerceAtLeast(60)
             val enemy = when (operationId) {
                 "OP_DRONE" -> {
                     // 무인기 정찰전대 + 화력지원 (적 대드론 전력)
@@ -1069,23 +1338,38 @@ class SlgGameViewModel(
                 else -> "통합 방호기지 방어"
             }
 
-            val result: ModernBattleResult = modernBattleEngine.resolve(
-                attackers = if (weDefend) enemy else own,
-                defenders = if (weDefend) own else enemy,
-                territory = battleTerritory,
-                isSupplyLineCut = s.intelGained && weDefend,
+            // 전략 · 무기 기술이 손실률을 크게 가른다.
+            // 방어전은 진지 사수이므로 방어 진형을 쓰고, 공격전은 고른 전략을 쓴다.
+            val ownStrategy = if (weDefend) BattleStrategy.DEFENSE else s.battleStrategy
+            val enemySeed = (s.unlockedHop * 7 + operationId.length + s.territories.size)
+            val enemyStrategy = StrategyBattleEngine.enemyStrategyFor(battleTerrain, enemySeed)
+            val strat = StrategyBattleEngine.resolve(
+                own = own,
+                enemy = enemy,
+                terrain = battleTerrain,
+                ownStrategy = ownStrategy,
+                enemyStrategy = enemyStrategy,
+                ownTech = s.weaponTech,
+                enemyTechLevel = StrategyBattleEngine.enemyTechLevel(s.unlockedHop, enemySeed),
+                ownOpsBonusPercent = (s.heroBonus.combatPercent + s.coalitionBonusPercent).coerceAtMost(60),
                 defenseBonusRatio = if (weDefend) facilityEngine.defenseBonus(s.facilities) else 0.0,
-                casualtyReductionBonus = if (weDefend) facilityEngine.casualtyReduction(s.facilities) else 0.0
+                casualtyReduction = if (weDefend) facilityEngine.casualtyReduction(s.facilities) else 0.0,
+                fortressReduction = if (weDefend) (fortress?.casualtyReductionRatio ?: 0.0) else 0.0,
+                durabilityFactor = if (weDefend) 1.0 else 0.0,
+                defending = weDefend
             )
+            // 보급선을 끊었다면 방어전에서 적이 무혈 항복한다
+            val supplyRout = s.intelGained && weDefend
+            val enemyLosses = if (supplyRout) (enemy.totalTroops * 0.4).toInt() else strat.enemyLosses
+            val ourLosses = if (supplyRout) 0 else strat.ownLosses
+            val ourWin = if (supplyRout) true else strat.ownWon
 
-            val ourLosses = if (weDefend) result.defenderLosses else result.attackerLosses
-            val enemyLosses = if (weDefend) result.attackerLosses else result.defenderLosses
-            val ourWin = if (weDefend) result.defenderWon else !result.defenderWon
-
-            val lossRatio = if (s.troops == 0) 0.0 else ourLosses.toDouble() / s.troops
+            val lossRatio = if (s.totalTroops == 0) 0.0 else ourLosses.toDouble() / s.totalTroops
             val verdict = when {
-                lossRatio <= 0.10 -> "저손실 현대전 성공 — 사상자 ${(lossRatio * 100).toInt()}%"
-                lossRatio <= 0.20 -> "감내 가능 손실 — 사상자 ${(lossRatio * 100).toInt()}%"
+                supplyRout -> "보급선 차단 — 무혈 항복, 사상자 0"
+                lossRatio <= 0.05 -> "압도적 우세 — 아군 손실 ${(lossRatio * 100).toInt()}%"
+                lossRatio <= 0.12 -> "저손실 현대전 성공 — 사상자 ${(lossRatio * 100).toInt()}%"
+                lossRatio <= 0.22 -> "감내 가능 손실 — 사상자 ${(lossRatio * 100).toInt()}%"
                 else -> "치명적 손실 — 사상자 ${(lossRatio * 100).toInt()}%. 재편성 필요"
             }
             val report = OperationReport(
@@ -1093,12 +1377,21 @@ class SlgGameViewModel(
                 defenderWon = ourWin,
                 attackerLosses = enemyLosses,
                 defenderLosses = ourLosses,
-                message = result.message,
+                message = if (supplyRout) {
+                    "물류·보급선을 끊어 적 공격군 ${comma(enemyLosses)}명이 무혈 항복했습니다. 아군 사상자 0."
+                } else strat.message,
                 verdict = verdict,
                 targetName = if (weDefend) s.regionName else (target?.name ?: s.regionName),
                 composition = "아군 ${own.describe()} / 적 ${enemy.describe()}",
-                requiredLevel = requiredHop + 1
+                requiredLevel = requiredHop + 1,
+                strategyLabel = "${ownStrategy.icon} ${ownStrategy.label} vs ${enemyStrategy.icon} ${enemyStrategy.label}",
+                exchangeLabel = strat.exchangeLabel,
+                breakdown = strat.lines,
+                ownLossPercent = (lossRatio * 100).toInt(),
+                enemyLossPercent = if (enemy.totalTroops == 0) 0
+                    else (enemyLosses * 100 / enemy.totalTroops)
             )
+            val strategyMemo = strat.lines
             val outcome = if (ourWin) "작전 성공" else "작전 실패"
             val line = "[작전] $operationName — $outcome, " +
                 "적 사상자 $enemyLosses, 아군 사상자 $ourLosses · $verdict"
@@ -1111,8 +1404,10 @@ class SlgGameViewModel(
             }
             val techBonus = if (s.researchedTechs.contains("sci_1")) 5 else 0
             val gained = before.gainXp(baseXp + techBonus)
+            val (regularLeft, mercsLeft) = applyLosses(s.troops, s.mercenaries, ourLosses)
             s.copy(
-                troops = (s.troops - ourLosses + heal).coerceAtLeast(0),
+                troops = (regularLeft + heal).coerceAtLeast(0),
+                mercenaries = mercsLeft,
                 prestige = (s.prestige + if (ourWin) 3 else -4).coerceIn(0, 100),
                 command = gained,
                 unlockedHop = gained.unlockedHop,
@@ -1126,7 +1421,8 @@ class SlgGameViewModel(
                 } else s.mapNodes,
                 levelUpMessage = if (gained.level != before.level) levelUpText(gained) else s.levelUpMessage,
                 lastReport = report,
-                log = (s.log + line).takeLast(8),
+                lastStrategy = strat,
+                log = (s.log + line + strategyMemo).takeLast(8),
                 statusMessage = line
             )
         }
@@ -1424,6 +1720,568 @@ class SlgGameViewModel(
     }
 
     // ──────────────────────────────────────────────────────────────
+    // 영토 흡수 · 일임 통치 · 병력/용병
+    // ──────────────────────────────────────────────────────────────
+
+    /** 영지 선택·전환 — 통치할 편입 영지를 바꾼다 */
+    fun switchManagedTerritory(code: String) {
+        _uiState.update { s ->
+            val target = s.territories.firstOrNull { it.code == code } ?: return@update s
+            s.copy(
+                selectedManagedCode = target.code,
+                empireMessage = "[영지 전환] ${target.name} · ${target.status} — " +
+                    "민심 ${target.morale} · 개발 ${target.development} · ⚔ ${target.troops}",
+                statusMessage = "[영지 전환] ${target.name} 선택"
+            )
+        }
+        persist()
+    }
+
+    /** 영웅을 태수로 일임 — 영웅 능력치대로 자동 운영된다 */
+    fun assignViceroy(heroId: String, territoryCode: String? = null) {
+        _uiState.update { s ->
+            val hero = s.heroes.ownedHeroes.firstOrNull { it.id == heroId }
+                ?: return@update s.copy(empireMessage = "[일임 불가] 보유하지 않은 영웅입니다.")
+            val target = territoryCode?.let { code -> s.territories.firstOrNull { it.code == code } }
+                ?: s.selectedManaged
+                ?: return@update s.copy(empireMessage = "[일임 불가] 편입 영지가 없습니다.")
+            val cleared = s.territories.map {
+                if (it.viceroyHeroId == heroId) it.copy(viceroyHeroId = null, viceroyName = null, viceroyRole = null)
+                else it
+            }
+            val updated = cleared.map {
+                if (it.code == target.code) it.copy(
+                    viceroyHeroId = hero.id,
+                    viceroyName = hero.name,
+                    viceroyRole = hero.role.label
+                ) else it
+            }
+            val message = "[일임] ${hero.name}(${hero.role.label}) → ${target.name} 태수 — " +
+                "매 절기 개발·민심·세수·징병·방어를 자동으로 운영합니다. (${hero.statLine})"
+            s.copy(
+                territories = updated,
+                selectedManagedCode = target.code,
+                empireMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 태수 해임 */
+    fun unassignViceroy(territoryCode: String? = null) {
+        _uiState.update { s ->
+            val target = territoryCode?.let { code -> s.territories.firstOrNull { it.code == code } }
+                ?: s.selectedManaged ?: return@update s
+            s.copy(
+                territories = s.territories.map {
+                    if (it.code == target.code) it.copy(
+                        viceroyHeroId = null, viceroyName = null, viceroyRole = null
+                    ) else it
+                },
+                empireMessage = "[일임 해제] ${target.name} — 직접 통치로 전환",
+                statusMessage = "[일임 해제] ${target.name}"
+            )
+        }
+        persist()
+    }
+
+    /** 직접 개발 — 자금을 들여 개발도를 올린다 */
+    fun developTerritory(territoryCode: String? = null) {
+        val cost = 350
+        _uiState.update { s ->
+            val target = territoryCode?.let { code -> s.territories.firstOrNull { it.code == code } }
+                ?: s.selectedManaged ?: return@update s
+            if (s.gold < cost) {
+                return@update s.copy(empireMessage = "[개발 불가] 자금이 부족합니다. (필요 ${cost}G / 보유 ${s.gold}G)")
+            }
+            val message = "[개발] ${target.name} 개발도 ${target.development} → ${(target.development + 5).coerceAtMost(100)} " +
+                "(자금 -${cost}G)"
+            s.copy(
+                gold = s.gold - cost,
+                territories = s.territories.map {
+                    if (it.code == target.code) it.copy(
+                        development = (it.development + 5).coerceAtMost(100),
+                        morale = (it.morale + 1).coerceAtMost(100)
+                    ) else it
+                },
+                empireMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 흡수·편입 시도 — 6가지 방법 중 하나 */
+    fun attemptAbsorption(method: AbsorptionMethod, factionId: String) {
+        _uiState.update { s ->
+            val faction = s.factions.firstOrNull { it.id == factionId }
+                ?: return@update s.copy(empireMessage = "[흡수] 알 수 없는 세력입니다.")
+            val outcome = AbsorptionEngine.resolve(method, faction, s.empireContext())
+            if (!outcome.success) {
+                return@update s.copy(
+                    empireMessage = outcome.message,
+                    lastAbsorption = outcome,
+                    statusMessage = outcome.message
+                )
+            }
+            val territories = outcome.territory?.let { newTerritory ->
+                if (s.territories.any { it.code == newTerritory.code }) s.territories
+                else s.territories + newTerritory
+            } ?: s.territories
+            s.copy(
+                gold = (s.gold + outcome.goldDelta).coerceAtLeast(0),
+                food = (s.food + outcome.foodDelta).coerceAtLeast(0),
+                troops = (s.troops - outcome.troopLoss).coerceAtLeast(0),
+                prestige = (s.prestige + outcome.prestigeDelta).coerceIn(0, 100),
+                morale = (s.morale + outcome.moraleDelta).coerceIn(0, 100),
+                factions = s.factions.map { if (it.id == faction.id) outcome.faction else it },
+                territories = territories,
+                selectedManagedCode = outcome.territory?.code ?: s.selectedManagedCode,
+                lastAbsorption = outcome,
+                empireMessage = outcome.message,
+                alliedTerritories = s.alliedTerritories + 1,
+                lords = s.lords.map { lord ->
+                    if (faction.id == "faction_${lord.id}") lord.copy(troops = outcome.faction.troops)
+                    else lord
+                },
+                log = (s.log + outcome.message).takeLast(8),
+                statusMessage = outcome.message
+            )
+        }
+        persist()
+    }
+
+    /**
+     * 첩자 민심 공작 — 상대 세력의 민심을 떨어뜨려 속국 편입 조건(민심 40 이하)을 만든다.
+     * 첩보력이 높을수록 잘 먹힌다.
+     */
+    fun instigateFaction(factionId: String) {
+        val cost = 300
+        _uiState.update { s ->
+            val faction = s.factions.firstOrNull { it.id == factionId } ?: return@update s
+            if (faction.incorporated) {
+                return@update s.copy(empireMessage = "[공작] ${faction.name}은(는) 이미 편입된 세력입니다.")
+            }
+            if (s.gold < cost) {
+                return@update s.copy(
+                    empireMessage = "[공작 불가] 자금이 부족합니다. (필요 ${cost}G / 보유 ${s.gold}G)"
+                )
+            }
+            // 성공 판정 — 첩보력 + 명성으로 상대 명성을 넘어야 한다
+            val attack = s.espionagePower + s.prestige / 5 + s.heroBonus.intelBonus
+            val defense = 45 + faction.prestige / 3
+            val success = attack >= defense
+            val drop = if (success) 14 else 4
+            val nextMorale = (faction.morale - drop).coerceAtLeast(0)
+            val message = if (success) {
+                "[민심 공작] ${faction.name} 거점에 유언비어와 이간계가 퍼졌습니다. " +
+                    "민심 ${faction.morale} → $nextMorale (첩보 $attack / 방어 $defense) — " +
+                    (if (nextMorale <= 40) "이제 첩자 민심 전환으로 속국 편입이 가능합니다." else "한 번 더 공작이 필요합니다.")
+            } else {
+                "[민심 공작 실패] ${faction.name}이(가) 첩자를 색출했습니다. 민심 ${faction.morale} → $nextMorale " +
+                    "(첩보 $attack / 방어 $defense)"
+            }
+            s.copy(
+                gold = s.gold - cost,
+                espionagePower = (s.espionagePower - 2).coerceAtLeast(0),
+                factions = s.factions.map {
+                    if (it.id == faction.id) it.copy(
+                        morale = nextMorale,
+                        affinity = (it.affinity - 4).coerceAtLeast(0),
+                        relation = if (nextMorale <= 40) FactionRelation.WARY else it.relation
+                    ) else it
+                },
+                empireMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 공동 적 조성 — 연방 결성 조건을 만든다 (자금 250G) */
+    fun createCommonEnemy(factionId: String) {
+        val cost = 250
+        _uiState.update { s ->
+            val faction = s.factions.firstOrNull { it.id == factionId } ?: return@update s
+            if (faction.commonEnemy) {
+                return@update s.copy(empireMessage = "[공동 적] ${faction.name}과는 이미 같은 적을 두고 있습니다.")
+            }
+            if (s.gold < cost) {
+                return@update s.copy(empireMessage = "[공동 적] 자금이 부족합니다. (필요 ${cost}G / 보유 ${s.gold}G)")
+            }
+            val message = "[공동 적] ${faction.name}과(와) 인접 구역의 공동 적을 지목했습니다. " +
+                "우호도 +8 · 연방 결성 조건 충족 (자금 -${cost}G)"
+            s.copy(
+                gold = s.gold - cost,
+                factions = s.factions.map {
+                    if (it.id == faction.id) it.copy(
+                        commonEnemy = true,
+                        affinity = (it.affinity + 8).coerceAtMost(100)
+                    ) else it
+                },
+                empireMessage = message,
+                statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    /** 정규 병력 모집 — 전체 인구 5% 상한을 넘지 못한다 */
+    fun recruitRegular(troops: Int = 300) {
+        val goldCost = (troops * 5 / 3).coerceAtLeast(200)
+        val foodCost = (troops * 4 / 3).coerceAtLeast(150)
+        _uiState.update { s ->
+            val room = (s.troopCap - s.troops).coerceAtLeast(0)
+            if (room <= 0) {
+                return@update s.copy(
+                    empireMessage = "[모집 불가] 정규 병력 상한 ${comma(s.troopCap)}명에 이미 도달했습니다. " +
+                        "용병을 쓰거나 영지를 편입해 인구를 늘리십시오.",
+                    statusMessage = "[모집 불가] 정규 상한 도달"
+                )
+            }
+            val actual = troops.coerceAtMost(room)
+            if (s.gold < goldCost || s.food < foodCost) {
+                return@update s.copy(empireMessage = "[모집 불가] 자금 ${comma(goldCost)}G · 식량 ${comma(foodCost)}석이 필요합니다.")
+            }
+            val message = "[모집] 정규병 ${comma(actual)}명 — 자금 -${comma(goldCost)}G · 식량 -${comma(foodCost)}석. " +
+                ManpowerEngine.label(s.totalTerritoryPopulation, s.troops + actual, s.mercenaryTroops)
+            s.copy(
+                troops = s.troops + actual,
+                gold = (s.gold - goldCost).coerceAtLeast(0),
+                food = (s.food - foodCost).coerceAtLeast(0),
+                territories = s.territories.map {
+                    if (it.status == TerritoryStatus.DIRECT) it.copy(troops = it.troops + actual) else it
+                },
+                mapNodes = TerritoryMapLayout.build(
+                    start = s.regionArea ?: RegionCatalog.defaultRegion(),
+                    unlockedHop = s.unlockedHop,
+                    playerName = s.playerLord?.name ?: "이광수",
+                    homeTroops = s.troops + actual
+                ),
+                empireMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 고비용 용병 고용 — 정규 상한과 별도 */
+    fun hireMercenary(troops: Int = 300) {
+        _uiState.update { s ->
+            val cost = MercenaryEngine.hireCostOf(troops)
+            val (band, message) = MercenaryEngine.hire(s.mercenaries, troops, s.gold, s.mercenaries.size)
+            if (band == null) {
+                return@update s.copy(empireMessage = message, statusMessage = message)
+            }
+            s.copy(
+                gold = s.gold - cost,
+                mercenaries = s.mercenaries + band,
+                empireMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 용병 계약 해지 */
+    fun dismissMercenary(bandId: String) {
+        _uiState.update { s ->
+            val band = s.mercenaries.firstOrNull { it.id == bandId } ?: return@update s
+            s.copy(
+                mercenaries = s.mercenaries.filterNot { it.id == bandId },
+                empireMessage = "[용병] ${band.name} ${comma(band.troops)}명과의 계약을 해지했습니다.",
+                statusMessage = "[용병 해지] ${band.name}"
+            )
+        }
+        persist()
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 전략 · 무기 기술
+    // ──────────────────────────────────────────────────────────────
+
+    /** 진형·계략 선택 — 다음 작전부터 적용된다 */
+    fun selectBattleStrategy(strategy: BattleStrategy) {
+        _uiState.update { s ->
+            s.copy(
+                battleStrategy = strategy,
+                strategyMessage = "[전략] ${strategy.icon} ${strategy.label} — ${strategy.detail}",
+                statusMessage = "[전략] ${strategy.label} 선택"
+            )
+        }
+    }
+
+    /** 무기 기술 연구 — 계통별 0~4레벨 */
+    fun researchWeaponTech(tech: WeaponTech) {
+        _uiState.update { s ->
+            val current = s.weaponTech.levelOf(tech)
+            if (current >= 4) {
+                return@update s.copy(strategyMessage = "[무기 연구] ${tech.label}은(는) 이미 최고 레벨입니다.")
+            }
+            val cost = tech.costOf(current + 1)
+            if (s.gold < cost) {
+                return@update s.copy(
+                    strategyMessage = "[무기 연구 불가] 자금이 부족합니다. (필요 ${comma(cost)}G / 보유 ${comma(s.gold)}G)"
+                )
+            }
+            val next = WeaponTechState(s.weaponTech.levels + (tech to current + 1))
+            val message = "[무기 연구] ${tech.label} Lv.${current + 1} '${tech.levelName(current + 1)}' — " +
+                "${tech.effect} · 전투력 ×${"%.2f".format(next.multiplier)} (자금 -${comma(cost)}G)"
+            s.copy(
+                gold = s.gold - cost,
+                weaponTech = next,
+                strategyMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 영웅 탐색 · 방문 합류
+    // ──────────────────────────────────────────────────────────────
+
+    /** 영웅 탐색 — 이름을 지정하지 않고 재야 영웅을 만난다 */
+    fun searchHeroes() {
+        _uiState.update { s ->
+            val seed = (s.command.xp + s.heroes.ownedCount * 17L + s.prestige * 7L + s.log.size)
+            val result = HeroDiscoveryEngine.search(
+                roster = s.heroes,
+                gold = s.gold,
+                regionCode = s.regionCode,
+                season = s.seasonName,
+                seed = seed
+            )
+            s.copy(
+                heroes = result.roster,
+                gold = (s.gold + result.goldDelta).coerceAtLeast(0),
+                heroSearchMessage = result.message,
+                heroMessage = result.message,
+                statusMessage = result.message,
+                log = if (result.success) (s.log + result.message).takeLast(8) else s.log
+            )
+        }
+        persist()
+    }
+
+    /** 찾아온 영웅 수락 — 무상 합류 */
+    fun acceptHeroVisit() {
+        _uiState.update { s ->
+            val visit = s.heroVisit ?: return@update s
+            val result = HeroDiscoveryEngine.acceptVisit(s.heroes, visit)
+            s.copy(
+                heroes = result.roster,
+                prestige = (s.prestige + result.prestigeDelta).coerceIn(0, 100),
+                heroVisit = null,
+                heroVisitMessage = result.message,
+                heroMessage = result.message,
+                statusMessage = result.message,
+                log = (s.log + result.message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 찾아온 영웅 거절 */
+    fun declineHeroVisit() {
+        _uiState.update { s ->
+            val visit = s.heroVisit ?: return@update s
+            val result = HeroDiscoveryEngine.declineVisit(s.heroes, visit)
+            s.copy(
+                heroes = result.roster,
+                heroVisit = null,
+                heroVisitMessage = result.message,
+                statusMessage = result.message
+            )
+        }
+        persist()
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 영웅으로 시작 — 리더에게 등용 청
+    // ──────────────────────────────────────────────────────────────
+
+    /** 시작 방식 전환 */
+    fun chooseStartMode(mode: StartMode) {
+        _uiState.update { s ->
+            s.copy(
+                startMode = mode,
+                pendingHeroPick = null,
+                pendingEmployment = null,
+                statusMessage = if (mode == StartMode.HERO) {
+                    "[영웅 시작] 등용을 청할 영웅을 고르세요. 리더는 유저일 수도, 아닐 수도 있습니다."
+                } else {
+                    "[리더 시작] 인계받을 리더를 명부에서 고르세요."
+                }
+            )
+        }
+    }
+
+    /** 영웅 스타트에서 플레이할 영웅 선택 */
+    fun pickHeroForStart(heroId: String) {
+        _uiState.update { s ->
+            val hero = HeroRoster.byId(heroId) ?: return@update s
+            s.copy(
+                pendingHeroPick = hero.id,
+                pendingEmployment = null,
+                statusMessage = "[영웅 시작] ${hero.name} · ${hero.title} — 등용을 청할 리더를 고르세요. " +
+                    "(${hero.statLine})"
+            )
+        }
+    }
+
+    /**
+     * 리더에게 등용 청 — 수락/거절은 상대가 누구인지와 무관하게
+     * 능력치·명성·세력 필요도로만 결정된다(블라인드 원칙).
+     */
+    fun requestEmployment(lordId: String) {
+        _uiState.update { s ->
+            val hero = s.pendingHeroPick?.let { HeroRoster.byId(it) }
+                ?: return@update s.copy(statusMessage = "[등용] 먼저 영웅을 고르세요.")
+            val lord = s.lords.firstOrNull { it.id == lordId }
+                ?: return@update s.copy(statusMessage = "[등용] 명부에 없는 리더입니다.")
+            val need = LordNeed(
+                troops = lord.troops,
+                prestige = lord.prestige,
+                population = s.regionPopulation
+            )
+            val startPrestige = (12 + hero.stats.total / 12).coerceIn(15, 55)
+            val request = HeroEmploymentEngine.request(
+                hero = hero,
+                prestige = startPrestige,
+                lordId = lord.id,
+                lordName = lord.name,
+                need = need
+            )
+            if (!request.accepted) {
+                return@update s.copy(
+                    pendingEmployment = request,
+                    statusMessage = request.message,
+                    log = (s.log + request.message).takeLast(8)
+                )
+            }
+            val region = s.regionArea ?: RegionCatalog.defaultRegion()
+            // 영웅 스타트는 동료 없이 시작한다 — 동료는 탐색·방문 합류로만 늘어난다
+            val roster = HeroRosterState().let { base ->
+                base.copy(
+                    records = base.records + (
+                        hero.id to base.recordOf(hero.id).copy(
+                            stage = HeroStage.HIRED,
+                            affinity = 85,
+                            assignedRole = hero.role
+                        )
+                        )
+                )
+            }
+            val troops = 120
+            val message = request.message + " — ${lord.name} 리더 휘하의 ${hero.role.label} 영웅으로 시작합니다."
+            s.copy(
+                stage = GameStage.PLAY,
+                startMode = StartMode.HERO,
+                pendingEmployment = request,
+                playerLordId = lord.id,
+                selectedLordId = lord.id,
+                registeredLords = 1,
+                prestige = startPrestige,
+                gold = 1_500,
+                food = 2_400,
+                troops = troops,
+                morale = 58,
+                heroes = roster,
+                heroMessage = "${hero.name}으로 시작합니다. 동료 영웅은 탐색과 방문 합류로만 늘릴 수 있습니다.",
+                heroCareer = HeroCareer(
+                    heroId = hero.id,
+                    heroName = hero.name,
+                    employerLordId = lord.id,
+                    employerLordName = "${lord.name} 리더",
+                    employerTerritory = lord.stronghold,
+                    loyalty = request.loyalty,
+                    merit = 0,
+                    privateTroops = 40
+                ),
+                command = CommandProgress(),
+                unlockedHop = 0,
+                mapNodes = TerritoryMapLayout.build(region, 0, hero.name, troops),
+                selectedTerritoryCode = region.code,
+                territories = listOf(homeTerritory(region, troops, 58)),
+                selectedManagedCode = region.code,
+                factions = factionsOf(region, AiLordGenerator.generate(region), lord.id),
+                union = RegionUnionEngine.open(s.regionCode, s.regionName),
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 영웅 경력 — 사병 모집 */
+    fun gatherPrivateTroops() {
+        val cost = 420
+        _uiState.update { s ->
+            val career = s.heroCareer ?: return@update s
+            if (s.gold < cost) return@update s.copy(statusMessage = "[사병] 자금이 부족합니다. (필요 ${cost}G)")
+            val gain = 60
+            val message = "[사병] 개인 병력 +${gain}명 (자금 -${cost}G) — 사병 ${comma(career.privateTroops + gain)}명. " +
+                "리더 몰래 키우는 힘입니다."
+            s.copy(
+                gold = s.gold - cost,
+                heroCareer = career.copy(privateTroops = career.privateTroops + gain),
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 영웅 경력 — 공적 보고 (명성·충성 상승) */
+    fun reportMerit() {
+        _uiState.update { s ->
+            val career = s.heroCareer ?: return@update s
+            val meritGain = 8
+            val message = "[공적] 임무 보고 — 공적 ${career.merit + meritGain}, 명성 +3, 충성 +2"
+            s.copy(
+                prestige = (s.prestige + 3).coerceIn(0, 100),
+                heroCareer = career.copy(
+                    merit = career.merit + meritGain,
+                    loyalty = (career.loyalty + 2).coerceAtMost(100)
+                ),
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 영웅 경력 — 독립 (명성 55 이상, 공적 40 이상) */
+    fun declareIndependence() {
+        _uiState.update { s ->
+            val career = s.heroCareer ?: return@update s
+            if (career.merit < 40 || s.prestige < 55) {
+                return@update s.copy(
+                    statusMessage = "[독립 불가] 공적 ${career.merit}/40 · 명성 ${s.prestige}/55 — 더 쌓아야 합니다."
+                )
+            }
+            val message = "[독립] ${career.heroName}이(가) ${career.employerLordName}의 휘하를 떠나 " +
+                "독자 세력을 세웠습니다. 사병 ${comma(career.privateTroops)}명이 따릅니다."
+            s.copy(
+                heroCareer = career.copy(independent = true),
+                startMode = StartMode.LORD,
+                troops = s.troops + career.privateTroops,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    // ──────────────────────────────────────────────────────────────
     // 재원 탭 서브 메뉴 — 식량 · 골드 · 인구수 · 병력
     // ──────────────────────────────────────────────────────────────
 
@@ -1465,22 +2323,29 @@ class SlgGameViewModel(
                     if (!outcome.ok) {
                         st.copy(resourceMessage = outcome.message, statusMessage = outcome.message)
                     } else {
+                        // 정규 병력은 전체 인구 5% 상한을 넘지 못한다 (용병은 별도)
+                        val troopDelta = if (outcome.troopsDelta > 0) {
+                            outcome.troopsDelta.coerceAtMost((st.troopCap - st.troops).coerceAtLeast(0))
+                        } else outcome.troopsDelta
+                        val capNote = if (outcome.troopsDelta > 0 && troopDelta < outcome.troopsDelta) {
+                            "\n[상한] 정규 병력은 인구의 5%(${comma(st.troopCap)}명)까지입니다 — ${comma(troopDelta)}명만 충원. 용병을 쓰십시오."
+                        } else ""
                         st.copy(
                             gold = (st.gold + outcome.goldDelta).coerceAtLeast(0),
                             food = (st.food + outcome.foodDelta).coerceAtLeast(0),
                             population = (st.population + outcome.populationDelta).coerceAtLeast(0),
-                            troops = (st.troops + outcome.troopsDelta).coerceAtLeast(0),
+                            troops = (st.troops + troopDelta).coerceAtLeast(0),
                             morale = (st.morale + outcome.moraleDelta).coerceIn(0, 100),
                             boostUses = st.boostUses + (action.id to used + 1),
-                            resourceMessage = outcome.message,
-                            statusMessage = outcome.message,
+                            resourceMessage = outcome.message + capNote,
+                            statusMessage = outcome.message + capNote,
                             log = (st.log + outcome.message).takeLast(8),
-                            mapNodes = if (outcome.troopsDelta == 0) st.mapNodes else {
+                            mapNodes = if (troopDelta == 0) st.mapNodes else {
                                 TerritoryMapLayout.build(
                                     start = st.regionArea ?: RegionCatalog.defaultRegion(),
                                     unlockedHop = st.unlockedHop,
                                     playerName = st.playerLord?.name ?: "이광수",
-                                    homeTroops = (st.troops + outcome.troopsDelta).coerceAtLeast(0)
+                                    homeTroops = (st.troops + troopDelta).coerceAtLeast(0)
                                 )
                             }
                         )
@@ -1543,22 +2408,26 @@ class SlgGameViewModel(
 
             val area = s.regionArea ?: RegionCatalog.defaultRegion()
             val own = ForceComposition.standard(
-                (s.troops * (1.0 + s.heroBonus.combatPercent / 100.0)).toInt()
+                (s.totalTroops * (1.0 + s.heroBonus.combatPercent / 100.0)).toInt()
             )
             val enemy = ForceComposition.standard(target.troops.coerceAtLeast(60))
-            val result = modernBattleEngine.resolve(
-                attackers = own,
-                defenders = enemy,
-                territory = buildTerritory(area = area, fortress = null).copy(terrain = area.terrain),
-                isSupplyLineCut = s.intelGained,
-                defenseBonusRatio = 0.0,
-                casualtyReductionBonus = 0.0
+            val enemyStrategy = StrategyBattleEngine.enemyStrategyFor(area.terrain, target.name.hashCode())
+            val strat = StrategyBattleEngine.resolve(
+                own = own,
+                enemy = enemy,
+                terrain = area.terrain,
+                ownStrategy = s.battleStrategy,
+                enemyStrategy = enemyStrategy,
+                ownTech = s.weaponTech,
+                enemyTechLevel = StrategyBattleEngine.enemyTechLevel(s.unlockedHop, target.name.hashCode()),
+                ownOpsBonusPercent = (s.heroBonus.combatPercent + s.coalitionBonusPercent).coerceAtMost(60),
+                defending = false
             )
-            val win = !result.defenderWon
-            val ourLosses = result.attackerLosses
-            val theirLosses = result.defenderLosses
+            val win = strat.ownWon
+            val ourLosses = strat.ownLosses
+            val theirLosses = strat.enemyLosses
             val message = "[교전] ${target.name} 리더 — ${if (win) "압박 성공" else "공격 실패"} · " +
-                "적 사상자 $theirLosses, 아군 사상자 $ourLosses"
+                "적 사상자 $theirLosses, 아군 사상자 $ourLosses (교환비 ${strat.exchangeLabel})"
             val report = OperationReport(
                 operation = "지역 리더 압박",
                 defenderWon = !win,
@@ -1568,10 +2437,17 @@ class SlgGameViewModel(
                 verdict = if (win) "지역 내 주도권 확보" else "지역 내 반발 — 재편성 필요",
                 targetName = target.name,
                 composition = "아군 ${own.describe()} / 적 ${enemy.describe()}",
-                requiredLevel = 1
+                requiredLevel = 1,
+                strategyLabel = "${s.battleStrategy.icon} ${s.battleStrategy.label} vs ${enemyStrategy.icon} ${enemyStrategy.label}",
+                exchangeLabel = strat.exchangeLabel,
+                breakdown = strat.lines,
+                ownLossPercent = (strat.ownLossRatio * 100).toInt(),
+                enemyLossPercent = (strat.enemyLossRatio * 100).toInt()
             )
+            val (regularLeft, mercsLeft) = applyLosses(s.troops, s.mercenaries, ourLosses)
             s.copy(
-                troops = (s.troops - ourLosses).coerceAtLeast(0),
+                troops = regularLeft,
+                mercenaries = mercsLeft,
                 prestige = (s.prestige + if (win) 4 else -3).coerceIn(0, 100),
                 morale = (s.morale + if (win) 2 else -3).coerceIn(0, 100),
                 lords = s.lords.map { lord ->
@@ -1653,6 +2529,81 @@ class SlgGameViewModel(
         prestige = prestige,
         arms = arm.displayName
     )
+
+    // ──────────────────────────────────────────────────────────────
+    // 영토 · 세력 초기화
+    // ──────────────────────────────────────────────────────────────
+
+    /** 본진 영지 — 시작 지역은 직할로 직접 통치한다 */
+    private fun homeTerritory(area: RegionArea, troops: Int, morale: Int = 62): ManagedTerritory =
+        ManagedTerritory(
+            code = area.code,
+            name = area.name,
+            population = area.population,
+            status = TerritoryStatus.DIRECT,
+            morale = morale,
+            development = 35,
+            troops = troops,
+            food = 0,
+            gold = 0,
+            defense = 45,
+            absorbedBy = "인계"
+        )
+
+    /**
+     * 같은 지역 리더 세력 — 편입 대상.
+     * 리더 명부와 같은 사람들이며, 유저인지 AI인지 드러나는 값은 두지 않는다.
+     */
+    private fun factionsOf(area: RegionArea, lords: List<AiLordProfile>, playerLordId: String? = null): List<Faction> {
+        val perLord = (area.population / area.lordCapacity.coerceAtLeast(1)).coerceAtLeast(500)
+        return lords.filter { it.id != playerLordId }.mapIndexed { index, lord ->
+            Faction(
+                id = "faction_${lord.id}",
+                name = lord.name,
+                territoryCode = "${area.code}_${index + 1}",
+                territoryName = "${area.name} ${index + 1}구역",
+                population = (perLord * (0.85 + (index % 4) * 0.1)).toInt(),
+                troops = lord.troops.coerceAtLeast(60),
+                morale = (38 + (lord.prestige % 30)).coerceIn(20, 92),
+                affinity = (28 + (lord.prestige % 35)).coerceIn(10, 85),
+                prestige = lord.prestige,
+                gold = lord.gold,
+                food = lord.grain,
+                relation = when {
+                    lord.prestige >= 60 -> FactionRelation.FRIENDLY
+                    lord.prestige >= 45 -> FactionRelation.NEUTRAL
+                    else -> FactionRelation.WARY
+                },
+                commonEnemy = index % 3 == 0
+            )
+        }
+    }
+
+    /** 영지 목록에서 방어 태세·민심이 높은 순으로 정렬한 총력 */
+    private fun empireSummary(state: SlgGameState): String =
+        "영지 ${state.territories.size}곳(편입 ${state.absorbedCount}) · " +
+            ManpowerEngine.label(state.totalTerritoryPopulation, state.troops, state.mercenaryTroops)
+
+    /** 손실 배분 — 정규병을 먼저 잃고, 모자라면 용병이 쓰러진다 */
+    private fun applyLosses(
+        regular: Int,
+        mercenaries: List<MercenaryBand>,
+        losses: Int
+    ): Pair<Int, List<MercenaryBand>> {
+        val total = losses.coerceAtLeast(0)
+        val fromRegular = total.coerceAtMost(regular)
+        var rest = total - fromRegular
+        val kept = mercenaries.mapNotNull { band ->
+            if (rest <= 0) band
+            else {
+                val take = rest.coerceAtMost(band.troops)
+                rest -= take
+                val left = band.troops - take
+                if (left <= 0) null else band.copy(troops = left, upkeepPerSeason = MercenaryEngine.upkeepOf(left))
+            }
+        }
+        return (regular - fromRegular) to kept
+    }
 
     private fun levelUpText(command: CommandProgress): String =
         "🎖 지휘 Lv.${command.level} — ${command.tier.label} 해금. ${command.tier.detail}"

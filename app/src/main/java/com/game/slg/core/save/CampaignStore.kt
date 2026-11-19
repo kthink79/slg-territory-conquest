@@ -31,7 +31,17 @@ data class CampaignSave(
     /** 영웅 id → 배치된 역할 이름 */
     val heroPlacements: Map<String, String> = emptyMap(),
     /** 영웅 id → 호감도 */
-    val heroAffinity: Map<String, Int> = emptyMap()
+    val heroAffinity: Map<String, Int> = emptyMap(),
+    /** 편입 영지 — "code|name|population|status|morale|development|troops|food|gold|defense|viceroyId|viceroyName|viceroyRole|tribute|absorbedBy" */
+    val territories: List<String> = emptyList(),
+    /** 용병 부대 — "id|name|troops|hireCost|upkeep|contract|origin" */
+    val mercenaries: List<String> = emptyList(),
+    /** 무기 기술 이름 → 레벨 */
+    val weaponTech: Map<String, Int> = emptyMap(),
+    /** LORD / HERO */
+    val startMode: String = "LORD",
+    /** 영웅 스타트 경력 — "heroId|heroName|lordName|loyalty|merit|privateTroops" */
+    val heroCareer: String? = null
 )
 
 interface CampaignStore {

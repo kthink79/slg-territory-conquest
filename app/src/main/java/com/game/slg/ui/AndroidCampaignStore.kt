@@ -51,7 +51,17 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
                     val parts = entry.split(':')
                     parts.getOrNull(0)?.let { id -> id to (parts.getOrNull(1)?.toIntOrNull() ?: 80) }
                 }
-                .toMap()
+                .toMap(),
+            territories = prefs.getStringSet(KEY_TERRITORIES, emptySet()).orEmpty().sorted(),
+            mercenaries = prefs.getStringSet(KEY_MERCENARIES, emptySet()).orEmpty().sorted(),
+            weaponTech = prefs.getStringSet(KEY_WEAPON_TECH, emptySet()).orEmpty()
+                .mapNotNull { entry ->
+                    val parts = entry.split(':')
+                    parts.getOrNull(0)?.let { name -> name to (parts.getOrNull(1)?.toIntOrNull() ?: 0) }
+                }
+                .toMap(),
+            startMode = prefs.getString(KEY_START_MODE, "LORD") ?: "LORD",
+            heroCareer = prefs.getString(KEY_HERO_CAREER, null)
         )
     }
 
@@ -86,6 +96,14 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
                 KEY_HERO_AFFINITY,
                 save.heroAffinity.map { (id, value) -> "$id:$value" }.toSet()
             )
+            .putStringSet(KEY_TERRITORIES, save.territories.toSet())
+            .putStringSet(KEY_MERCENARIES, save.mercenaries.toSet())
+            .putStringSet(
+                KEY_WEAPON_TECH,
+                save.weaponTech.map { (name, level) -> "$name:$level" }.toSet()
+            )
+            .putString(KEY_START_MODE, save.startMode)
+            .putString(KEY_HERO_CAREER, save.heroCareer)
             .apply()
     }
 
@@ -109,5 +127,10 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
         private const val KEY_HEROES = "owned_heroes"
         private const val KEY_HERO_SLOTS = "hero_slots"
         private const val KEY_HERO_AFFINITY = "hero_affinity"
+        private const val KEY_TERRITORIES = "territories"
+        private const val KEY_MERCENARIES = "mercenaries"
+        private const val KEY_WEAPON_TECH = "weapon_tech"
+        private const val KEY_START_MODE = "start_mode"
+        private const val KEY_HERO_CAREER = "hero_career"
     }
 }

@@ -40,7 +40,7 @@ class MainUiNavigationTest {
     }
 
     @Test
-    fun `하단 탭 5개가 모두 화면을 연다`() {
+    fun `하단 탭 6개가 모두 화면을 연다`() {
         MainTab.bottomOrder.filter { it != MainTab.MAP }.forEach { tab ->
             val opened = MainNavigationState().open(tab)
 
@@ -48,7 +48,7 @@ class MainUiNavigationTest {
             assertEquals(tab, opened.openedTab)
             assertEquals(0, opened.sub)
         }
-        assertEquals(5, MainTab.bottomOrder.size)
+        assertEquals(6, MainTab.bottomOrder.size)
     }
 
     @Test
@@ -97,7 +97,8 @@ class MainUiNavigationTest {
         assertEquals(listOf("유민", "상인", "정찰대"), EventTab.entries.map { it.label })
         assertEquals(4, TerritoryTab.entries.size)
         assertEquals(2, CouncilTab.entries.size)
-        assertEquals(4, WarTab.entries.size)
+        assertEquals(5, WarTab.entries.size)
+        assertEquals(3, com.game.slg.ui.EmpireTab.entries.size)
         assertEquals(3, DiplomacyTab.entries.size)
         assertEquals(3, PromotionTab.entries.size)
         assertEquals(2, HeroTab.entries.size)

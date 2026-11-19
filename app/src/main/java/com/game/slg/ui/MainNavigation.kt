@@ -57,11 +57,18 @@ enum class MainTab(
         title = "외교·첩보",
         emoji = "🤝",
         accentHex = 0xFF81C784
+    ),
+    EMPIRE(
+        id = "tab_empire",
+        label = "영토",
+        title = "영토·흡수",
+        emoji = "🗺",
+        accentHex = 0xFFE2B755
     );
 
     companion object {
         /** 하단 탭 순서 — 지도가 기본 화면 */
-        val bottomOrder: List<MainTab> = listOf(MAP, DOMAIN, HERO, WAR, DIPLOMACY)
+        val bottomOrder: List<MainTab> = listOf(MAP, DOMAIN, HERO, WAR, DIPLOMACY, EMPIRE)
     }
 }
 
@@ -86,9 +93,17 @@ enum class HeroTab(val label: String) {
 /** 작전 탭 상단 탭 */
 enum class WarTab(val label: String) {
     OPS("작전"),
+    STRATEGY("전략"),
     REGION("지역"),
     REPORT("전과"),
     DOCTRINE("원칙")
+}
+
+/** 영토 탭 상단 탭 — 흡수 / 통치 / 병력 */
+enum class EmpireTab(val label: String) {
+    ABSORB("흡수"),
+    GOVERN("통치"),
+    MANPOWER("병력")
 }
 
 /** 외교 탭 상단 탭 */
@@ -146,6 +161,7 @@ object ScreenTabs {
         MainTab.HERO -> HeroTab.entries.map { it.label }
         MainTab.WAR -> WarTab.entries.map { it.label }
         MainTab.DIPLOMACY -> DiplomacyTab.entries.map { it.label }
+        MainTab.EMPIRE -> EmpireTab.entries.map { it.label }
     }
 
     fun countOf(tab: MainTab): Int = labelsOf(tab).size
@@ -341,6 +357,43 @@ object StatusAlertBuilder {
                 targetSub = HeroTab.RECRUIT.ordinal
             )
         }
+        // 찾아온 영웅 — 합류를 청하는 방문 이벤트
+        if (state.heroVisit != null) {
+            alerts += StatusAlert(
+                id = "alert_hero_visit",
+                icon = "🚪",
+                short = "합류 청함",
+                title = "${state.heroVisit.heroName} 합류 청함",
+                severity = AlertSeverity.WARNING,
+                target = MainTab.HERO,
+                targetSub = HeroTab.RECRUIT.ordinal
+            )
+        }
+        // 태수 없는 편입 영지
+        val noViceroy = state.territories.count { it.needsViceroy && it.absorbedBy != "인계" }
+        if (noViceroy > 0) {
+            alerts += StatusAlert(
+                id = "alert_viceroy",
+                icon = "🏛",
+                short = "태수 ${noViceroy}곳",
+                title = "태수 없는 영지 ${noViceroy}곳",
+                severity = AlertSeverity.INFO,
+                target = MainTab.EMPIRE,
+                targetSub = EmpireTab.GOVERN.ordinal
+            )
+        }
+        // 정규 병력 상한 도달 — 용병 안내
+        if (state.troopCap > 0 && state.troops >= state.troopCap) {
+            alerts += StatusAlert(
+                id = "alert_troop_cap",
+                icon = "⚔",
+                short = "상한 도달",
+                title = "정규 병력 상한 ${state.troopCap}명",
+                severity = AlertSeverity.WARNING,
+                target = MainTab.EMPIRE,
+                targetSub = EmpireTab.MANPOWER.ordinal
+            )
+        }
         return alerts
     }
 }
@@ -392,6 +445,23 @@ object MainInfoPanel {
                 )
             )
             add(InfoEntry("🦸", "영웅", "${state.heroes.ownedCount}명 · 배치 ${state.heroes.placedCount}", 0xFFB39DDB))
+            add(
+                InfoEntry(
+                    "🗺",
+                    "영토",
+                    "${state.territories.size}곳 · 편입 ${state.absorbedCount} · 연방 +${state.coalitionBonusPercent}%",
+                    0xFFE2B755
+                )
+            )
+            add(
+                InfoEntry(
+                    "⚔",
+                    "상한",
+                    "정규 ${state.troops}/${state.troopCap} · 용병 ${state.mercenaryTroops}",
+                    0xFF7FA4D6
+                )
+            )
+            add(InfoEntry("🛠", "무기", "Lv.${state.weaponTech.totalLevels} ×${"%.2f".format(state.weaponTech.multiplier)}", 0xFF64B5F6))
             if (next != null) {
                 add(
                     InfoEntry(

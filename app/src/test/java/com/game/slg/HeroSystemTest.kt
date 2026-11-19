@@ -23,14 +23,14 @@ class HeroSystemTest {
     // ── 카탈로그 ──────────────────────────────────────────────
 
     @Test
-    fun `영웅 230명이 초상화 230장과 1대1로 맞물린다`() {
-        assertEquals(230, HeroRoster.ALL.size)
+    fun `영웅 240명이 초상화 240장과 1대1로 맞물린다`() {
+        assertEquals(240, HeroRoster.ALL.size)
         assertEquals(
-            (1..230).map { "slg_hero_" + it.toString().padStart(3, '0') },
+            (1..240).map { "slg_hero_" + it.toString().padStart(3, '0') },
             HeroRoster.PORTRAIT_NAMES
         )
-        assertEquals(230, HeroRoster.ALL.map { it.id }.distinct().size)
-        assertEquals(230, HeroRoster.ALL.map { it.name }.distinct().size)
+        assertEquals(240, HeroRoster.ALL.map { it.id }.distinct().size)
+        assertEquals(240, HeroRoster.ALL.map { it.name }.distinct().size)
     }
 
     @Test
@@ -90,10 +90,10 @@ class HeroSystemTest {
     }
 
     @Test
-    fun `나머지 227명은 미탐색 상태로 영입 대상이다`() {
+    fun `나머지 237명은 미탐색 상태로 영입 대상이다`() {
         val roster = HeroRosterState.initial()
 
-        assertEquals(227, roster.recruitables.size)
+        assertEquals(237, roster.recruitables.size)
         roster.recruitables.forEach { hero ->
             assertEquals(HeroStage.UNDISCOVERED, roster.recordOf(hero.id).stage)
             assertEquals(0, roster.recordOf(hero.id).affinity)

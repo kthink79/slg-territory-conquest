@@ -6,6 +6,7 @@ package com.game.slg.core.hero
  * 사용자 요청: *"영웅 시스템을 도입하고 초상화 10종을 넣어줘. 초기 3명을 주고
  * 나머지는 탐색 → 설득 → 고용으로 영입하게 해줘."*
  * → 2026-11-18: 현대 영웅 1~230번 전체를 탐색·설득·고용 풀에 일괄 탑재(초상화 230장).
+ * → 2026-11-19: 231~240번 10명을 더해 총 240명 · 초상화 240장.
  *
  * · 영웅은 6개 역할(내정·기술·상업·작전·외교·정보) 중 하나를 가진다.
  * · 등급(SSR/SR/R/N)·5개 능력치(내정·기술·상업·작전·외교)·특기를 함께 들고 있다.
@@ -44,7 +45,7 @@ enum class HeroRole(
 }
 
 /**
- * 영웅 등급 — 로스터 230명의 SSR 28 · SR 65 · R 97 · N 40 분포를 그대로 쓴다.
+ * 영웅 등급 — 로스터 240명의 SSR 30 · SR 69 · R 100 · N 41 분포를 그대로 쓴다.
  * 등급이 높을수록 배치 효과·필요 명성·고용비가 크다.
  */
 enum class HeroGrade(
@@ -158,7 +159,7 @@ data class HeroBonus(
     }
 }
 
-/** 영웅 1명 — 초상화는 `slg_hero_001` ~ `slg_hero_230` 리소스로 이어진다. */
+/** 영웅 1명 — 초상화는 `slg_hero_001` ~ `slg_hero_240` 리소스로 이어진다. */
 data class Hero(
     val id: String,
     val name: String,
@@ -183,7 +184,7 @@ data class Hero(
     /** "여" / "남" */
     val gender: String = ""
 ) {
-    /** 로스터 번호 (001~230) */
+    /** 로스터 번호 (001~240) */
     val number: Int get() = id.substringAfterLast('_').toIntOrNull() ?: 0
 
     /** 탑재 초상화 drawable 이름 — slg_hero_001 형식 */
@@ -474,7 +475,7 @@ object HeroRoster {
         )
     )
 
-    /** 전체 로스터 — 기본 10명 + 드라이브 로스터 011~230번 = 230명 */
+    /** 전체 로스터 — 기본 10명 + 드라이브 로스터 011~240번 = 240명 */
     val ALL: List<Hero> = CORE + HeroExpansion.HEROES
 
     private val BY_ID: Map<String, Hero> = ALL.associateBy { it.id }

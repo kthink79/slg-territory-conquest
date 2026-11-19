@@ -1,12 +1,12 @@
 package com.game.slg.core.hero
 
 /**
- * 현대 영웅 로스터 011~230번 — 구글 드라이브 `SLG_현대영웅_케릭터`
- * (`1hEK1MPQjWhuwoPaOhGluWyTDbliHg_uj`)의 통합 로스터 `roster_001_230.json`에서 옮긴 220명.
+ * 현대 영웅 로스터 011~240번 — 구글 드라이브 `SLG_현대영웅_케릭터`
+ * (`1hEK1MPQjWhuwoPaOhGluWyTDbliHg_uj`)의 통합 로스터 `roster_001_240.json`에서 옮긴 230명.
  *
  * · 직업군(job)·등급(SSR/SR/R/N)·5개 능력치·특기(specialty)를 그대로 옮겼다.
  * · 배치 효과·필요 명성·고용비는 [buildRosterHero]가 능력치와 등급에서 계산한다.
- * · 초상화는 `res/drawable-nodpi/slg_hero_011.jpg` ~ `slg_hero_230.jpg`(540x810 JPEG).
+ * · 초상화는 `res/drawable-nodpi/slg_hero_011.jpg` ~ `slg_hero_240.jpg`(540x810 JPEG).
  * · 1~10번은 [HeroRoster] 본문에 손으로 쓴 기본 10명이므로 여기에 없다.
  */
 internal object HeroExpansion {
@@ -1331,6 +1331,66 @@ internal object HeroExpansion {
             age = 48, gender = "남", job = "농기계·종자 유통 대표", specialty = "농기계 판매망 구축 · 종자 계약 유통",
             admin = 58, tech = 70, commerce = 82, ops = 38, diplomacy = 66,
             quote = "\"농기계 판매망 구축 · 종자 계약 유통\" — 사람이 모이는 길에 돈이 있습니다."
+        ),
+        buildRosterHero(
+            no = 231, name = "도재훈", role = HeroRole.OPS, grade = HeroGrade.SSR,
+            age = 36, gender = "남", job = "소방 항공대 구조 헬기 조종사", specialty = "산악·해상 구조 출동 지휘 · 저시정 조종",
+            admin = 55, tech = 68, commerce = 40, ops = 93, diplomacy = 62,
+            quote = "\"산악·해상 구조 출동 지휘 · 저시정 조종\" — 작전은 준비에서 끝납니다."
+        ),
+        buildRosterHero(
+            no = 232, name = "백하영", role = HeroRole.TECH, grade = HeroGrade.SR,
+            age = 41, gender = "여", job = "국립과학수사연구원 법의학자", specialty = "사인 감정 · 미세 증거 판독",
+            admin = 62, tech = 88, commerce = 46, ops = 34, diplomacy = 54,
+            quote = "\"사인 감정 · 미세 증거 판독\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠."
+        ),
+        buildRosterHero(
+            no = 233, name = "권이현", role = HeroRole.COMMERCE, grade = HeroGrade.R,
+            age = 33, gender = "남", job = "수제 맥주 양조장 브루마스터", specialty = "레시피 설계 · 로컬 유통 협상",
+            admin = 48, tech = 62, commerce = 78, ops = 30, diplomacy = 58,
+            quote = "\"레시피 설계 · 로컬 유통 협상\" — 사람이 모이는 길에 돈이 있습니다."
+        ),
+        buildRosterHero(
+            no = 234, name = "노유정", role = HeroRole.ADMIN, grade = HeroGrade.SR,
+            age = 29, gender = "여", job = "지역아동센터 사회복지사", specialty = "돌봄 사례 관리 · 지역 자원 연계",
+            admin = 86, tech = 42, commerce = 38, ops = 28, diplomacy = 76,
+            quote = "\"돌봄 사례 관리 · 지역 자원 연계\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다."
+        ),
+        buildRosterHero(
+            no = 235, name = "서재우", role = HeroRole.TECH, grade = HeroGrade.SR,
+            age = 44, gender = "남", job = "데이터센터 냉각 설비 엔지니어", specialty = "열관리 설계 · 무중단 냉각 운전",
+            admin = 54, tech = 90, commerce = 44, ops = 46, diplomacy = 40,
+            quote = "\"열관리 설계 · 무중단 냉각 운전\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠."
+        ),
+        buildRosterHero(
+            no = 236, name = "하지수", role = HeroRole.DIPLOMACY, grade = HeroGrade.R,
+            age = 35, gender = "여", job = "항공사 서비스 교육 컨설턴트", specialty = "응대 매뉴얼 설계 · 감정 노동 관리",
+            admin = 56, tech = 30, commerce = 52, ops = 26, diplomacy = 84,
+            quote = "\"응대 매뉴얼 설계 · 감정 노동 관리\" — 상대의 말을 먼저 들어야 제 말이 들립니다."
+        ),
+        buildRosterHero(
+            no = 237, name = "명재훈", role = HeroRole.COMMERCE, grade = HeroGrade.N,
+            age = 27, gender = "남", job = "전통시장 청년 상인회 기획자", specialty = "시장 축제 기획 · 온라인 판로 개척",
+            admin = 44, tech = 38, commerce = 70, ops = 32, diplomacy = 58,
+            quote = "\"시장 축제 기획 · 온라인 판로 개척\" — 사람이 모이는 길에 돈이 있습니다."
+        ),
+        buildRosterHero(
+            no = 238, name = "유하윤", role = HeroRole.OPS, grade = HeroGrade.R,
+            age = 31, gender = "여", job = "프로 스포츠 구단 재활 트레이너", specialty = "부상 복귀 프로그램 · 컨디셔닝 관리",
+            admin = 52, tech = 62, commerce = 30, ops = 78, diplomacy = 48,
+            quote = "\"부상 복귀 프로그램 · 컨디셔닝 관리\" — 작전은 준비에서 끝납니다."
+        ),
+        buildRosterHero(
+            no = 239, name = "신도경", role = HeroRole.DIPLOMACY, grade = HeroGrade.SSR,
+            age = 49, gender = "남", job = "외교부 통상교섭 실무관", specialty = "통상 협상 · 쟁점 조율",
+            admin = 74, tech = 48, commerce = 66, ops = 38, diplomacy = 92,
+            quote = "\"통상 협상 · 쟁점 조율\" — 상대의 말을 먼저 들어야 제 말이 들립니다."
+        ),
+        buildRosterHero(
+            no = 240, name = "채민서", role = HeroRole.TECH, grade = HeroGrade.SR,
+            age = 38, gender = "여", job = "도시재생 목조건축가", specialty = "목구조 설계 · 노후 지역 재생 계획",
+            admin = 72, tech = 86, commerce = 50, ops = 34, diplomacy = 64,
+            quote = "\"목구조 설계 · 노후 지역 재생 계획\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠."
         ),
     )
 }

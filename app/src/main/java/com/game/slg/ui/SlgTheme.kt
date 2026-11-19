@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -103,18 +105,32 @@ fun relationColor(label: String): Color = when (label) {
     else -> SlgColors.Stone
 }
 
-/** 스크롤 가능한 상세 화면 본문 */
+/**
+ * 스크롤 가능한 상세 화면 본문.
+ *
+ * 폰·폴더블·태블릿 어디서든 가로로 늘어나지 않도록 최대 [SlgLayout.MAX_CONTENT_WIDTH]로
+ * 묶고 가운데 정렬한다. 여백은 화면 폭에 따라 12~24dp로 바뀐다.
+ */
 @Composable
 fun SlgScreenFrame(content: @Composable ColumnScope.() -> Unit) {
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(SlgColors.Background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        content = content
-    )
+            .background(SlgColors.Background),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        val horizontal = SlgLayout.horizontalPadding(maxWidth.value)
+        Column(
+            modifier = Modifier
+                .widthIn(max = SlgLayout.MAX_CONTENT_WIDTH.dp)
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = horizontal.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content
+        )
+    }
 }
 
 /**
@@ -226,7 +242,7 @@ fun SlgBottomNav(
                     Text(
                         tab.label,
                         color = if (active) accent else SlgColors.Muted,
-                        fontSize = SlgType.BODY_SMALL,
+                        fontSize = if (MainTab.bottomOrder.size >= 6) SlgType.MICRO else SlgType.BODY_SMALL,
                         fontWeight = if (active) FontWeight.ExtraBold else FontWeight.SemiBold,
                         maxLines = 1
                     )

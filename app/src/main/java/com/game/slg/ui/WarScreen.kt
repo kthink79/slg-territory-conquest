@@ -24,6 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.game.slg.R
+import com.game.slg.core.engine.BattleStrategy
+import com.game.slg.core.engine.StrategyBattleEngine
+import com.game.slg.core.engine.WeaponTech
 
 /**
  * 서브 메뉴 「전장·전략」 — 탭 3개: 작전 / 전과 / 원칙.
@@ -33,11 +36,14 @@ import com.game.slg.R
 fun WarScreen(
     state: SlgGameState,
     onRunOperation: (String) -> Unit,
-    tabIndex: Int = 0
+    tabIndex: Int = 0,
+    onSelectStrategy: (BattleStrategy) -> Unit = {},
+    onResearchTech: (WeaponTech) -> Unit = {}
 ) {
     SlgScreenFrame {
         when (WarTab.entries[tabIndex.coerceIn(0, WarTab.entries.lastIndex)]) {
             WarTab.OPS -> WarOperations(state, onRunOperation)
+            WarTab.STRATEGY -> WarStrategyPanel(state, onSelectStrategy, onResearchTech)
             WarTab.REGION -> WarOperations(state, onRunOperation)
             WarTab.REPORT -> WarReport(state)
             WarTab.DOCTRINE -> WarDoctrine()
@@ -246,6 +252,22 @@ private fun WarReport(state: SlgGameState) {
                 )
             }
         }
+        if (report.strategyLabel.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SlgPill(report.strategyLabel, SlgColors.Steel)
+                Spacer(Modifier.width(5.dp))
+                SlgPill("교환비 ${report.exchangeLabel}", SlgColors.Brass)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "아군 -${report.ownLossPercent}% · 적 -${report.enemyLossPercent}%",
+                    color = SlgColors.Muted,
+                    fontSize = SlgType.MICRO
+                )
+            }
+            report.breakdown.forEach { line ->
+                Text("· $line", color = SlgColors.Muted, fontSize = SlgType.MICRO, lineHeight = SlgLine.MICRO)
+            }
+        }
         if (report.composition.isNotBlank()) {
             Text("🪖 ${report.composition}", color = SlgColors.Muted, fontSize = SlgType.MICRO, lineHeight = SlgLine.MICRO)
         }
@@ -256,6 +278,85 @@ private fun WarReport(state: SlgGameState) {
         )
         SlgLogBox(state.log, maxLines = 3)
     }
+}
+
+/**
+ * 작전 탭 「전략」 — 진형·계략 선택과 무기 기술 연구.
+ * 같은 병력이라도 전략 상성과 무기 기술에 따라 손실률이 크게 벌어진다.
+ */
+@Composable
+private fun WarStrategyPanel(
+    state: SlgGameState,
+    onSelectStrategy: (BattleStrategy) -> Unit,
+    onResearchTech: (WeaponTech) -> Unit
+) {
+    val enemyHint = StrategyBattleEngine.enemyStrategyFor(
+        state.homeNode?.terrain ?: com.game.slg.core.model.TerrainType.PLAIN,
+        state.unlockedHop + state.territories.size
+    )
+    SlgSectionCard(
+        title = "진형·계략",
+        badge = "${state.battleStrategy.icon} ${state.battleStrategy.label}",
+        accent = SlgColors.Steel
+    ) {
+        Text(
+            "다음 작전에 적용됩니다. 방어전은 항상 방어 진지로 싸웁니다.",
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO
+        )
+        BattleStrategy.entries.forEach { strategy ->
+            val selected = strategy == state.battleStrategy
+            SlgChoiceCard(
+                title = "${strategy.label}${if (selected) " · 선택됨" else ""}",
+                icon = strategy.icon,
+                effects = listOf(
+                    Effect("↔", "상성 ${strategy.beats.joinToString("/") { it.label }}", SlgColors.Success),
+                    Effect("⛰", "지형 ×${"%.2f".format(strategy.terrainFactor(state.homeNode?.terrain ?: com.game.slg.core.model.TerrainType.PLAIN))}", SlgColors.Brass)
+                ),
+                accent = if (selected) SlgColors.Brass else SlgColors.Steel,
+                onClick = { onSelectStrategy(strategy) }
+            )
+        }
+        Text(
+            "지형 예상 적 전략 · ${enemyHint.icon} ${enemyHint.label} — " +
+                BattleStrategy.edgeLabel(state.battleStrategy, enemyHint),
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO,
+            lineHeight = SlgLine.MICRO
+        )
+    }
+
+    SlgSectionCard(
+        title = "무기 기술",
+        badge = "×${"%.2f".format(state.weaponTech.multiplier)}",
+        accent = SlgColors.Brass
+    ) {
+        Text(state.weaponTech.summary(), color = SlgColors.Text, fontSize = SlgType.BODY_SMALL)
+        Text(
+            "계통별 0~4레벨 · 레벨 1당 전투력 +6%. 레벨이 높을수록 아군 손실률이 크게 줄어듭니다.",
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO,
+            lineHeight = SlgLine.MICRO
+        )
+        WeaponTech.entries.forEach { tech ->
+            val level = state.weaponTech.levelOf(tech)
+            val cost = if (level >= 4) 0 else tech.costOf(level + 1)
+            SlgChoiceCard(
+                title = "${tech.label} Lv.$level — ${tech.levelName(level)}",
+                icon = tech.icon,
+                effects = listOf(
+                    Effect("📈", tech.effect, SlgColors.Steel),
+                    Effect("💰", if (level >= 4) "최고" else "${"%,d".format(cost)}G", SlgColors.Brass)
+                ),
+                accent = if (level >= 4) SlgColors.Success else SlgColors.Brass,
+                enabled = level < 4 && state.gold >= cost,
+                onClick = { onResearchTech(tech) }
+            )
+        }
+    }
+
+    state.strategyMessage?.let { ResultBox(it, SlgColors.Steel) }
+    SlgLogBox(state.log, maxLines = 3)
 }
 
 @Composable
@@ -293,6 +394,11 @@ private fun WarDoctrine() {
                     fontSize = SlgType.LABEL,
                     fontWeight = FontWeight.ExtraBold
                 )
+            }
+        }
+        SlgSectionCard(title = "블라인드 원칙", badge = "동일 규칙", accent = SlgColors.Violet) {
+            com.game.slg.core.hero.BlindPrinciple.RULES.forEach { rule ->
+                Text(rule, color = SlgColors.Text, fontSize = SlgType.MICRO, lineHeight = SlgLine.MICRO)
             }
         }
         SlgExpand(

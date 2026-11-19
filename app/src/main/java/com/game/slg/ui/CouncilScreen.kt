@@ -212,7 +212,7 @@ private fun CouncilLords(state: SlgGameState) {
         SlgExpand(
             summary = "리더 ${lords.size}석 구성",
             detail = "${state.regionFullName}에는 리더 정원 ${state.lordCapacity}석이 있습니다. " +
-                "그중 1석을 인계받았고 나머지 ${state.aiLordCount}석은 AI가 운영합니다. " +
+                "그중 1석을 인계받았고 나머지 ${state.aiLordCount}석은 다른 리더가 운영합니다. " +
                 "표결에서 반대 65%를 넘기면 연합 불복으로 이어집니다.",
             accent = SlgColors.Brass
         )

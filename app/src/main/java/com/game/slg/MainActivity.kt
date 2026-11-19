@@ -126,7 +126,15 @@ fun SlgApp(viewModel: SlgGameViewModel) {
                         viewModel.chooseLord(id)
                         mapViewport = MapViewport()
                     },
-                    onBack = { viewModel.backToRegionSelect() }
+                    onBack = { viewModel.backToRegionSelect() },
+                    onChooseStartMode = { viewModel.chooseStartMode(it) },
+                    onPickHero = { viewModel.pickHeroForStart(it) },
+                    onRequestEmployment = { lordId ->
+                        viewModel.requestEmployment(lordId)
+                        if (viewModel.uiState.value.stage == GameStage.PLAY) {
+                            mapViewport = MapViewport()
+                        }
+                    }
                 )
 
                 GameStage.PLAY -> PlaySurface(

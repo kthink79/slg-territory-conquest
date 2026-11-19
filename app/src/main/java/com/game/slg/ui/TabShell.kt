@@ -5,11 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,7 +99,16 @@ fun SlgTabSurface(
             )
         }
 
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .widthIn(max = SlgLayout.MAX_CONTENT_WIDTH.dp)
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+            ) {
             when (tab) {
                 MainTab.MAP -> Unit
                 MainTab.DOMAIN -> DomainSurface(state, navigation.sub, viewModel, onAdvanceSeason)
@@ -107,11 +119,32 @@ fun SlgTabSurface(
                     onHire = { viewModel.hireHero(it) },
                     onAssign = { id, role -> viewModel.assignHero(id, role) },
                     onUnassign = { viewModel.unassignHero(it) },
-                    tabIndex = navigation.sub
+                    tabIndex = navigation.sub,
+                    onSearch = { viewModel.searchHeroes() },
+                    onAcceptVisit = { viewModel.acceptHeroVisit() },
+                    onDeclineVisit = { viewModel.declineHeroVisit() }
                 )
 
                 MainTab.WAR -> WarSurface(state, navigation.sub, viewModel)
                 MainTab.DIPLOMACY -> DiplomacySurface(state, navigation.sub, viewModel)
+                MainTab.EMPIRE -> EmpireScreen(
+                    state = state,
+                    onSelectMethod = { method, factionId -> viewModel.attemptAbsorption(method, factionId) },
+                    onCreateCommonEnemy = { viewModel.createCommonEnemy(it) },
+                    onInstigate = { viewModel.instigateFaction(it) },
+                    onSwitchTerritory = { viewModel.switchManagedTerritory(it) },
+                    onAssignViceroy = { heroId, code -> viewModel.assignViceroy(heroId, code) },
+                    onUnassignViceroy = { viewModel.unassignViceroy(it) },
+                    onDevelopTerritory = { viewModel.developTerritory(it) },
+                    onRecruitRegular = { viewModel.recruitRegular() },
+                    onHireMercenary = { viewModel.hireMercenary() },
+                    onDismissMercenary = { viewModel.dismissMercenary(it) },
+                    onGatherPrivateTroops = { viewModel.gatherPrivateTroops() },
+                    onReportMerit = { viewModel.reportMerit() },
+                    onDeclareIndependence = { viewModel.declareIndependence() },
+                    tabIndex = navigation.sub
+                )
+            }
             }
         }
     }
@@ -292,7 +325,17 @@ private fun WarSurface(state: SlgGameState, sub: Int, viewModel: SlgGameViewMode
         WarTab.OPS -> WarScreen(
             state = state,
             onRunOperation = { viewModel.runOperation(it) },
-            tabIndex = 0
+            tabIndex = WarTab.OPS.ordinal,
+            onSelectStrategy = { viewModel.selectBattleStrategy(it) },
+            onResearchTech = { viewModel.researchWeaponTech(it) }
+        )
+
+        WarTab.STRATEGY -> WarScreen(
+            state = state,
+            onRunOperation = { viewModel.runOperation(it) },
+            tabIndex = WarTab.STRATEGY.ordinal,
+            onSelectStrategy = { viewModel.selectBattleStrategy(it) },
+            onResearchTech = { viewModel.researchWeaponTech(it) }
         )
 
         WarTab.REGION -> RegionLordsScreen(
@@ -303,13 +346,13 @@ private fun WarSurface(state: SlgGameState, sub: Int, viewModel: SlgGameViewMode
         WarTab.REPORT -> WarScreen(
             state = state,
             onRunOperation = { viewModel.runOperation(it) },
-            tabIndex = 1
+            tabIndex = WarTab.REPORT.ordinal
         )
 
         WarTab.DOCTRINE -> WarScreen(
             state = state,
             onRunOperation = { viewModel.runOperation(it) },
-            tabIndex = 2
+            tabIndex = WarTab.DOCTRINE.ordinal
         )
     }
 }

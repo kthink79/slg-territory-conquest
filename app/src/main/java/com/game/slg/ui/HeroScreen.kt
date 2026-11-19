@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,7 +44,7 @@ import com.game.slg.core.hero.HeroStage
 /**
  * 영웅 탭 — 보유 영웅 배치(배치)와 미보유 영웅 영입(영입).
  *
- * 초상화 230장(2:3)은 `drawable-nodpi/slg_hero_001~230.jpg` 로 탑재되어 있고,
+ * 초상화 240장(2:3)은 `drawable-nodpi/slg_hero_001~240.jpg` 로 탑재되어 있고,
  * 카드에서는 `ContentScale.Fit` 으로 잘리지 않게 보여 준다.
  */
 @Composable
@@ -54,17 +55,28 @@ fun HeroScreen(
     onHire: (String) -> Unit,
     onAssign: (String, HeroRole) -> Unit,
     onUnassign: (String) -> Unit,
-    tabIndex: Int = 0
+    tabIndex: Int = 0,
+    onSearch: () -> Unit = {},
+    onAcceptVisit: () -> Unit = {},
+    onDeclineVisit: () -> Unit = {}
 ) {
     SlgScreenFrame {
         when (HeroTab.entries[tabIndex.coerceIn(0, HeroTab.entries.lastIndex)]) {
             HeroTab.PLACE -> HeroPlaceSection(state, onAssign, onUnassign)
-            HeroTab.RECRUIT -> HeroRecruitSection(state, onScout, onPersuade, onHire)
+            HeroTab.RECRUIT -> HeroRecruitSection(
+                state = state,
+                onScout = onScout,
+                onPersuade = onPersuade,
+                onHire = onHire,
+                onSearch = onSearch,
+                onAcceptVisit = onAcceptVisit,
+                onDeclineVisit = onDeclineVisit
+            )
         }
     }
 }
 
-/** 초상화 리소스 — slg_hero_001 ~ slg_hero_230 (drawable-nodpi, 540x810 JPEG) */
+/** 초상화 리소스 — slg_hero_001 ~ slg_hero_240 (drawable-nodpi, 540x810 JPEG) */
 private val portraitResIds: Map<String, Int> by lazy {
     R.drawable::class.java.fields
         .filter { it.name.startsWith("slg_hero_") }
@@ -296,7 +308,7 @@ private fun HeroSlotRow(state: SlgGameState, role: HeroRole, onUnassign: (String
 // 영입 — 탐색 → 설득 → 고용
 // ────────────────────────────────────────────────────────────────
 
-/** 영입 화면에 한 번에 보여 주는 카드 수 — 230명 로스터를 페이지로 나눈다 */
+/** 영입 화면에 한 번에 보여 주는 카드 수 — 240명 로스터를 페이지로 나눈다 */
 private const val RECRUIT_PAGE = 8
 
 @Composable
@@ -304,16 +316,20 @@ private fun HeroRecruitSection(
     state: SlgGameState,
     onScout: (String) -> Unit,
     onPersuade: (String) -> Unit,
-    onHire: (String) -> Unit
+    onHire: (String) -> Unit,
+    onSearch: () -> Unit,
+    onAcceptVisit: () -> Unit,
+    onDeclineVisit: () -> Unit
 ) {
     val roster = state.heroes
     val diplomacy = state.heroBonus.diplomacyBonus
-    val recruitables = roster.recruitables
+    val known = state.knownHeroes.filterNot { roster.recordOf(it.id).owned }
     var roleFilter by remember { mutableStateOf<HeroRole?>(null) }
     var gradeFilter by remember { mutableStateOf<HeroGrade?>(null) }
     var shown by remember { mutableStateOf(RECRUIT_PAGE) }
+    val undiscovered = state.undiscoveredHeroCount
 
-    val filtered = recruitables
+    val filtered = known
         .filter { roleFilter == null || it.role == roleFilter }
         .filter { gradeFilter == null || it.grade == gradeFilter }
         .sortedWith(compareByDescending<Hero> { it.grade.rank }.thenByDescending { it.stats.total })
@@ -324,28 +340,102 @@ private fun HeroRecruitSection(
         SlgSummaryChip("🤝", "설득 +$diplomacy", SlgColors.Steel, Modifier.weight(1f))
     }
 
+    // 찾아온 영웅 — 스스로 합류를 청하는 방문 이벤트
+    state.heroVisit?.let { visit ->
+        SlgSectionCard(title = "찾아온 영웅", badge = visit.season.substringBefore(" ("), accent = SlgColors.Success) {
+            Text(visit.summary, color = SlgColors.Text, fontSize = SlgType.BODY_SMALL, fontWeight = FontWeight.Bold)
+            Text(
+                visit.requestText,
+                color = SlgColors.Text.copy(alpha = 0.85f),
+                fontSize = SlgType.MICRO,
+                lineHeight = SlgLine.MICRO
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SlgChoiceCard(
+                    title = "합류 수락",
+                    icon = "🤝",
+                    effects = listOf(Effect("✓", "무상 합류", SlgColors.Success)),
+                    accent = SlgColors.Success,
+                    onClick = onAcceptVisit
+                )
+                SlgChoiceCard(
+                    title = "거절",
+                    icon = "✋",
+                    effects = listOf(Effect("⭐", "-1", SlgColors.Danger)),
+                    accent = SlgColors.Muted,
+                    onClick = onDeclineVisit
+                )
+            }
+        }
+    }
+
+    SlgSectionCard(title = "영웅 탐색", badge = "지역·절기 랜덤", accent = SlgColors.Brass) {
+        Text(
+            "240명 전체 명부는 공개되지 않습니다. ${state.seasonName.substringBefore(" (")} " +
+                "${state.regionName} 일대를 훑어 재야 영웅을 만나십시오.",
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO,
+            lineHeight = SlgLine.MICRO
+        )
+        SlgChoiceCard(
+            title = "🔎 영웅 탐색 · ${com.game.slg.core.hero.HeroDiscoveryEngine.SEARCH_COST}G",
+            icon = "🔎",
+            effects = listOf(
+                Effect("🎲", "랜덤 발견", SlgColors.Brass),
+                Effect("👥", "미발견 ${undiscovered}명", SlgColors.Muted)
+            ),
+            accent = SlgColors.Brass,
+            enabled = state.gold >= com.game.slg.core.hero.HeroDiscoveryEngine.SEARCH_COST && undiscovered > 0,
+            onClick = onSearch
+        )
+        state.heroSearchMessage?.let { ResultBox(it, SlgColors.Brass) }
+    }
+
     SlgExpand(
         summary = "영입 순서 — 탐색 → 설득 → 고용",
-        detail = "① 탐색 ${HeroRoster.SCOUT_COST}G — 신상과 접점을 확인하고 호감도 ${HeroRoster.SCOUT_AFFINITY}을 얻습니다.\n" +
+        detail = "① 탐색 — 자금을 쓰고 지역·절기에 맞는 재야 영웅을 만납니다(만난 영웅만 명부에 남습니다).\n" +
             "② 설득 — 명성(＋외교 영웅 설득력)이 필요 명성 이상이면 성공합니다.\n" +
             "③ 고용 — 자금을 지급하면 보유 영웅이 되고, 빈 슬롯에 자동 배치됩니다.\n" +
-            "현대 영웅 ${HeroRoster.ALL.size}명이 모두 탐색·설득·고용 대상입니다. 등급(SSR/SR/R/N)과 능력치가 높을수록 조건이 높습니다.",
+            "명성·민심·절기 조건을 채우면 영웅이 스스로 찾아와 합류를 청하기도 합니다.",
         accent = SlgColors.Violet
     )
 
-    if (state.heroMessage != null) {
+    if (state.heroMessage != null && state.heroVisit == null) {
         ResultBox(state.heroMessage, SlgColors.Violet)
     }
 
-    if (recruitables.isEmpty()) {
-        SlgSectionCard(
-            title = "영입 완료",
-            badge = "${HeroRoster.ALL.size}명 보유",
-            accent = SlgColors.Success
-        ) {
+    // 미발견 영웅 — 실루엣으로만 보인다
+    if (undiscovered > 0) {
+        SlgSectionCard(title = "미발견 영웅", badge = "${undiscovered}명", accent = SlgColors.Line) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items((0 until minOf(undiscovered, 10)).toList()) { index ->
+                    Box(
+                        modifier = Modifier
+                            .width(64.dp)
+                            .height(96.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(SlgColors.SurfaceAlt)
+                            .border(1.dp, SlgColors.Line.copy(alpha = 0.6f), RoundedCornerShape(9.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("?", color = SlgColors.Muted, fontSize = SlgType.TITLE, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
             Text(
-                "${HeroRoster.ALL.size}명의 영웅을 모두 영입했습니다. 배치 탭에서 슬롯을 바꿔 보세요.",
-                color = SlgColors.Text,
+                "아직 만나지 못한 영웅은 이름·능력치·초상화가 모두 비공개입니다. 탐색해야 드러납니다.",
+                color = SlgColors.Muted,
+                fontSize = SlgType.MICRO,
+                lineHeight = SlgLine.MICRO
+            )
+        }
+    }
+
+    if (known.isEmpty()) {
+        SlgSectionCard(title = "만난 영웅", badge = "0명", accent = SlgColors.Steel) {
+            Text(
+                "아직 만난 재야 영웅이 없습니다. 위의 영웅 탐색으로 한 명씩 만나 보십시오.",
+                color = SlgColors.Muted,
                 fontSize = SlgType.BODY_SMALL
             )
         }
@@ -353,8 +443,8 @@ private fun HeroRecruitSection(
     }
 
     SlgSectionCard(
-        title = "영입 대상",
-        badge = "${filtered.size}/${recruitables.size}명",
+        title = "만난 영웅",
+        badge = "${filtered.size}/${known.size}명",
         accent = SlgColors.Violet
     ) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -402,7 +492,7 @@ private fun HeroRecruitSection(
             }
         }
         Text(
-            "등급·능력치가 높은 순서로 보여 줍니다.",
+            "만난 영웅만 보입니다. 설득·고용으로 데려오십시오.",
             color = SlgColors.Muted,
             fontSize = SlgType.MICRO
         )
@@ -417,16 +507,29 @@ private fun HeroRecruitSection(
         return
     }
 
-    filtered.take(shown).forEach { hero ->
-        RecruitCard(
-            hero = hero,
-            state = state,
-            stage = roster.recordOf(hero.id).stage,
-            affinity = roster.recordOf(hero.id).affinity,
-            onScout = onScout,
-            onPersuade = onPersuade,
-            onHire = onHire
-        )
+    // 넓은 화면(태블릿·폴더블)에서는 2열, 폰에서는 1열 — 2:3 초상화 비율은 그대로
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val columns = SlgLayout.heroColumns(maxWidth.value)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            filtered.take(shown).chunked(columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { hero ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            RecruitCard(
+                                hero = hero,
+                                state = state,
+                                stage = roster.recordOf(hero.id).stage,
+                                affinity = roster.recordOf(hero.id).affinity,
+                                onScout = onScout,
+                                onPersuade = onPersuade,
+                                onHire = onHire
+                            )
+                        }
+                    }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
     }
 
     if (filtered.size > shown) {
