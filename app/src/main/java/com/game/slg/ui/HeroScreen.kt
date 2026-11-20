@@ -44,7 +44,7 @@ import com.game.slg.core.hero.HeroStage
 /**
  * 영웅 탭 — 보유 영웅 배치(배치)와 미보유 영웅 영입(영입).
  *
- * 초상화 240장(2:3)은 `drawable-nodpi/slg_hero_001~240.jpg` 로 탑재되어 있고,
+ * 초상화 250장(2:3)은 `drawable-nodpi/slg_hero_001~250.jpg` 로 탑재되어 있고,
  * 카드에서는 `ContentScale.Fit` 으로 잘리지 않게 보여 준다.
  */
 @Composable
@@ -76,7 +76,7 @@ fun HeroScreen(
     }
 }
 
-/** 초상화 리소스 — slg_hero_001 ~ slg_hero_240 (drawable-nodpi, 540x810 JPEG) */
+/** 초상화 리소스 — slg_hero_001 ~ slg_hero_250 (drawable-nodpi, 540x810 JPEG) */
 private val portraitResIds: Map<String, Int> by lazy {
     R.drawable::class.java.fields
         .filter { it.name.startsWith("slg_hero_") }
@@ -308,7 +308,7 @@ private fun HeroSlotRow(state: SlgGameState, role: HeroRole, onUnassign: (String
 // 영입 — 탐색 → 설득 → 고용
 // ────────────────────────────────────────────────────────────────
 
-/** 영입 화면에 한 번에 보여 주는 카드 수 — 240명 로스터를 페이지로 나눈다 */
+/** 영입 화면에 한 번에 보여 주는 카드 수 — 250명 로스터를 페이지로 나눈다 */
 private const val RECRUIT_PAGE = 8
 
 @Composable
@@ -369,7 +369,7 @@ private fun HeroRecruitSection(
 
     SlgSectionCard(title = "영웅 탐색", badge = "지역·절기 랜덤", accent = SlgColors.Brass) {
         Text(
-            "240명 전체 명부는 공개되지 않습니다. ${state.seasonName.substringBefore(" (")} " +
+            "${HeroRoster.ALL.size}명 전체 명부는 공개되지 않습니다. ${state.seasonName.substringBefore(" (")} " +
                 "${state.regionName} 일대를 훑어 재야 영웅을 만나십시오.",
             color = SlgColors.Muted,
             fontSize = SlgType.MICRO,

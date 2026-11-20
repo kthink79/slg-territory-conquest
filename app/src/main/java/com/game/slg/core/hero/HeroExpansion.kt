@@ -1,13 +1,14 @@
 package com.game.slg.core.hero
 
 /**
- * 현대 영웅 로스터 011~240번 — 구글 드라이브 `SLG_현대영웅_케릭터`
- * (`1hEK1MPQjWhuwoPaOhGluWyTDbliHg_uj`)의 통합 로스터 `roster_001_240.json`에서 옮긴 230명.
+ * 현대 영웅 로스터 011~250번 — 구글 드라이브 `SLG_현대영웅_케릭터`
+ * (`1hEK1MPQjWhuwoPaOhGluWyTDbliHg_uj`)의 통합 로스터 `roster_001_250.json`에서 옮긴 240명.
  *
  * · 직업군(job)·등급(SSR/SR/R/N)·5개 능력치·특기(specialty)를 그대로 옮겼다.
  * · 배치 효과·필요 명성·고용비는 [buildRosterHero]가 능력치와 등급에서 계산한다.
- * · 초상화는 `res/drawable-nodpi/slg_hero_011.jpg` ~ `slg_hero_240.jpg`(540x810 JPEG).
+ * · 초상화는 `res/drawable-nodpi/slg_hero_011.jpg` ~ `slg_hero_250.jpg`(540x810 JPEG).
  * · 1~10번은 [HeroRoster] 본문에 손으로 쓴 기본 10명이므로 여기에 없다.
+ * · 241~250번(2026-11-20, 다국적 배치 8)부터 로스터의 `origin`·`ethnicity` 필드를 같이 옮긴다.
  */
 internal object HeroExpansion {
 
@@ -1391,6 +1392,76 @@ internal object HeroExpansion {
             age = 38, gender = "여", job = "도시재생 목조건축가", specialty = "목구조 설계 · 노후 지역 재생 계획",
             admin = 72, tech = 86, commerce = 50, ops = 34, diplomacy = 64,
             quote = "\"목구조 설계 · 노후 지역 재생 계획\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠."
+        ),
+        buildRosterHero(
+            no = 241, name = "쿠로사와 렌", role = HeroRole.OPS, grade = HeroGrade.SSR,
+            age = 41, gender = "남", job = "스마트시티 통합안전관제센터장", specialty = "도시 센서망 이상 징후 판독 · 다중 재난 동시 대응",
+            admin = 58, tech = 76, commerce = 42, ops = 94, diplomacy = 48,
+            quote = "\"도시 센서망 이상 징후 판독 · 다중 재난 동시 대응\" — 작전은 준비에서 끝납니다.",
+            origin = "일본 도쿄", ethnicity = "아시아계(일본인)"
+        ),
+        buildRosterHero(
+            no = 242, name = "응우옌 티 란", role = HeroRole.COMMERCE, grade = HeroGrade.R,
+            age = 29, gender = "여", job = "로부스타 커피 수출 상사 대표", specialty = "산지 직거래 계약 · 선적 항로 협상",
+            admin = 46, tech = 38, commerce = 84, ops = 30, diplomacy = 60,
+            quote = "\"산지 직거래 계약 · 선적 항로 협상\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "베트남 다낭", ethnicity = "아시아계(베트남인)"
+        ),
+        buildRosterHero(
+            no = 243, name = "아르준 라구나단", role = HeroRole.TECH, grade = HeroGrade.SR,
+            age = 36, gender = "남", job = "항공교통관제 자동화 소프트웨어 아키텍트", specialty = "다중 레이더 트랙 융합 · 관제 절차 자동화",
+            admin = 46, tech = 90, commerce = 40, ops = 50, diplomacy = 50,
+            quote = "\"다중 레이더 트랙 융합 · 관제 절차 자동화\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "인도 벵갈루루", ethnicity = "아시아계(인도인)"
+        ),
+        buildRosterHero(
+            no = 244, name = "엘리자베스 코널리", role = HeroRole.DIPLOMACY, grade = HeroGrade.SR,
+            age = 45, gender = "여", job = "인도적 지원 조정관", specialty = "구호 물자 통로 협상 · 다국적 기구 운영",
+            admin = 68, tech = 44, commerce = 52, ops = 38, diplomacy = 92,
+            quote = "\"구호 물자 통로 협상 · 다국적 기구 운영\" — 상대의 말을 먼저 들어야 제 말이 들립니다.",
+            origin = "미국 보스턴", ethnicity = "백인(유럽계 미국인)"
+        ),
+        buildRosterHero(
+            no = 245, name = "마티아스 크뢰거", role = HeroRole.TECH, grade = HeroGrade.SSR,
+            age = 54, gender = "남", job = "초정밀 공작기계 수석 엔지니어", specialty = "마이크론 공차 설계 · 생산 라인 전환",
+            admin = 64, tech = 96, commerce = 54, ops = 34, diplomacy = 62,
+            quote = "\"마이크론 공차 설계 · 생산 라인 전환\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "독일 슈투트가르트", ethnicity = "백인(독일인)"
+        ),
+        buildRosterHero(
+            no = 246, name = "카미유 르루아", role = HeroRole.COMMERCE, grade = HeroGrade.N,
+            age = 34, gender = "여", job = "향료 원료 소싱 디렉터", specialty = "원료 등급 감별 · 농가 소싱 네트워크",
+            admin = 42, tech = 44, commerce = 74, ops = 28, diplomacy = 56,
+            quote = "\"원료 등급 감별 · 농가 소싱 네트워크\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "프랑스 그라스", ethnicity = "백인(프랑스인)"
+        ),
+        buildRosterHero(
+            no = 247, name = "치네두 오카포", role = HeroRole.ADMIN, grade = HeroGrade.R,
+            age = 39, gender = "남", job = "대도시 상수도 공기업 운영혁신 책임자", specialty = "누수 구역 우선순위 책정 · 요금 체계 개편",
+            admin = 80, tech = 52, commerce = 44, ops = 32, diplomacy = 66,
+            quote = "\"누수 구역 우선순위 책정 · 요금 체계 개편\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "나이지리아 라고스", ethnicity = "흑인(아프리카계)"
+        ),
+        buildRosterHero(
+            no = 248, name = "타니카 브룩스", role = HeroRole.OPS, grade = HeroGrade.R,
+            age = 32, gender = "여", job = "국제 스포츠 이벤트 안전 운영 총괄", specialty = "인파 통제 동선 설계 · 비상 대피 시나리오",
+            admin = 48, tech = 56, commerce = 32, ops = 82, diplomacy = 50,
+            quote = "\"인파 통제 동선 설계 · 비상 대피 시나리오\" — 작전은 준비에서 끝납니다.",
+            origin = "미국 애틀랜타", ethnicity = "흑인(아프리카계 미국인)"
+        ),
+        buildRosterHero(
+            no = 249, name = "와니쿠 응구기", role = HeroRole.ADMIN, grade = HeroGrade.SR,
+            age = 27, gender = "여", job = "기후 적응·식수 접근 정책 분석가", specialty = "가뭄 예측 데이터 해석 · 물 배분 협의",
+            admin = 88, tech = 54, commerce = 36, ops = 30, diplomacy = 82,
+            quote = "\"가뭄 예측 데이터 해석 · 물 배분 협의\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "케냐 나이로비", ethnicity = "흑인(아프리카계)"
+        ),
+        buildRosterHero(
+            no = 250, name = "패트릭 도노번", role = HeroRole.DIPLOMACY, grade = HeroGrade.SR,
+            age = 47, gender = "남", job = "북극·기후 다자협상 대표", specialty = "다자 협약 문안 조율 · 이해관계국 중재",
+            admin = 70, tech = 40, commerce = 62, ops = 36, diplomacy = 88,
+            quote = "\"다자 협약 문안 조율 · 이해관계국 중재\" — 상대의 말을 먼저 들어야 제 말이 들립니다.",
+            origin = "캐나다 오타와", ethnicity = "백인(유럽계 캐나다인)"
         ),
     )
 }

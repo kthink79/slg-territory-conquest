@@ -1,5 +1,6 @@
 package com.game.slg.core.economy
 
+import com.game.slg.core.hero.HeroRoster
 import com.game.slg.core.model.FacilityType
 
 /**
@@ -168,7 +169,7 @@ object ResourceBoosts {
             icon = "🏛",
             title = "내정 영웅 배치",
             effect = "절기 자금 +% (능력치·등급 비례)",
-            detail = "영웅 › 배치에서 내정 영웅을 앉히면 절기 자금이 비율로 늘어난다. 230명 중에서 고른다.",
+            detail = "영웅 › 배치에서 내정 영웅을 앉히면 절기 자금이 비율로 늘어난다. ${HeroRoster.ALL.size}명 중에서 고른다.",
             kind = BoostKind.NAVIGATE,
             target = BoostTarget.HERO_PLACE
         ),

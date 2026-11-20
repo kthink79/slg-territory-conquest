@@ -7,6 +7,7 @@ package com.game.slg.core.hero
  * 나머지는 탐색 → 설득 → 고용으로 영입하게 해줘."*
  * → 2026-11-18: 현대 영웅 1~230번 전체를 탐색·설득·고용 풀에 일괄 탑재(초상화 230장).
  * → 2026-11-19: 231~240번 10명을 더해 총 240명 · 초상화 240장.
+ * → 2026-11-20: 다국적 241~250번 10명을 더해 총 250명 · 초상화 250장(origin·ethnicity 필드 추가).
  *
  * · 영웅은 6개 역할(내정·기술·상업·작전·외교·정보) 중 하나를 가진다.
  * · 등급(SSR/SR/R/N)·5개 능력치(내정·기술·상업·작전·외교)·특기를 함께 들고 있다.
@@ -45,7 +46,7 @@ enum class HeroRole(
 }
 
 /**
- * 영웅 등급 — 로스터 240명의 SSR 30 · SR 69 · R 100 · N 41 분포를 그대로 쓴다.
+ * 영웅 등급 — 로스터 250명의 SSR 32 · SR 73 · R 103 · N 42 분포를 그대로 쓴다.
  * 등급이 높을수록 배치 효과·필요 명성·고용비가 크다.
  */
 enum class HeroGrade(
@@ -159,7 +160,7 @@ data class HeroBonus(
     }
 }
 
-/** 영웅 1명 — 초상화는 `slg_hero_001` ~ `slg_hero_240` 리소스로 이어진다. */
+/** 영웅 1명 — 초상화는 `slg_hero_001` ~ `slg_hero_250` 리소스로 이어진다. */
 data class Hero(
     val id: String,
     val name: String,
@@ -182,9 +183,13 @@ data class Hero(
     val specialty: String = "",
     val age: Int = 0,
     /** "여" / "남" */
-    val gender: String = ""
+    val gender: String = "",
+    /** 출신지 — 다국적 배치(241~250번)부터 채운다. 비어 있으면 화면에 넣지 않는다 */
+    val origin: String = "",
+    /** 민족 구분 — 로스터 메타데이터. 화면에는 쓰지 않고 로스터 대조에만 쓴다 */
+    val ethnicity: String = ""
 ) {
-    /** 로스터 번호 (001~240) */
+    /** 로스터 번호 (001~250) */
     val number: Int get() = id.substringAfterLast('_').toIntOrNull() ?: 0
 
     /** 탑재 초상화 drawable 이름 — slg_hero_001 형식 */
@@ -201,6 +206,7 @@ data class Hero(
         if (age > 0) add("${age}세")
         if (gender.isNotBlank()) add(gender)
         add(grade.label)
+        if (origin.isNotBlank()) add(origin)
     }.joinToString(" · ")
 }
 
@@ -475,7 +481,7 @@ object HeroRoster {
         )
     )
 
-    /** 전체 로스터 — 기본 10명 + 드라이브 로스터 011~240번 = 240명 */
+    /** 전체 로스터 — 기본 10명 + 드라이브 로스터 011~250번 = 250명 */
     val ALL: List<Hero> = CORE + HeroExpansion.HEROES
 
     private val BY_ID: Map<String, Hero> = ALL.associateBy { it.id }
@@ -704,7 +710,7 @@ object HeroEngine {
 }
 
 /**
- * 로스터 011~230번 한 줄을 영웅으로 만든다 — [HeroExpansion]이 쓴다.
+ * 로스터 011~250번 한 줄을 영웅으로 만든다 — [HeroExpansion]이 쓴다.
  *
  * 배치 효과: 역할 주 능력치 ÷ 6 + 등급 보정(SSR +4 · SR +2 · R 0 · N -2), 3~24%.
  * 필요 명성: 등급 기준값 + (100 - 주 능력치) ÷ 6.
@@ -724,7 +730,9 @@ internal fun buildRosterHero(
     commerce: Int,
     ops: Int,
     diplomacy: Int,
-    quote: String
+    quote: String,
+    origin: String = "",
+    ethnicity: String = ""
 ): Hero {
     val stats = HeroStats(admin = admin, tech = tech, commerce = commerce, ops = ops, diplomacy = diplomacy)
     val primary = stats.primaryOf(role)
@@ -750,6 +758,8 @@ internal fun buildRosterHero(
         stats = stats,
         specialty = specialty,
         age = age,
-        gender = gender
+        gender = gender,
+        origin = origin,
+        ethnicity = ethnicity
     )
 }

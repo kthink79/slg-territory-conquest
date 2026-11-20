@@ -60,9 +60,9 @@ class HeroDiscoveryTest {
     fun `만나지 못한 영웅은 목록에 드러나지 않는다`() {
         val roster = HeroRosterState.initial()
 
-        // 기본 3명만 보이고, 나머지 237명은 실루엣(비공개)
+        // 기본 3명만 보이고, 나머지 247명은 실루엣(비공개)
         assertEquals(3, HeroDiscoveryEngine.knownHeroes(roster).size)
-        assertEquals(237, HeroDiscoveryEngine.undiscoveredCount(roster))
+        assertEquals(247, HeroDiscoveryEngine.undiscoveredCount(roster))
 
         val searched = HeroDiscoveryEngine.search(roster, 5_000, "4420033000", "봄", 3L).roster
         assertEquals(4, HeroDiscoveryEngine.knownHeroes(searched).size)
