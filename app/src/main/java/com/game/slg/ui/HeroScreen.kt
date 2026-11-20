@@ -606,7 +606,15 @@ private fun RecruitCard(
             Spacer(Modifier.width(11.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(hero.name, color = SlgColors.Text, fontSize = SlgType.TITLE, fontWeight = FontWeight.ExtraBold)
+                    // 이름이 긴 다국적 영웅(241~250번)도 역할·등급 배지가 밀려나지 않게 이름이 먼저 줄어든다
+                    Text(
+                        hero.name,
+                        color = SlgColors.Text,
+                        fontSize = SlgType.TITLE,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 2,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
                     Spacer(Modifier.width(6.dp))
                     SlgPill("${hero.role.emoji} ${hero.role.label}", accent)
                     Spacer(Modifier.width(4.dp))
