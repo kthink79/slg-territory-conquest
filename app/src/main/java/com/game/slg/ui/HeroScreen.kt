@@ -44,7 +44,7 @@ import com.game.slg.core.hero.HeroStage
 /**
  * 영웅 탭 — 보유 영웅 배치(배치)와 미보유 영웅 영입(영입).
  *
- * 초상화 250장(2:3)은 `drawable-nodpi/slg_hero_001~250.jpg` 로 탑재되어 있고,
+ * 초상화 303장(2:3)은 `drawable-nodpi/slg_hero_001~303.jpg` 로 탑재되어 있고,
  * 카드에서는 `ContentScale.Fit` 으로 잘리지 않게 보여 준다.
  */
 @Composable
@@ -76,7 +76,7 @@ fun HeroScreen(
     }
 }
 
-/** 초상화 리소스 — slg_hero_001 ~ slg_hero_250 (drawable-nodpi, 540x810 JPEG) */
+/** 초상화 리소스 — slg_hero_001 ~ slg_hero_303 (drawable-nodpi, 540x810 JPEG) */
 private val portraitResIds: Map<String, Int> by lazy {
     R.drawable::class.java.fields
         .filter { it.name.startsWith("slg_hero_") }
@@ -308,7 +308,7 @@ private fun HeroSlotRow(state: SlgGameState, role: HeroRole, onUnassign: (String
 // 영입 — 탐색 → 설득 → 고용
 // ────────────────────────────────────────────────────────────────
 
-/** 영입 화면에 한 번에 보여 주는 카드 수 — 250명 로스터를 페이지로 나눈다 */
+/** 영입 화면에 한 번에 보여 주는 카드 수 — 303명 로스터를 페이지로 나눈다 */
 private const val RECRUIT_PAGE = 8
 
 @Composable
@@ -606,7 +606,7 @@ private fun RecruitCard(
             Spacer(Modifier.width(11.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 이름이 긴 다국적 영웅(241~250번)도 역할·등급 배지가 밀려나지 않게 이름이 먼저 줄어든다
+                    // 이름이 긴 다국적 영웅(241~260번)·시트 분할 영웅도 역할·등급 배지가 밀려나지 않게 이름이 먼저 줄어든다
                     Text(
                         hero.name,
                         color = SlgColors.Text,

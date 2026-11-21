@@ -12,31 +12,31 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 현대 영웅 250명 로스터 정합성 — 2026-11-20 241~250번 추가분.
+ * 현대 영웅 303명 로스터 정합성 (2026-11-21).
  *
- * 구글 드라이브 `SLG_현대영웅_케릭터` 의 통합 로스터(roster_001_250.json)를
+ * 구글 드라이브 `SLG_현대영웅_케릭터` 의 통합 로스터(roster_001_303.json)를
  * 게임 카탈로그로 옮겼을 때 번호·이름·역할·등급·능력치·특기·초상화가 어긋나지 않는지 본다.
- * 241~250번은 다국적 배치로 `origin`·`ethnicity` 필드가 더해진 첫 배치다.
+ * 241~260번은 다국적 배치, 261~303번은 사용자가 올린 합성 시트를 2:3 세로로 분할한 배치다.
  */
-class HeroRoster250Test {
+class HeroRoster303Test {
 
     @Test
-    fun `로스터는 1번부터 250번까지 빈 번호 없이 이어진다`() {
-        assertEquals(250, HeroRoster.ALL.size)
+    fun `로스터는 1번부터 303번까지 빈 번호 없이 이어진다`() {
+        assertEquals(303, HeroRoster.ALL.size)
         assertEquals(
-            (1..250).toList(),
+            (1..303).toList(),
             HeroRoster.ALL.map { it.number }
         )
         assertEquals(
-            (1..250).map { "hero_" + it.toString().padStart(3, '0') },
+            (1..303).map { "hero_" + it.toString().padStart(3, '0') },
             HeroRoster.ALL.map { it.id }
         )
     }
 
     @Test
-    fun `이름은 250명 모두 다르다`() {
+    fun `이름은 303명 모두 다르다`() {
         val names = HeroRoster.ALL.map { it.name }
-        assertEquals(250, names.distinct().size)
+        assertEquals(303, names.distinct().size)
         assertTrue(names.all { it.isNotBlank() })
     }
 
@@ -58,29 +58,29 @@ class HeroRoster250Test {
     }
 
     @Test
-    fun `등급 분포와 역할 분포가 250명 로스터와 같다`() {
+    fun `등급 분포와 역할 분포가 303명 로스터와 같다`() {
         val byGrade = HeroRoster.ALL.groupingBy { it.grade }.eachCount()
-        assertEquals(32, byGrade[HeroGrade.SSR])
-        assertEquals(73, byGrade[HeroGrade.SR])
-        assertEquals(103, byGrade[HeroGrade.R])
-        assertEquals(42, byGrade[HeroGrade.N])
+        assertEquals(42, byGrade[HeroGrade.SSR])
+        assertEquals(94, byGrade[HeroGrade.SR])
+        assertEquals(115, byGrade[HeroGrade.R])
+        assertEquals(52, byGrade[HeroGrade.N])
 
         val byRole = HeroRoster.ALL.groupingBy { it.role }.eachCount()
-        assertEquals(48, byRole[HeroRole.ADMIN])
-        assertEquals(58, byRole[HeroRole.TECH])
-        assertEquals(50, byRole[HeroRole.COMMERCE])
-        assertEquals(50, byRole[HeroRole.OPS])
-        assertEquals(40, byRole[HeroRole.DIPLOMACY])
-        assertEquals(4, byRole[HeroRole.INTEL])
+        assertEquals(56, byRole[HeroRole.ADMIN])
+        assertEquals(74, byRole[HeroRole.TECH])
+        assertEquals(60, byRole[HeroRole.COMMERCE])
+        assertEquals(63, byRole[HeroRole.OPS])
+        assertEquals(45, byRole[HeroRole.DIPLOMACY])
+        assertEquals(5, byRole[HeroRole.INTEL])
     }
 
     @Test
-    fun `초상화는 250장이 모두 다른 리소스 이름으로 이어진다`() {
+    fun `초상화는 303장이 모두 다른 리소스 이름으로 이어진다`() {
         val portraits = HeroRoster.PORTRAIT_NAMES
-        assertEquals(250, portraits.size)
-        assertEquals(250, portraits.distinct().size)
+        assertEquals(303, portraits.size)
+        assertEquals(303, portraits.distinct().size)
         assertEquals("slg_hero_001", portraits.first())
-        assertEquals("slg_hero_250", portraits.last())
+        assertEquals("slg_hero_303", portraits.last())
     }
 
     @Test
@@ -117,6 +117,97 @@ class HeroRoster250Test {
             assertTrue(hero.effectLabel.isNotBlank())
             assertEquals("slg_hero_" + no.toString().padStart(3, '0'), hero.portraitName)
         }
+    }
+
+    @Test
+    fun `251~303번 53명은 드라이브 로스터의 이름 역할 등급 능력치를 그대로 갖는다`() {
+        // 251~260: 외국인 배치 9 · 261~280: 시트 분할 10 · 281~303: 시트 분할 11
+        val expected = mapOf(
+            251 to listOf("라미 알사예드", HeroRole.INTEL, HeroGrade.SSR, 72),
+            252 to listOf("루아나 파이샹", HeroRole.COMMERCE, HeroGrade.SR, 86),
+            253 to listOf("알바로 니에토", HeroRole.TECH, HeroGrade.SSR, 96),
+            254 to listOf("마리엘 산토스", HeroRole.DIPLOMACY, HeroGrade.SR, 90),
+            255 to listOf("콰메 멘사", HeroRole.ADMIN, HeroGrade.R, 82),
+            256 to listOf("에바 노바크", HeroRole.OPS, HeroGrade.R, 84),
+            257 to listOf("에밀리아노 바르가스", HeroRole.COMMERCE, HeroGrade.N, 72),
+            258 to listOf("하야트 알만수리", HeroRole.TECH, HeroGrade.SR, 88),
+            259 to listOf("시포 응코시", HeroRole.OPS, HeroGrade.R, 80),
+            260 to listOf("안네커 데브리스", HeroRole.ADMIN, HeroGrade.SR, 86),
+            261 to listOf("한태호", HeroRole.OPS, HeroGrade.SR, 84),
+            262 to listOf("서지민", HeroRole.TECH, HeroGrade.R, 78),
+            263 to listOf("권정훈", HeroRole.COMMERCE, HeroGrade.SSR, 94),
+            264 to listOf("배수진", HeroRole.TECH, HeroGrade.N, 71),
+            265 to listOf("최진혁", HeroRole.ADMIN, HeroGrade.SR, 83),
+            266 to listOf("이선영", HeroRole.TECH, HeroGrade.R, 83),
+            267 to listOf("강민혁", HeroRole.OPS, HeroGrade.SR, 83),
+            268 to listOf("박지우", HeroRole.TECH, HeroGrade.N, 71),
+            269 to listOf("윤혜경", HeroRole.DIPLOMACY, HeroGrade.SR, 88),
+            270 to listOf("신동화", HeroRole.TECH, HeroGrade.R, 80),
+            271 to listOf("송은채", HeroRole.DIPLOMACY, HeroGrade.SSR, 90),
+            272 to listOf("정태준", HeroRole.COMMERCE, HeroGrade.SR, 85),
+            273 to listOf("백시현", HeroRole.OPS, HeroGrade.R, 83),
+            274 to listOf("고상욱", HeroRole.ADMIN, HeroGrade.N, 71),
+            275 to listOf("임유나", HeroRole.TECH, HeroGrade.SR, 88),
+            276 to listOf("하진우", HeroRole.OPS, HeroGrade.R, 78),
+            277 to listOf("조은주", HeroRole.ADMIN, HeroGrade.SR, 85),
+            278 to listOf("김도윤", HeroRole.TECH, HeroGrade.SSR, 88),
+            279 to listOf("민서연", HeroRole.COMMERCE, HeroGrade.N, 76),
+            280 to listOf("홍성태", HeroRole.OPS, HeroGrade.SR, 89),
+            281 to listOf("박상호", HeroRole.ADMIN, HeroGrade.SR, 85),
+            282 to listOf("최지아", HeroRole.TECH, HeroGrade.R, 78),
+            283 to listOf("오상진", HeroRole.DIPLOMACY, HeroGrade.SSR, 88),
+            284 to listOf("강유정", HeroRole.OPS, HeroGrade.N, 73),
+            285 to listOf("윤준혁", HeroRole.OPS, HeroGrade.SR, 88),
+            286 to listOf("신예은", HeroRole.TECH, HeroGrade.R, 79),
+            287 to listOf("권혜진", HeroRole.TECH, HeroGrade.SSR, 92),
+            288 to listOf("한승우", HeroRole.COMMERCE, HeroGrade.N, 75),
+            289 to listOf("배진호", HeroRole.ADMIN, HeroGrade.SR, 88),
+            290 to listOf("지승우", HeroRole.OPS, HeroGrade.SSR, 92),
+            291 to listOf("조현아", HeroRole.COMMERCE, HeroGrade.N, 76),
+            292 to listOf("민경태", HeroRole.TECH, HeroGrade.SR, 85),
+            293 to listOf("백하린", HeroRole.TECH, HeroGrade.R, 80),
+            294 to listOf("고태훈", HeroRole.OPS, HeroGrade.SR, 89),
+            295 to listOf("황동주", HeroRole.COMMERCE, HeroGrade.SR, 85),
+            296 to listOf("선우현", HeroRole.OPS, HeroGrade.SSR, 91),
+            297 to listOf("강태석", HeroRole.OPS, HeroGrade.N, 74),
+            298 to listOf("신서윤", HeroRole.TECH, HeroGrade.SR, 87),
+            299 to listOf("정유진", HeroRole.COMMERCE, HeroGrade.R, 78),
+            300 to listOf("안재현", HeroRole.TECH, HeroGrade.SR, 86),
+            301 to listOf("차영주", HeroRole.DIPLOMACY, HeroGrade.SSR, 94),
+            302 to listOf("유동혁", HeroRole.COMMERCE, HeroGrade.N, 76),
+            303 to listOf("오창식", HeroRole.ADMIN, HeroGrade.SR, 84)
+        )
+        assertEquals(53, expected.size)
+        val newBatch = (251..303).map { HeroRoster.byId("hero_" + it.toString().padStart(3, '0')) }
+        assertTrue(newBatch.all { it != null })
+        assertEquals(53, newBatch.map { it!!.id }.distinct().size)
+
+        expected.forEach { (no, values) ->
+            val hero = HeroRoster.byId("hero_" + no.toString().padStart(3, '0'))
+            assertNotNull("$no 번 영웅 없음", hero)
+            assertEquals(values[0], hero!!.name)
+            assertEquals(values[1], hero.role)
+            assertEquals(values[2], hero.grade)
+            assertEquals("$no 번 주 능력치", values[3], hero.stats.primaryOf(hero.role))
+            assertTrue("$no 번 효과", !hero.bonus.isEmpty)
+            assertEquals("slg_hero_" + no.toString().padStart(3, '0'), hero.portraitName)
+        }
+    }
+
+    @Test
+    fun `251~303번은 출신과 민족을 갖고 프로필 줄에 출신이 보인다`() {
+        (251..303).forEach { no ->
+            val hero = HeroRoster.byId("hero_$no")!!
+            assertTrue("$no 번 ${hero.name} 출신 없음", hero.origin.isNotBlank())
+            assertTrue("$no 번 ${hero.name} 민족 없음", hero.ethnicity.isNotBlank())
+            assertTrue("$no 번 ${hero.name} 프로필 줄", hero.profileLine.contains(hero.origin))
+        }
+
+        // 251~260은 외국인 배치, 261~303은 한국인 시트 분할 배치
+        val foreign = (251..260).map { HeroRoster.byId("hero_$it")!! }
+        assertTrue("251~260번은 한국인이 아니다", foreign.none { it.ethnicity.startsWith("한국") })
+        val sheet = (261..303).map { HeroRoster.byId("hero_$it")!! }
+        assertTrue("261~303번은 한국인 배치", sheet.all { it.ethnicity == "한국인" })
     }
 
     @Test
@@ -167,7 +258,7 @@ class HeroRoster250Test {
     fun `정보 역할은 기술 능력치로 효과가 계산된다`() {
         val intelHeroes = HeroRoster.ALL.filter { it.role == HeroRole.INTEL }
 
-        assertEquals(4, intelHeroes.size)
+        assertEquals(5, intelHeroes.size)
         intelHeroes.forEach { hero ->
             assertTrue("${hero.name} 첩보 효과", hero.bonus.intelBonus > 0)
             assertEquals(0, hero.bonus.goldPercent)
@@ -176,9 +267,9 @@ class HeroRoster250Test {
     }
 
     @Test
-    fun `250번 영웅도 탐색 설득 고용 3단계로 영입된다`() {
+    fun `303번 영웅도 탐색 설득 고용 3단계로 영입된다`() {
         val roster = HeroRosterState.initial()
-        val target = HeroRoster.byId("hero_250")!!
+        val target = HeroRoster.byId("hero_303")!!
         assertNotNull(target)
 
         val scouted = HeroEngine.scout(roster, target.id, gold = 5_000)

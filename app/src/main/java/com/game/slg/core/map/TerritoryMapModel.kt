@@ -5,6 +5,7 @@ import com.game.slg.core.region.RegionArea
 import com.game.slg.core.region.RegionCatalog
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * 메인 화면 지도 노드 — 시작 지역에서 hop 거리로 배치되는 읍·면·동 거점.
@@ -48,22 +49,48 @@ data class WorldBounds(val minX: Float, val maxX: Float, val minY: Float, val ma
  *
  * 시작 지역(0,0)을 중심으로 hop 1은 바로 옆 고리, hop 2는 그 바깥 고리에 놓는다.
  * 잠긴 거점도 한 단계 미리 보여 주어(안개) 다음에 무엇이 열리는지 알 수 있게 한다.
+ *
+ * 2026-11-21 사용자 실기 피드백 반영:
+ *  · 고리 반경(= 영지 사이 거리)을 이전보다 30% 줄여 가까운 영지들이 한 화면에 더 밀집한다.
+ *  · 확대/축소 범위를 0.4× ~ 4.0× 로 넓히고 기본 배율을 1.15× 로 높여 처음부터 지도가 크게 보인다.
  */
 object TerritoryMapLayout {
 
     /** 세계 좌표 최대 반경 (이 밖으로는 화면이 나가지 않는다) */
-    const val WORLD_HALF_EXTENT = 1.55f
+    const val WORLD_HALF_EXTENT = 1.12f
 
-    /** 확대/축소 한계 — 0.7배 ~ 2.5배 */
-    const val MIN_SCALE = 0.7f
-    const val MAX_SCALE = 2.5f
-    const val DEFAULT_SCALE = 1.0f
+    /** 확대/축소 한계 — 0.4배 ~ 4.0배 */
+    const val MIN_SCALE = 0.4f
+    const val MAX_SCALE = 4.0f
+    const val DEFAULT_SCALE = 1.15f
+
+    /** +/- 버튼 한 번에 바뀌는 배율 — 크게 움직여 몇 번에 끝난다 */
+    const val ZOOM_STEP = 1.45f
 
     /** 배율 1.0에서 화면 절반이 덮는 세계 거리 */
     const val BASE_VIEW_RADIUS = 0.95f
 
     /** 영향권 경계 점선 반경 (hop 1 고리) */
-    const val INFLUENCE_RADIUS = 0.52f
+    const val INFLUENCE_RADIUS = 0.36f
+
+    /** 영지 노드 반지름(dp) — 기본 배율 1.15×에서 13dp(직경 26dp) */
+    const val NODE_RADIUS_DP = 13f
+
+    /** 영지 이름 라벨 글씨(dp) */
+    const val NODE_LABEL_DP = 13f
+
+    /** 병력·잠김 라벨 글씨(dp) */
+    const val NODE_SUB_LABEL_DP = 11.5f
+
+    /**
+     * 배율에 따른 노드·라벨 확대 계수 — 기본 배율에서 1.0, 작아져도 0.72 아래로는 내려가지 않는다.
+     * 실기기에서 노드가 점처럼 보이던 문제를 막는 하한이다.
+     */
+    fun nodeZoomFactor(scale: Float): Float =
+        sqrt(scale / DEFAULT_SCALE).coerceIn(0.72f, 1.95f)
+
+    /** 배율에 따른 노드 반지름(dp) */
+    fun nodeRadiusDp(scale: Float): Float = NODE_RADIUS_DP * nodeZoomFactor(scale)
 
     /** 장식용 하천 폴리라인 — 실제 지형과 무관한 지도 질감 */
     val RIVER: List<Pair<Float, Float>> = listOf(
@@ -75,14 +102,14 @@ object TerritoryMapLayout {
         1.25f to 0.58f
     )
 
-    /** hop → 고리 반경 */
+    /** hop → 고리 반경 (2026-11-21 이전 값의 70% — 영지 간 간격 30% 압축) */
     fun ringRadius(hop: Int): Float = when (hop) {
         0 -> 0f
-        1 -> 0.52f
-        2 -> 0.80f
-        3 -> 1.04f
-        4 -> 1.26f
-        else -> 1.46f
+        1 -> 0.36f
+        2 -> 0.56f
+        3 -> 0.73f
+        4 -> 0.88f
+        else -> 1.02f
     }
 
     /**
@@ -209,9 +236,9 @@ data class MapViewport(
         return copy(scale = next).clampedToWorld()
     }
 
-    fun zoomIn(step: Float = 1.3f): MapViewport = zoomedBy(step)
+    fun zoomIn(step: Float = TerritoryMapLayout.ZOOM_STEP): MapViewport = zoomedBy(step)
 
-    fun zoomOut(step: Float = 1.3f): MapViewport = zoomedBy(1f / step)
+    fun zoomOut(step: Float = TerritoryMapLayout.ZOOM_STEP): MapViewport = zoomedBy(1f / step)
 
     fun pannedBy(dxWorld: Float, dyWorld: Float): MapViewport =
         copy(centerX = centerX + dxWorld, centerY = centerY + dyWorld).clampedToWorld()
@@ -285,7 +312,7 @@ data class MapViewport(
         widthPx: Float,
         heightPx: Float,
         nodes: List<MapNode>,
-        tapRadiusPx: Float = 48f
+        tapRadiusPx: Float = 56f
     ): MapNode? {
         val (wx, wy) = worldAt(pointX, pointY, widthPx, heightPx)
         val unit = unitPerWorld(widthPx, heightPx) ?: return null

@@ -16,21 +16,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 현대 영웅(인재) 시스템 — 카탈로그 250명 · 기본 3명 · 탐색/설득/고용 · 슬롯 배치 보너스.
+ * 현대 영웅(인재) 시스템 — 카탈로그 303명 · 기본 3명 · 탐색/설득/고용 · 슬롯 배치 보너스.
  */
 class HeroSystemTest {
 
     // ── 카탈로그 ──────────────────────────────────────────────
 
     @Test
-    fun `영웅 250명이 초상화 250장과 1대1로 맞물린다`() {
-        assertEquals(250, HeroRoster.ALL.size)
+    fun `영웅 303명이 초상화 303장과 1대1로 맞물린다`() {
+        assertEquals(303, HeroRoster.ALL.size)
         assertEquals(
-            (1..250).map { "slg_hero_" + it.toString().padStart(3, '0') },
+            (1..303).map { "slg_hero_" + it.toString().padStart(3, '0') },
             HeroRoster.PORTRAIT_NAMES
         )
-        assertEquals(250, HeroRoster.ALL.map { it.id }.distinct().size)
-        assertEquals(250, HeroRoster.ALL.map { it.name }.distinct().size)
+        assertEquals(303, HeroRoster.ALL.map { it.id }.distinct().size)
+        assertEquals(303, HeroRoster.ALL.map { it.name }.distinct().size)
     }
 
     @Test
@@ -90,10 +90,10 @@ class HeroSystemTest {
     }
 
     @Test
-    fun `나머지 247명은 미탐색 상태로 영입 대상이다`() {
+    fun `나머지 300명은 미탐색 상태로 영입 대상이다`() {
         val roster = HeroRosterState.initial()
 
-        assertEquals(247, roster.recruitables.size)
+        assertEquals(300, roster.recruitables.size)
         roster.recruitables.forEach { hero ->
             assertEquals(HeroStage.UNDISCOVERED, roster.recordOf(hero.id).stage)
             assertEquals(0, roster.recordOf(hero.id).affinity)

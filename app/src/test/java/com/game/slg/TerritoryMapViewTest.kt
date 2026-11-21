@@ -30,29 +30,94 @@ class TerritoryMapViewTest {
         )
 
     @Test
-    fun `기본 지도는 본진 중심 배율 1배로 시작한다`() {
+    fun `기본 지도는 본진 중심 배율 1_15배로 시작한다`() {
         val viewport = MapViewport()
 
         assertEquals(TerritoryMapLayout.DEFAULT_SCALE, viewport.scale, 0.0001f)
+        assertEquals(1.15f, viewport.scale, 0.0001f)
         assertEquals(0f, viewport.centerX, 0.0001f)
         assertEquals(0f, viewport.centerY, 0.0001f)
-        assertEquals(TerritoryMapLayout.BASE_VIEW_RADIUS, viewport.viewHalfExtent, 0.0001f)
+        assertEquals(
+            TerritoryMapLayout.BASE_VIEW_RADIUS / TerritoryMapLayout.DEFAULT_SCALE,
+            viewport.viewHalfExtent,
+            0.0001f
+        )
     }
 
     @Test
-    fun `확대는 최대 2_5배에서 멈춘다`() {
+    fun `기본 배율에서는 가까운 영지 세 고리가 한 화면에 들어온다`() {
+        val viewport = MapViewport()
+
+        listOf(1, 2, 3).forEach { hop ->
+            val radius = TerritoryMapLayout.ringRadius(hop)
+            assertTrue("hop $hop 영지가 기본 화면 안에 있어야 한다", radius < viewport.viewHalfExtent)
+        }
+    }
+
+    @Test
+    fun `확대는 최대 4배에서 멈춘다`() {
         var viewport = MapViewport()
         repeat(12) { viewport = viewport.zoomIn() }
 
+        assertEquals(4f, TerritoryMapLayout.MAX_SCALE, 0.0001f)
         assertEquals(TerritoryMapLayout.MAX_SCALE, viewport.scale, 0.0001f)
     }
 
     @Test
-    fun `축소는 최소 0_7배에서 멈춘다`() {
+    fun `축소는 최소 0_4배에서 멈춘다`() {
         var viewport = MapViewport()
         repeat(12) { viewport = viewport.zoomOut() }
 
+        assertEquals(0.4f, TerritoryMapLayout.MIN_SCALE, 0.0001f)
         assertEquals(TerritoryMapLayout.MIN_SCALE, viewport.scale, 0.0001f)
+    }
+
+    @Test
+    fun `플러스 마이너스 버튼은 네 번 안에 최대 배율까지 간다`() {
+        var viewport = MapViewport()
+        var steps = 1
+        while (viewport.scale < TerritoryMapLayout.MAX_SCALE && steps <= 6) {
+            viewport = viewport.zoomIn()
+            steps++
+        }
+        assertTrue("확대 단계가 6번을 넘지 않는다", steps <= 6)
+        assertEquals(TerritoryMapLayout.MAX_SCALE, viewport.scale, 0.0001f)
+
+        var out = MapViewport()
+        var outSteps = 1
+        while (out.scale > TerritoryMapLayout.MIN_SCALE && outSteps <= 6) {
+            out = out.zoomOut()
+            outSteps++
+        }
+        assertTrue("축소 단계가 6번을 넘지 않는다", outSteps <= 6)
+        assertEquals(TerritoryMapLayout.MIN_SCALE, out.scale, 0.0001f)
+    }
+
+    @Test
+    fun `영지 간 간격은 이전 배치보다 25~35퍼센트 좁아졌다`() {
+        // 이전 값: hop1 0.52 · hop2 0.80 · hop3 1.04
+        listOf(1 to 0.52f, 2 to 0.80f, 3 to 1.04f, 4 to 1.26f).forEach { (hop, before) ->
+            val after = TerritoryMapLayout.ringRadius(hop)
+            assertTrue("hop $hop 간격이 25% 이상 줄어야 한다", after <= before * 0.75f)
+            assertTrue("hop $hop 간격이 35% 넘게 줄면 안 된다", after >= before * 0.65f)
+        }
+        assertTrue(
+            "가장 바깥 고리도 지도 경계 안에 들어와야 한다",
+            TerritoryMapLayout.ringRadius(6) < TerritoryMapLayout.WORLD_HALF_EXTENT
+        )
+    }
+
+    @Test
+    fun `영지 노드와 라벨은 기본 배율에서 충분히 크고 축소해도 점처럼 작아지지 않는다`() {
+        val default = TerritoryMapLayout.nodeRadiusDp(TerritoryMapLayout.DEFAULT_SCALE)
+        assertEquals(13f, default, 0.001f)
+        assertTrue("지름 26dp 이상", default * 2f >= 26f)
+
+        val zoomed = TerritoryMapLayout.nodeRadiusDp(TerritoryMapLayout.MAX_SCALE)
+        assertTrue("확대하면 노드도 커진다", zoomed > default)
+
+        val zoomedOut = TerritoryMapLayout.nodeRadiusDp(TerritoryMapLayout.MIN_SCALE)
+        assertTrue("최소 배율에서도 9dp 아래로 내려가지 않는다", zoomedOut >= 9f)
     }
 
     @Test
@@ -77,7 +142,8 @@ class TerritoryMapViewTest {
     fun `이동은 표시 가능한 세계 경계를 넘지 않는다`() {
         val limit = MapViewport().panLimit
         assertEquals(
-            TerritoryMapLayout.WORLD_HALF_EXTENT - TerritoryMapLayout.BASE_VIEW_RADIUS,
+            TerritoryMapLayout.WORLD_HALF_EXTENT -
+                TerritoryMapLayout.BASE_VIEW_RADIUS / TerritoryMapLayout.DEFAULT_SCALE,
             limit,
             0.0001f
         )
@@ -162,14 +228,14 @@ class TerritoryMapViewTest {
     }
 
     @Test
-    fun `확대하면 화면 밖으로 나간 거점은 그리지 않는다`() {
+    fun `최대로 확대하면 보이는 거점이 줄어들고 본진은 남는다`() {
         val nodes = nodesAt(2)
         val all = MapViewport().visibleNodes(nodes)
-        assertTrue(all.isNotEmpty())
+        assertTrue(all.size > 1)
 
-        val zoomed = MapViewport().zoomedBy(2.5f).visibleNodes(nodes)
-        assertEquals("본진만 남는다", 1, zoomed.size)
-        assertTrue(zoomed.single().isHome)
+        val zoomed = MapViewport().zoomedBy(TerritoryMapLayout.MAX_SCALE).visibleNodes(nodes)
+        assertTrue("확대하면 보이는 거점이 줄어든다", zoomed.size < all.size)
+        assertEquals("본진은 화면에 남는다", 1, zoomed.count { it.isHome })
     }
 
     @Test

@@ -1,14 +1,16 @@
 package com.game.slg.core.hero
 
 /**
- * 현대 영웅 로스터 011~250번 — 구글 드라이브 `SLG_현대영웅_케릭터`
- * (`1hEK1MPQjWhuwoPaOhGluWyTDbliHg_uj`)의 통합 로스터 `roster_001_250.json`에서 옮긴 240명.
+ * 현대 영웅 로스터 011~303번 — 구글 드라이브 `SLG_현대영웅_케릭터`
+ * (`1hEK1MPQjWhuwoPaOhGluWyTDbliHg_uj`)의 통합 로스터 `roster_001_303.json`에서 옮긴 293명.
  *
  * · 직업군(job)·등급(SSR/SR/R/N)·5개 능력치·특기(specialty)를 그대로 옮겼다.
  * · 배치 효과·필요 명성·고용비는 [buildRosterHero]가 능력치와 등급에서 계산한다.
- * · 초상화는 `res/drawable-nodpi/slg_hero_011.jpg` ~ `slg_hero_250.jpg`(540x810 JPEG).
+ * · 초상화는 `res/drawable-nodpi/slg_hero_011.jpg` ~ `slg_hero_303.jpg`(540x810 JPEG).
  * · 1~10번은 [HeroRoster] 본문에 손으로 쓴 기본 10명이므로 여기에 없다.
  * · 241~250번(2026-11-20, 다국적 배치 8)부터 로스터의 `origin`·`ethnicity` 필드를 같이 옮긴다.
+ * · 251~260번(2026-11-20, 외국인 10명) · 261~280번(2026-11-21, 시트 분할 20명) ·
+ *   281~303번(2026-11-21, 시트 분할 23명)까지 같은 방식으로 이어진다.
  */
 internal object HeroExpansion {
 
@@ -1462,6 +1464,377 @@ internal object HeroExpansion {
             admin = 70, tech = 40, commerce = 62, ops = 36, diplomacy = 88,
             quote = "\"다자 협약 문안 조율 · 이해관계국 중재\" — 상대의 말을 먼저 들어야 제 말이 들립니다.",
             origin = "캐나다 오타와", ethnicity = "백인(유럽계 캐나다인)"
+        ),
+        buildRosterHero(
+            no = 251, name = "라미 알사예드", role = HeroRole.INTEL, grade = HeroGrade.SSR,
+            age = 38, gender = "남", job = "에너지·수도 인프라 위험정보 분석관", specialty = "송유관·담수화 플랜트 이상 조짐 추적 · 공급 중단 시나리오 평가",
+            admin = 56, tech = 72, commerce = 48, ops = 68, diplomacy = 62,
+            quote = "\"송유관·담수화 플랜트 이상 조짐 추적 · 공급 중단 시나리오 평가\" — 정보는 조용한 쪽이 정확합니다. 소리는 잡음이죠.",
+            origin = "사우디아라비아 리야드", ethnicity = "아랍계(사우디아라비아인)"
+        ),
+        buildRosterHero(
+            no = 252, name = "루아나 파이샹", role = HeroRole.COMMERCE, grade = HeroGrade.SR,
+            age = 31, gender = "여", job = "아마존 천연고무·바이오 원료 수출상", specialty = "산림 채집민 공정거래 계약 · 원료 등급 인증",
+            admin = 50, tech = 42, commerce = 86, ops = 34, diplomacy = 58,
+            quote = "\"산림 채집민 공정거래 계약 · 원료 등급 인증\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "브라질 마나우스", ethnicity = "라틴계(브라질인)"
+        ),
+        buildRosterHero(
+            no = 253, name = "알바로 니에토", role = HeroRole.TECH, grade = HeroGrade.SSR,
+            age = 44, gender = "남", job = "해상풍력 터빈 유지보수 로봇 책임 엔지니어", specialty = "해상 접근 로봇 원격 조작 · 부식 예측 정비",
+            admin = 56, tech = 96, commerce = 52, ops = 44, diplomacy = 52,
+            quote = "\"해상 접근 로봇 원격 조작 · 부식 예측 정비\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "스페인 빌바오", ethnicity = "백인(스페인인)"
+        ),
+        buildRosterHero(
+            no = 254, name = "마리엘 산토스", role = HeroRole.DIPLOMACY, grade = HeroGrade.SR,
+            age = 36, gender = "여", job = "ASEAN 재난관리 협력 사무국 프로그램 책임자", specialty = "다국 구조팀 출입 협의 · 재난 정보 공유 체계 구축",
+            admin = 62, tech = 46, commerce = 48, ops = 40, diplomacy = 90,
+            quote = "\"다국 구조팀 출입 협의 · 재난 정보 공유 체계 구축\" — 상대의 말을 먼저 들어야 제 말이 들립니다.",
+            origin = "필리핀 마닐라", ethnicity = "아시아계(필리핀인)"
+        ),
+        buildRosterHero(
+            no = 255, name = "콰메 멘사", role = HeroRole.ADMIN, grade = HeroGrade.R,
+            age = 41, gender = "남", job = "중소도시 위생·방역 행정 책임자", specialty = "유행병 발생 구역 우선 방역 배치 · 폐기물 수거 체계 정비",
+            admin = 82, tech = 50, commerce = 40, ops = 36, diplomacy = 60,
+            quote = "\"유행병 발생 구역 우선 방역 배치 · 폐기물 수거 체계 정비\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "가나 쿠마시", ethnicity = "흑인(아프리카계)"
+        ),
+        buildRosterHero(
+            no = 256, name = "에바 노바크", role = HeroRole.OPS, grade = HeroGrade.R,
+            age = 33, gender = "여", job = "산악 구조대 지휘관", specialty = "악천후 수색 구역 설정 · 구조팀 로프 훈련",
+            admin = 44, tech = 58, commerce = 30, ops = 84, diplomacy = 46,
+            quote = "\"악천후 수색 구역 설정 · 구조팀 로프 훈련\" — 작전은 준비에서 끝납니다.",
+            origin = "폴란드 그단스크", ethnicity = "백인(폴란드인)"
+        ),
+        buildRosterHero(
+            no = 257, name = "에밀리아노 바르가스", role = HeroRole.COMMERCE, grade = HeroGrade.N,
+            age = 29, gender = "남", job = "전기차 배선·커넥터 부품 조립사 대표", specialty = "근교 협력사 품질 관리 · 납기 단축 조정",
+            admin = 38, tech = 46, commerce = 72, ops = 26, diplomacy = 50,
+            quote = "\"근교 협력사 품질 관리 · 납기 단축 조정\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "멕시코 몬테레이", ethnicity = "라틴계(멕시코인)"
+        ),
+        buildRosterHero(
+            no = 258, name = "하야트 알만수리", role = HeroRole.TECH, grade = HeroGrade.SR,
+            age = 37, gender = "여", job = "사막 태양광·에너지 저장 운영 책임자", specialty = "모래 폭풍 대비 패널 정비 스케줄 · 저장 설비 방전 최적화",
+            admin = 52, tech = 88, commerce = 56, ops = 44, diplomacy = 52,
+            quote = "\"모래 폭풍 대비 패널 정비 스케줄 · 저장 설비 방전 최적화\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "아랍에미리트 아부다비", ethnicity = "아랍계(아랍에미리트인)"
+        ),
+        buildRosterHero(
+            no = 259, name = "시포 응코시", role = HeroRole.OPS, grade = HeroGrade.R,
+            age = 46, gender = "남", job = "광산 구조대장", specialty = "갱도 붕괴 지지대 평가 · 심부 구조대 진입 지휘",
+            admin = 40, tech = 52, commerce = 38, ops = 80, diplomacy = 42,
+            quote = "\"갱도 붕괴 지지대 평가 · 심부 구조대 진입 지휘\" — 작전은 준비에서 끝납니다.",
+            origin = "남아프리카공화국 요하네스버그", ethnicity = "흑인(아프리카계)"
+        ),
+        buildRosterHero(
+            no = 260, name = "안네커 데브리스", role = HeroRole.ADMIN, grade = HeroGrade.SR,
+            age = 42, gender = "여", job = "항만 도시 기후 적응·수문 관리 총괄", specialty = "폭풍 해일 방벽 운영 결정 · 저지대 배수 우선순위",
+            admin = 86, tech = 54, commerce = 50, ops = 36, diplomacy = 68,
+            quote = "\"폭풍 해일 방벽 운영 결정 · 저지대 배수 우선순위\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "네덜란드 로테르담", ethnicity = "백인(네덜란드인)"
+        ),
+        buildRosterHero(
+            no = 261, name = "한태호", role = HeroRole.OPS, grade = HeroGrade.SR,
+            age = 38, gender = "남", job = "특수재난 구조대장", specialty = "화재·붕괴 현장 진입 지휘 · 대원 안전 통제",
+            admin = 49, tech = 67, commerce = 39, ops = 84, diplomacy = 53,
+            quote = "\"화재·붕괴 현장 진입 지휘 · 대원 안전 통제\" — 작전은 준비에서 끝납니다.",
+            origin = "서울", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 262, name = "서지민", role = HeroRole.TECH, grade = HeroGrade.R,
+            age = 29, gender = "여", job = "사이버 보안 분석관", specialty = "침해 사고 추적 · 관제 로그 상관 분석",
+            admin = 51, tech = 78, commerce = 47, ops = 50, diplomacy = 48,
+            quote = "\"침해 사고 추적 · 관제 로그 상관 분석\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "대전", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 263, name = "권정훈", role = HeroRole.COMMERCE, grade = HeroGrade.SSR,
+            age = 54, gender = "남", job = "해양 수송 선단장", specialty = "원양 선단 운항 지휘 · 항로·적재 협상",
+            admin = 60, tech = 47, commerce = 94, ops = 43, diplomacy = 64,
+            quote = "\"원양 선단 운항 지휘 · 항로·적재 협상\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "부산", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 264, name = "배수진", role = HeroRole.TECH, grade = HeroGrade.N,
+            age = 35, gender = "여", job = "응급의학과 전문의", specialty = "중증 외상 초기 처치 · 이송 우선순위 판단",
+            admin = 42, tech = 71, commerce = 39, ops = 44, diplomacy = 42,
+            quote = "\"중증 외상 초기 처치 · 이송 우선순위 판단\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "대구", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 265, name = "최진혁", role = HeroRole.ADMIN, grade = HeroGrade.SR,
+            age = 42, gender = "남", job = "도시개발 기획관", specialty = "구도심 재생 사업 조정 · 용지 보상 협의",
+            admin = 83, tech = 46, commerce = 52, ops = 41, diplomacy = 64,
+            quote = "\"구도심 재생 사업 조정 · 용지 보상 협의\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "인천", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 266, name = "이선영", role = HeroRole.TECH, grade = HeroGrade.R,
+            age = 31, gender = "여", job = "환경생태 연구원", specialty = "수변 생태계 모니터링 · 영향 저감 방안 수립",
+            admin = 51, tech = 83, commerce = 49, ops = 49, diplomacy = 48,
+            quote = "\"수변 생태계 모니터링 · 영향 저감 방안 수립\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "강원 춘천", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 267, name = "강민혁", role = HeroRole.OPS, grade = HeroGrade.SR,
+            age = 36, gender = "남", job = "특수기동대 전술팀장", specialty = "야간 진압 팀 교대 지휘 · 위험 구역 진입 판단",
+            admin = 50, tech = 68, commerce = 38, ops = 83, diplomacy = 57,
+            quote = "\"야간 진압 팀 교대 지휘 · 위험 구역 진입 판단\" — 작전은 준비에서 끝납니다.",
+            origin = "서울", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 268, name = "박지우", role = HeroRole.TECH, grade = HeroGrade.N,
+            age = 25, gender = "남", job = "드론 관제 기술자", specialty = "군집 드론 비행 경로 설정 · 실시간 영상 중계",
+            admin = 44, tech = 71, commerce = 43, ops = 47, diplomacy = 44,
+            quote = "\"군집 드론 비행 경로 설정 · 실시간 영상 중계\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "경기 수원", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 269, name = "윤혜경", role = HeroRole.DIPLOMACY, grade = HeroGrade.SR,
+            age = 47, gender = "여", job = "외교 통상 교섭관", specialty = "양자 통상 협상 · 통상 분쟁 사전 조율",
+            admin = 64, tech = 42, commerce = 51, ops = 41, diplomacy = 88,
+            quote = "\"양자 통상 협상 · 통상 분쟁 사전 조율\" — 상대의 말을 먼저 들어야 제 말이 들립니다.",
+            origin = "서울", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 270, name = "신동화", role = HeroRole.TECH, grade = HeroGrade.R,
+            age = 49, gender = "남", job = "중장비 정비 명장", specialty = "중장비 고장 진단 · 현장 긴급 복구",
+            admin = 50, tech = 80, commerce = 44, ops = 51, diplomacy = 48,
+            quote = "\"중장비 고장 진단 · 현장 긴급 복구\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "울산", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 271, name = "송은채", role = HeroRole.DIPLOMACY, grade = HeroGrade.SSR,
+            age = 39, gender = "여", job = "위기협상 전문관", specialty = "인질·투항 협상 · 위기 상황 대화 창구 개설",
+            admin = 69, tech = 52, commerce = 56, ops = 48, diplomacy = 90,
+            quote = "\"인질·투항 협상 · 위기 상황 대화 창구 개설\" — 상대의 말을 먼저 들어야 제 말이 들립니다.",
+            origin = "서울", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 272, name = "정태준", role = HeroRole.COMMERCE, grade = HeroGrade.SR,
+            age = 45, gender = "남", job = "철도물류 운송팀장", specialty = "화물 열차 편성 조정 · 물류 지연 복구",
+            admin = 51, tech = 47, commerce = 85, ops = 38, diplomacy = 65,
+            quote = "\"화물 열차 편성 조정 · 물류 지연 복구\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "대전", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 273, name = "백시현", role = HeroRole.OPS, grade = HeroGrade.R,
+            age = 28, gender = "여", job = "항공교통 관제사", specialty = "접근 관제 순서 조정 · 악천후 이착륙 지시",
+            admin = 47, tech = 62, commerce = 33, ops = 83, diplomacy = 51,
+            quote = "\"접근 관제 순서 조정 · 악천후 이착륙 지시\" — 작전은 준비에서 끝납니다.",
+            origin = "경기 김포", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 274, name = "고상욱", role = HeroRole.ADMIN, grade = HeroGrade.N,
+            age = 52, gender = "남", job = "건설안전 총괄감리", specialty = "고위험 공정 안전 점검 · 부적합 시공 시정",
+            admin = 71, tech = 40, commerce = 46, ops = 35, diplomacy = 55,
+            quote = "\"고위험 공정 안전 점검 · 부적합 시공 시정\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "인천", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 275, name = "임유나", role = HeroRole.TECH, grade = HeroGrade.SR,
+            age = 33, gender = "여", job = "역학조사관", specialty = "감염 경로 추적 · 접촉자 분류 관리",
+            admin = 56, tech = 88, commerce = 50, ops = 50, diplomacy = 53,
+            quote = "\"감염 경로 추적 · 접촉자 분류 관리\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "광주", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 276, name = "하진우", role = HeroRole.OPS, grade = HeroGrade.R,
+            age = 30, gender = "남", job = "해안경비 구조대원", specialty = "해상 익수자 수색 · 구조정 접근 지휘",
+            admin = 50, tech = 61, commerce = 33, ops = 78, diplomacy = 51,
+            quote = "\"해상 익수자 수색 · 구조정 접근 지휘\" — 작전은 준비에서 끝납니다.",
+            origin = "전남 목포", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 277, name = "조은주", role = HeroRole.ADMIN, grade = HeroGrade.SR,
+            age = 50, gender = "여", job = "시정 기획국장", specialty = "시정 예산 배분 · 부서 간 사업 조정",
+            admin = 85, tech = 47, commerce = 52, ops = 38, diplomacy = 64,
+            quote = "\"시정 예산 배분 · 부서 간 사업 조정\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "세종", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 278, name = "김도윤", role = HeroRole.TECH, grade = HeroGrade.SSR,
+            age = 41, gender = "남", job = "자원 탐사 엔지니어", specialty = "광상 탐사 자료 해석 · 시추 후보지 선정",
+            admin = 59, tech = 88, commerce = 51, ops = 55, diplomacy = 54,
+            quote = "\"광상 탐사 자료 해석 · 시추 후보지 선정\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "강원 태백", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 279, name = "민서연", role = HeroRole.COMMERCE, grade = HeroGrade.N,
+            age = 27, gender = "여", job = "항만물류 운영관", specialty = "부두 하역 순서 배정 · 선석 회전 관리",
+            admin = 47, tech = 39, commerce = 76, ops = 30, diplomacy = 51,
+            quote = "\"부두 하역 순서 배정 · 선석 회전 관리\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "부산", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 280, name = "홍성태", role = HeroRole.OPS, grade = HeroGrade.SR,
+            age = 56, gender = "남", job = "소방 방재 본부장", specialty = "대형 재난 지휘부 운영 · 유관 기관 공조",
+            admin = 51, tech = 65, commerce = 33, ops = 89, diplomacy = 54,
+            quote = "\"대형 재난 지휘부 운영 · 유관 기관 공조\" — 작전은 준비에서 끝납니다.",
+            origin = "대구", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 281, name = "박상호", role = HeroRole.ADMIN, grade = HeroGrade.SR,
+            age = 48, gender = "남", job = "수자원 관리 본부장", specialty = "취수·방류량 조정 · 가뭄·홍수 급수 배분",
+            admin = 85, tech = 48, commerce = 48, ops = 40, diplomacy = 65,
+            quote = "\"취수·방류량 조정 · 가뭄·홍수 급수 배분\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "세종", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 282, name = "최지아", role = HeroRole.TECH, grade = HeroGrade.R,
+            age = 26, gender = "여", job = "무인 항공 관제사", specialty = "군집 드론 항로 배정 · 실시간 영상 판독",
+            admin = 49, tech = 78, commerce = 47, ops = 51, diplomacy = 50,
+            quote = "\"군집 드론 항로 배정 · 실시간 영상 판독\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "대전", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 283, name = "오상진", role = HeroRole.DIPLOMACY, grade = HeroGrade.SSR,
+            age = 44, gender = "남", job = "국가정보 분석팀장", specialty = "해외 위협 징후 분석 · 정보 공유 창구 조율",
+            admin = 72, tech = 49, commerce = 58, ops = 48, diplomacy = 88,
+            quote = "\"해외 위협 징후 분석 · 정보 공유 창구 조율\" — 상대의 말을 먼저 들어야 제 말이 들립니다.",
+            origin = "서울", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 284, name = "강유정", role = HeroRole.OPS, grade = HeroGrade.N,
+            age = 32, gender = "여", job = "응급구조 현장팀장", specialty = "다수 사상자 현장 지휘 · 이송 우선순위 판단",
+            admin = 40, tech = 51, commerce = 30, ops = 73, diplomacy = 44,
+            quote = "\"다수 사상자 현장 지휘 · 이송 우선순위 판단\" — 작전은 준비에서 끝납니다.",
+            origin = "인천", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 285, name = "윤준혁", role = HeroRole.OPS, grade = HeroGrade.SR,
+            age = 41, gender = "남", job = "해양경찰 경비함장", specialty = "해상 통제선 운영 · 불법 조업 선박 나포 지휘",
+            admin = 49, tech = 67, commerce = 35, ops = 88, diplomacy = 55,
+            quote = "\"해상 통제선 운영 · 불법 조업 선박 나포 지휘\" — 작전은 준비에서 끝납니다.",
+            origin = "부산", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 286, name = "신예은", role = HeroRole.TECH, grade = HeroGrade.R,
+            age = 29, gender = "여", job = "통신망 보안 연구원", specialty = "통신망 침입 흔적 추적 · 우회 경로 검증",
+            admin = 47, tech = 79, commerce = 47, ops = 46, diplomacy = 49,
+            quote = "\"통신망 침입 흔적 추적 · 우회 경로 검증\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "대전", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 287, name = "권혜진", role = HeroRole.TECH, grade = HeroGrade.SSR,
+            age = 43, gender = "여", job = "바이오 연구소장", specialty = "백신 후보물질 검증 · 임상 일정 총괄",
+            admin = 59, tech = 92, commerce = 51, ops = 57, diplomacy = 55,
+            quote = "\"백신 후보물질 검증 · 임상 일정 총괄\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "광주", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 288, name = "한승우", role = HeroRole.COMMERCE, grade = HeroGrade.N,
+            age = 34, gender = "남", job = "항만 하역 감독관", specialty = "야드 적재 계획 승인 · 하역 안전 통제",
+            admin = 42, tech = 39, commerce = 75, ops = 32, diplomacy = 53,
+            quote = "\"야드 적재 계획 승인 · 하역 안전 통제\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "부산", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 289, name = "배진호", role = HeroRole.ADMIN, grade = HeroGrade.SR,
+            age = 47, gender = "남", job = "광역교통 통제관", specialty = "도로 소통 등급 판단 · 긴급 차로 개방 지시",
+            admin = 88, tech = 45, commerce = 49, ops = 41, diplomacy = 64,
+            quote = "\"도로 소통 등급 판단 · 긴급 차로 개방 지시\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "경기 성남", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 290, name = "지승우", role = HeroRole.OPS, grade = HeroGrade.SSR,
+            age = 43, gender = "남", job = "대테러 전술지휘관", specialty = "다중 이용시설 진입 작전 · 인질 진압 지휘",
+            admin = 54, tech = 69, commerce = 38, ops = 92, diplomacy = 54,
+            quote = "\"다중 이용시설 진입 작전 · 인질 진압 지휘\" — 작전은 준비에서 끝납니다.",
+            origin = "서울", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 291, name = "조현아", role = HeroRole.COMMERCE, grade = HeroGrade.N,
+            age = 33, gender = "여", job = "구호물자 수송팀장", specialty = "재난 구호품 배차 · 긴급 수송로 확보",
+            admin = 44, tech = 37, commerce = 76, ops = 32, diplomacy = 54,
+            quote = "\"재난 구호품 배차 · 긴급 수송로 확보\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "대전", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 292, name = "민경태", role = HeroRole.TECH, grade = HeroGrade.SR,
+            age = 45, gender = "남", job = "스마트시티 설계 총괄", specialty = "도시 데이터 통합 설계 · 시설 연동 표준화",
+            admin = 56, tech = 85, commerce = 49, ops = 49, diplomacy = 51,
+            quote = "\"도시 데이터 통합 설계 · 시설 연동 표준화\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "세종", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 293, name = "백하린", role = HeroRole.TECH, grade = HeroGrade.R,
+            age = 28, gender = "여", job = "기상 특보 연구원", specialty = "국지성 호우 예측 · 특보 발효 기준 산정",
+            admin = 50, tech = 80, commerce = 46, ops = 50, diplomacy = 48,
+            quote = "\"국지성 호우 예측 · 특보 발효 기준 산정\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "강원 강릉", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 294, name = "고태훈", role = HeroRole.OPS, grade = HeroGrade.SR,
+            age = 39, gender = "남", job = "화학재난 신속대응팀장", specialty = "유해물질 누출 차단 · 제독 구역 설정",
+            admin = 53, tech = 65, commerce = 37, ops = 89, diplomacy = 53,
+            quote = "\"유해물질 누출 차단 · 제독 구역 설정\" — 작전은 준비에서 끝납니다.",
+            origin = "울산", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 295, name = "황동주", role = HeroRole.COMMERCE, grade = HeroGrade.SR,
+            age = 50, gender = "남", job = "자원순환 공장장", specialty = "재활용 선별 공정 운영 · 원료 등급 판정",
+            admin = 56, tech = 47, commerce = 85, ops = 36, diplomacy = 64,
+            quote = "\"재활용 선별 공정 운영 · 원료 등급 판정\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "경기 안산", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 296, name = "선우현", role = HeroRole.OPS, grade = HeroGrade.SSR,
+            age = 40, gender = "남", job = "항공 수색대장", specialty = "산악·해상 항공 수색 지휘 · 구조 투입 판단",
+            admin = 54, tech = 69, commerce = 42, ops = 91, diplomacy = 58,
+            quote = "\"산악·해상 항공 수색 지휘 · 구조 투입 판단\" — 작전은 준비에서 끝납니다.",
+            origin = "강원 원주", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 297, name = "강태석", role = HeroRole.OPS, grade = HeroGrade.N,
+            age = 35, gender = "남", job = "항만 경비 대장", specialty = "부두 출입 통제 · 위험 화물 검색 지휘",
+            admin = 42, tech = 52, commerce = 32, ops = 74, diplomacy = 42,
+            quote = "\"부두 출입 통제 · 위험 화물 검색 지휘\" — 작전은 준비에서 끝납니다.",
+            origin = "인천", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 298, name = "신서윤", role = HeroRole.TECH, grade = HeroGrade.SR,
+            age = 34, gender = "여", job = "에너지 자원 분석관", specialty = "발전 믹스 분석 · 자원 조달 리스크 평가",
+            admin = 51, tech = 87, commerce = 46, ops = 53, diplomacy = 52,
+            quote = "\"발전 믹스 분석 · 자원 조달 리스크 평가\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "대전", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 299, name = "정유진", role = HeroRole.COMMERCE, grade = HeroGrade.R,
+            age = 28, gender = "여", job = "물류 인프라 기획원", specialty = "물류 거점 입지 평가 · 배송망 재편 기획",
+            admin = 51, tech = 44, commerce = 78, ops = 41, diplomacy = 58,
+            quote = "\"물류 거점 입지 평가 · 배송망 재편 기획\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "경기 의왕", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 300, name = "안재현", role = HeroRole.TECH, grade = HeroGrade.SR,
+            age = 43, gender = "남", job = "지하 통신망 복구대장", specialty = "지하 관로 단선 복구 · 임시 회선 개통",
+            admin = 52, tech = 86, commerce = 47, ops = 54, diplomacy = 48,
+            quote = "\"지하 관로 단선 복구 · 임시 회선 개통\" — 설비는 거짓말을 안 합니다. 데이터로 증명하죠.",
+            origin = "서울", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 301, name = "차영주", role = HeroRole.DIPLOMACY, grade = HeroGrade.SSR,
+            age = 49, gender = "여", job = "국익 외교 특사", specialty = "비공개 채널 협상 · 국익 우선 조약 검토",
+            admin = 69, tech = 49, commerce = 58, ops = 47, diplomacy = 94,
+            quote = "\"비공개 채널 협상 · 국익 우선 조약 검토\" — 상대의 말을 먼저 들어야 제 말이 들립니다.",
+            origin = "서울", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 302, name = "유동혁", role = HeroRole.COMMERCE, grade = HeroGrade.N,
+            age = 33, gender = "남", job = "구호 보급 차량팀장", specialty = "구호 차량 편성 · 보급 거점 순환 운행",
+            admin = 46, tech = 38, commerce = 76, ops = 33, diplomacy = 51,
+            quote = "\"구호 차량 편성 · 보급 거점 순환 운행\" — 사람이 모이는 길에 돈이 있습니다.",
+            origin = "충북 청주", ethnicity = "한국인"
+        ),
+        buildRosterHero(
+            no = 303, name = "오창식", role = HeroRole.ADMIN, grade = HeroGrade.SR,
+            age = 53, gender = "남", job = "산업 폐기물 감독관", specialty = "폐기물 처리 업체 점검 · 위반 사항 행정 처분",
+            admin = 84, tech = 48, commerce = 53, ops = 42, diplomacy = 70,
+            quote = "\"폐기물 처리 업체 점검 · 위반 사항 행정 처분\" — 제 일입니다. 예산은 감이 아니라 숫자로 짭니다.",
+            origin = "울산", ethnicity = "한국인"
         ),
     )
 }

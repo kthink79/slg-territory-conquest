@@ -8,10 +8,10 @@ import org.junit.Test
 import java.io.File
 
 /**
- * 초상화 리소스 정합성 — 250명 로스터와 `drawable-nodpi/slg_hero_*.jpg` 가 1대1인지 본다.
+ * 초상화 리소스 정합성 — 303명 로스터와 `drawable-nodpi/slg_hero_*.jpg` 가 1대1인지 본다.
  *
  * 단위 테스트는 카탈로그의 이름만 검사하므로, 실제 탑재 파일이 빠지거나 규격(2:3 · 540x810)이
- * 어긋난 배치가 들어오는 것을 여기서 막는다. 241~250번 추가분(2026-11-20)까지 포함한다.
+ * 어긋난 배치가 들어오는 것을 여기서 막는다. 251~303번 추가분(2026-11-21)까지 포함한다.
  */
 class HeroPortraitResourceTest {
 
@@ -23,13 +23,13 @@ class HeroPortraitResourceTest {
     }
 
     @Test
-    fun `초상화 폴더에 250장이 있다`() {
+    fun `초상화 폴더에 303장이 있다`() {
         assertTrue("초상화 폴더 없음: ${portraitDir.absolutePath}", portraitDir.isDirectory)
         val files = portraitDir.listFiles { f -> f.name.startsWith("slg_hero_") } ?: emptyArray()
 
-        assertEquals(250, files.size)
+        assertEquals(303, files.size)
         assertEquals(
-            (1..250).map { "slg_hero_" + it.toString().padStart(3, '0') + ".jpg" }.sorted(),
+            (1..303).map { "slg_hero_" + it.toString().padStart(3, '0') + ".jpg" }.sorted(),
             files.map { it.name }.sorted()
         )
     }
@@ -53,9 +53,10 @@ class HeroPortraitResourceTest {
     }
 
     @Test
-    fun `새로 넣은 241~250번 초상화도 같은 규격이다`() {
-        (241..250).forEach { no ->
-            val file = File(portraitDir, "slg_hero_$no.jpg")
+    fun `새로 넣은 241~303번 초상화도 같은 규격이다`() {
+        (241..303).forEach { no ->
+            val name = "slg_hero_" + no.toString().padStart(3, '0')
+            val file = File(portraitDir, "$name.jpg")
             assertTrue("$no 번 초상화 없음", file.isFile)
             val size = jpegSize(file.readBytes())
             assertNotNull("$no 번 JPEG 헤더 판독 실패", size)
