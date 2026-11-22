@@ -58,11 +58,12 @@ fun HeroScreen(
     tabIndex: Int = 0,
     onSearch: () -> Unit = {},
     onAcceptVisit: () -> Unit = {},
-    onDeclineVisit: () -> Unit = {}
+    onDeclineVisit: () -> Unit = {},
+    onDismiss: (String) -> Unit = {}
 ) {
     SlgScreenFrame {
         when (HeroTab.entries[tabIndex.coerceIn(0, HeroTab.entries.lastIndex)]) {
-            HeroTab.PLACE -> HeroPlaceSection(state, onAssign, onUnassign)
+            HeroTab.PLACE -> HeroPlaceSection(state, onAssign, onUnassign, onDismiss)
             HeroTab.RECRUIT -> HeroRecruitSection(
                 state = state,
                 onScout = onScout,
@@ -119,7 +120,8 @@ fun HeroPortrait(hero: Hero, widthDp: Int = 88, modifier: Modifier = Modifier) {
 private fun HeroPlaceSection(
     state: SlgGameState,
     onAssign: (String, HeroRole) -> Unit,
-    onUnassign: (String) -> Unit
+    onUnassign: (String) -> Unit,
+    onDismiss: (String) -> Unit = {}
 ) {
     val roster = state.heroes
     val bonus = state.heroBonus
@@ -146,13 +148,13 @@ private fun HeroPlaceSection(
 
     SlgSectionCard(title = "영지 슬롯", badge = "내정·기술·상업·작전", accent = SlgColors.Brass) {
         HeroRole.primarySlots.forEach { role ->
-            HeroSlotRow(state = state, role = role, onUnassign = onUnassign)
+            HeroSlotRow(state = state, role = role, onUnassign = onUnassign, onDismiss = onDismiss)
         }
     }
 
     SlgSectionCard(title = "외교 슬롯", badge = "외교·정보", accent = SlgColors.Steel) {
         HeroRole.supportSlots.forEach { role ->
-            HeroSlotRow(state = state, role = role, onUnassign = onUnassign)
+            HeroSlotRow(state = state, role = role, onUnassign = onUnassign, onDismiss = onDismiss)
         }
     }
 
@@ -183,25 +185,43 @@ private fun HeroPlaceSection(
                         )
                     }
                     Spacer(Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(Color(hero.role.accentHex).copy(alpha = 0.2f))
-                            .border(1.dp, Color(hero.role.accentHex).copy(alpha = 0.7f), RoundedCornerShape(9.dp))
-                            .clickable { onAssign(hero.id, hero.role) }
-                            .padding(horizontal = 11.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            "배치",
-                            color = Color(hero.role.accentHex),
-                            fontSize = SlgType.LABEL,
-                            fontWeight = FontWeight.ExtraBold
-                        )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(Color(hero.role.accentHex).copy(alpha = 0.2f))
+                                .border(1.dp, Color(hero.role.accentHex).copy(alpha = 0.7f), RoundedCornerShape(9.dp))
+                                .clickable { onAssign(hero.id, hero.role) }
+                                .padding(horizontal = 11.dp, vertical = 7.dp)
+                        ) {
+                            Text(
+                                "배치",
+                                color = Color(hero.role.accentHex),
+                                fontSize = SlgType.LABEL,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(SlgColors.Surface)
+                                .border(1.dp, SlgColors.Danger.copy(alpha = 0.45f), RoundedCornerShape(9.dp))
+                                .clickable { onDismiss(hero.id) }
+                                .padding(horizontal = 11.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                "방출",
+                                color = SlgColors.Danger,
+                                fontSize = SlgType.MICRO,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
             Text(
-                "배치는 역할이 같은 슬롯에만 앉습니다. 이미 앉은 영웅은 대기로 내려갑니다.",
+                "배치는 역할이 같은 슬롯에만 앉습니다. 이미 앉은 영웅은 대기로 내려갑니다. " +
+                    "방출하면 계약이 끝나 재야로 돌아갑니다(호감도 −15 · 명성 −1).",
                 color = SlgColors.Muted,
                 fontSize = SlgType.MICRO,
                 lineHeight = SlgLine.MICRO
@@ -236,7 +256,12 @@ private fun HeroPlaceSection(
 }
 
 @Composable
-private fun HeroSlotRow(state: SlgGameState, role: HeroRole, onUnassign: (String) -> Unit) {
+private fun HeroSlotRow(
+    state: SlgGameState,
+    role: HeroRole,
+    onUnassign: (String) -> Unit,
+    onDismiss: (String) -> Unit = {}
+) {
     val hero = state.heroes.heroIn(role)
     val accent = Color(role.accentHex)
     Row(
@@ -291,14 +316,26 @@ private fun HeroSlotRow(state: SlgGameState, role: HeroRole, onUnassign: (String
                 )
             }
             Spacer(Modifier.width(6.dp))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(SlgColors.Surface)
-                    .clickable { onUnassign(hero.id) }
-                    .padding(horizontal = 10.dp, vertical = 7.dp)
-            ) {
-                Text("내리기", color = SlgColors.Muted, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(SlgColors.Surface)
+                        .clickable { onUnassign(hero.id) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("내리기", color = SlgColors.Muted, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(SlgColors.Surface)
+                        .border(1.dp, SlgColors.Danger.copy(alpha = 0.45f), RoundedCornerShape(9.dp))
+                        .clickable { onDismiss(hero.id) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("방출", color = SlgColors.Danger, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

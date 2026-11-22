@@ -61,7 +61,16 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
                 }
                 .toMap(),
             startMode = prefs.getString(KEY_START_MODE, "LORD") ?: "LORD",
-            heroCareer = prefs.getString(KEY_HERO_CAREER, null)
+            heroCareer = prefs.getString(KEY_HERO_CAREER, null),
+            factionStates = prefs.getStringSet(KEY_FACTIONS, emptySet()).orEmpty().sorted(),
+            pendingDisposition = prefs.getStringSet(KEY_PENDING_DISPOSITION, emptySet()).orEmpty().sorted(),
+            heroDiscovery = prefs.getStringSet(KEY_HERO_DISCOVERY, emptySet()).orEmpty()
+                .mapNotNull { entry ->
+                    val index = entry.indexOf('|')
+                    if (index <= 0) null
+                    else entry.substring(0, index) to entry.substring(index + 1)
+                }
+                .toMap()
         )
     }
 
@@ -104,6 +113,12 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
             )
             .putString(KEY_START_MODE, save.startMode)
             .putString(KEY_HERO_CAREER, save.heroCareer)
+            .putStringSet(KEY_FACTIONS, save.factionStates.toSet())
+            .putStringSet(KEY_PENDING_DISPOSITION, save.pendingDisposition.toSet())
+            .putStringSet(
+                KEY_HERO_DISCOVERY,
+                save.heroDiscovery.map { (id, raw) -> "$id|$raw" }.toSet()
+            )
             .apply()
     }
 
@@ -132,5 +147,8 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
         private const val KEY_WEAPON_TECH = "weapon_tech"
         private const val KEY_START_MODE = "start_mode"
         private const val KEY_HERO_CAREER = "hero_career"
+        private const val KEY_FACTIONS = "faction_states"
+        private const val KEY_PENDING_DISPOSITION = "pending_disposition"
+        private const val KEY_HERO_DISCOVERY = "hero_discovery"
     }
 }

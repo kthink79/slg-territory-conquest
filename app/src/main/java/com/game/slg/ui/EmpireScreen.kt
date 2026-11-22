@@ -30,6 +30,7 @@ import com.game.slg.core.empire.EmpireEngine
 import com.game.slg.core.empire.ManpowerEngine
 import com.game.slg.core.empire.MercenaryEngine
 import com.game.slg.core.empire.TerritoryStatus
+import com.game.slg.core.hero.HeroDispositionEngine
 
 /**
  * 영토 탭 — 흡수 / 통치 / 병력.
@@ -56,9 +57,19 @@ fun EmpireScreen(
     onGatherPrivateTroops: () -> Unit,
     onReportMerit: () -> Unit,
     onDeclareIndependence: () -> Unit,
+    onRecruitPending: (String) -> Unit = {},
+    onReleasePending: (String) -> Unit = {},
     tabIndex: Int = 0
 ) {
     SlgScreenFrame {
+        // 편입한 세력의 소속 영웅 — 어느 하위 탭에 있든 위에 뜨고, 처리할 때까지 남는다
+        if (state.pendingDisposition.isNotEmpty()) {
+            HeroDispositionSection(
+                state = state,
+                onRecruit = onRecruitPending,
+                onRelease = onReleasePending
+            )
+        }
         when (EmpireTab.entries[tabIndex.coerceIn(0, EmpireTab.entries.lastIndex)]) {
             EmpireTab.ABSORB -> AbsorptionPanel(state, onSelectMethod, onCreateCommonEnemy, onInstigate)
             EmpireTab.GOVERN -> GovernancePanel(
@@ -74,6 +85,131 @@ fun EmpireScreen(
 
             EmpireTab.MANPOWER -> ManpowerPanel(state, onRecruitRegular, onHireMercenary, onDismissMercenary)
         }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────
+// 편입 세력 소속 영웅 — 등용 / 방출 처분
+// ────────────────────────────────────────────────────────────────
+
+@Composable
+private fun HeroDispositionSection(
+    state: SlgGameState,
+    onRecruit: (String) -> Unit,
+    onRelease: (String) -> Unit
+) {    val pending = state.pendingHeroes
+    SlgSectionCard(
+        title = "처분 대기",
+        badge = "${pending.size}명",
+        accent = SlgColors.Violet
+    ) {
+        Text(
+            "편입한 세력 밑에 있던 영웅입니다. 등용하면 우리 로스터로 들어오고, 방출하면 재야로 돌아갑니다. " +
+                "다음 절기로 넘어가면 남은 영웅은 자동으로 방출됩니다.",
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO,
+            lineHeight = SlgLine.MICRO
+        )
+        pending.forEach { (entry, hero) ->
+            val cost = HeroDispositionEngine.recruitCost(hero)
+            val accent = Color(hero.role.accentHex)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SlgColors.SurfaceAlt)
+                    .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 2:3 초상화 카드
+                    HeroPortrait(hero = hero, widthDp = 66)
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            hero.name,
+                            color = SlgColors.Text,
+                            fontSize = SlgType.BODY_SMALL,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1
+                        )
+                        Text(
+                            "${hero.grade.label} · ${hero.role.emoji} ${hero.role.label} · ${hero.title}",
+                            color = accent,
+                            fontSize = SlgType.MICRO,
+                            lineHeight = SlgLine.MICRO,
+                            maxLines = 2
+                        )
+                        Text(
+                            "⚔ ${entry.lordName} 리더 소속 · ${hero.effectLabel}",
+                            color = SlgColors.Muted,
+                            fontSize = SlgType.MICRO,
+                            lineHeight = SlgLine.MICRO,
+                            maxLines = 2
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (state.gold >= cost) SlgColors.Success.copy(alpha = 0.9f)
+                                else SlgColors.Surface
+                            )
+                            .border(
+                                1.dp,
+                                SlgColors.Success.copy(alpha = if (state.gold >= cost) 0.9f else 0.3f),
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable(enabled = state.gold >= cost) { onRecruit(hero.id) }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "등용 ${comma(cost)}G",
+                            color = if (state.gold >= cost) Color(0xFF10131A) else SlgColors.Muted,
+                            fontSize = SlgType.LABEL,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SlgColors.Surface)
+                            .border(1.dp, SlgColors.Danger.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                            .clickable { onRelease(hero.id) }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "방출",
+                            color = SlgColors.Danger,
+                            fontSize = SlgType.LABEL,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1
+                        )
+                    }
+                }
+                Text(
+                    "등용 ${comma(cost)}G (등급 기준가 ${comma(hero.grade.hireBase)}G 에서 " +
+                        "${HeroDispositionEngine.RECRUIT_DISCOUNT_PERCENT}% 할인) · 방출 시 호감도 −" +
+                        "${HeroDispositionEngine.RELEASE_AFFINITY_PENALTY} · 명성 −${HeroDispositionEngine.RELEASE_PRESTIGE_PENALTY}",
+                    color = SlgColors.Muted,
+                    fontSize = SlgType.MICRO,
+                    lineHeight = SlgLine.MICRO
+                )
+            }
+        }
+        Text(
+            "보유 ${state.heroes.ownedCount}명 · 빈 슬롯 ${6 - state.heroes.placedCount}자리",
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO
+        )
     }
 }
 
@@ -539,3 +675,6 @@ private fun ManpowerPanel(
     state.empireMessage?.let { ResultBox(it, SlgColors.Brass) }
     SlgLogBox(state.log, maxLines = 3)
 }
+
+/** 천 단위 쉼표 — 카드 안 버튼·안내 문구용 */
+private fun comma(value: Int): String = "%,d".format(value)

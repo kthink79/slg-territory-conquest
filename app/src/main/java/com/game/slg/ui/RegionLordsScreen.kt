@@ -60,7 +60,8 @@ fun RegionLordsScreen(
 
         SlgSectionCard(
             title = "같은 지역 리더",
-            badge = "${state.aiLordCount}명",
+            badge = if (state.incorporatedLordCount > 0) "${state.aiLordCount}명 · 편입 ${state.incorporatedLordCount}"
+            else "${state.aiLordCount}명",
             accent = SlgColors.Steel
         ) {
             val partners = state.lords.filterNot { it.isPlayer }
@@ -93,8 +94,9 @@ fun RegionLordsScreen(
                             maxLines = 1
                         )
                         Text(
-                            "${lord.stronghold} · ⚔ ${lord.troops} · ${lord.traitIcon} ${lord.traitLabel}",
-                            color = SlgColors.Muted,
+                            if (lord.incorporated) "🏳 ${lord.stronghold} · 편입 완료"
+                            else "${lord.stronghold} · ⚔ ${lord.troops} · ${lord.traitIcon} ${lord.traitLabel}",
+                            color = if (lord.incorporated) SlgColors.Success else SlgColors.Muted,
                             fontSize = SlgType.MICRO,
                             maxLines = 1
                         )
@@ -104,20 +106,35 @@ fun RegionLordsScreen(
                         modifier = Modifier
                             .clip(RoundedCornerShape(9.dp))
                             .background(
-                                if (state.union.active) SlgColors.Success.copy(alpha = 0.16f)
-                                else SlgColors.Danger.copy(alpha = 0.9f)
+                                when {
+                                    lord.incorporated -> SlgColors.Surface
+                                    state.union.active -> SlgColors.Success.copy(alpha = 0.16f)
+                                    else -> SlgColors.Danger.copy(alpha = 0.9f)
+                                }
                             )
                             .border(
                                 1.dp,
-                                if (state.union.active) SlgColors.Success.copy(alpha = 0.6f) else SlgColors.Danger,
+                                when {
+                                    lord.incorporated -> SlgColors.Success.copy(alpha = 0.5f)
+                                    state.union.active -> SlgColors.Success.copy(alpha = 0.6f)
+                                    else -> SlgColors.Danger
+                                },
                                 RoundedCornerShape(9.dp)
                             )
-                            .clickable(enabled = !state.union.active) { onChallenge(lord.id) }
+                            .clickable(enabled = !state.union.active && !lord.incorporated) { onChallenge(lord.id) }
                             .padding(horizontal = 11.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            if (state.union.active) "연합" else "⚔ 교전",
-                            color = if (state.union.active) SlgColors.Success else Color(0xFF10131A),
+                            when {
+                                lord.incorporated -> "편입"
+                                state.union.active -> "연합"
+                                else -> "⚔ 교전"
+                            },
+                            color = when {
+                                lord.incorporated -> SlgColors.Success
+                                state.union.active -> SlgColors.Success
+                                else -> Color(0xFF10131A)
+                            },
                             fontSize = SlgType.LABEL,
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = 1
@@ -157,7 +174,9 @@ fun RegionLordsScreen(
                 "② 연합 기간에는 지역 안에서 서로 공격할 수 없습니다.\n" +
                 "③ 같은 기간 외부 인접 구역도 신규 거점을 공격·점령할 수 없습니다(보호막).\n" +
                 "④ 절기를 진행할 때마다 1턴씩 줄고, 0이 되면 교전이 열립니다.\n" +
-                "⑤ 대외 원정(무인기·교량 작전)은 보호 기간에도 나갈 수 있습니다.",
+                "⑤ 대외 원정(무인기·교량 작전)은 보호 기간에도 나갈 수 있습니다.\n" +
+                "⑥ 교전에서 상대 리더 병력을 0으로 만들면 추가 손실 없이 즉시 강제 편입되고, " +
+                "그 리더의 소속 영웅은 영토 탭 「처분 대기」에서 등용하거나 방출합니다.",
             accent = SlgColors.Success
         )
 

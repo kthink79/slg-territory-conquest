@@ -45,6 +45,8 @@ import com.game.slg.core.engine.StrategyBattleResult
 import com.game.slg.core.engine.WeaponTech
 import com.game.slg.core.engine.WeaponTechState
 import com.game.slg.core.hero.HeroDiscoveryEngine
+import com.game.slg.core.hero.HeroDispositionEngine
+import com.game.slg.core.hero.PendingDisposition
 import com.game.slg.core.hero.HeroEmploymentEngine
 import com.game.slg.core.hero.HeroVisit
 import com.game.slg.core.empire.EmploymentRequest
@@ -210,7 +212,9 @@ data class LordView(
     val grain: Int,
     val prestige: Int,
     val arms: String,
-    val isPlayer: Boolean = false
+    val isPlayer: Boolean = false,
+    /** 이 리더의 세력이 우리 연방에 편입됐는지 — 교전 버튼이 잠긴다 */
+    val incorporated: Boolean = false
 )
 
 object SlgWorld {
@@ -348,7 +352,9 @@ data class SlgGameState(
     val startMode: StartMode = StartMode.LORD,
     val pendingHeroPick: String? = null,
     val heroCareer: HeroCareer? = null,
-    val pendingEmployment: EmploymentRequest? = null
+    val pendingEmployment: EmploymentRequest? = null,
+    // ── 편입 세력 소속 영웅 처분 (등용·방출) ──
+    val pendingDisposition: List<PendingDisposition> = emptyList()
 ) {
     /** 배치된 영웅이 주는 실제 보너스 */
     val heroBonus: HeroBonus
@@ -491,6 +497,20 @@ data class SlgGameState(
     val isHeroStart: Boolean
         get() = startMode == StartMode.HERO && !isCampaignStarted && pendingHeroPick != null
 
+    /** 처분 대기 영웅 수 — 영토 탭 배지에 쓴다 */
+    val pendingDispositionCount: Int
+        get() = pendingDisposition.size
+
+    /** 처분 대기 영웅의 실제 영웅 정보 — 없어진 id 는 걸러낸다 */
+    val pendingHeroes: List<Pair<PendingDisposition, Hero>>
+        get() = pendingDisposition.mapNotNull { entry ->
+            HeroRoster.byId(entry.heroId)?.let { entry to it }
+        }
+
+    /** 편입(직할·속국·자치령)된 리더 수 */
+    val incorporatedLordCount: Int
+        get() = lords.count { !it.isPlayer && it.incorporated }
+
     companion object {
         const val NIGHT_MEETING_SUSPICION: Int = 50
     }
@@ -569,9 +589,15 @@ class SlgGameViewModel(
         val restoredTerritories = restore.territories.mapNotNull { decodeTerritory(it) }
             .ifEmpty { listOf(homeTerritory(startRegion, restore.troops)) }
         val restoredCodes = restoredTerritories.map { it.code }.toSet()
+        // 교전으로 깎은 적 리더 병력과 편입 상태 — 저장값이 있으면 그쪽이 우선
+        val savedFactionStates = restore.factionStates.mapNotNull { raw ->
+            val p = raw.split('|')
+            val id = p.getOrNull(0)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            id to ((p.getOrNull(1)?.toIntOrNull() ?: 0) to (p.getOrNull(2) == "true"))
+        }.toMap()
         val restoredFactions = factionsOf(startRegion, startLords, lord.id).map { faction ->
             val owned = restoredTerritories.firstOrNull { it.code == faction.territoryCode }
-            if (owned == null) faction
+            val fromTerritory = if (owned == null) faction
             else faction.copy(
                 incorporated = true,
                 absorbedBy = owned.absorbedBy,
@@ -583,14 +609,35 @@ class SlgGameViewModel(
                 tributePerSeason = owned.tributePerSeason,
                 troops = owned.troops
             )
+            val saved = savedFactionStates[faction.id] ?: return@map fromTerritory
+            fromTerritory.copy(
+                troops = saved.first.coerceAtLeast(0),
+                incorporated = fromTerritory.incorporated || saved.second
+            )
+        }
+        val restoredPending = restore.pendingDisposition.mapNotNull { PendingDisposition.decode(it) }
+        val restoredRoster = if (restore.ownedHeroes.isEmpty()) {
+            HeroRosterState.initial()
+        } else {
+            HeroRosterState.fromSaves(
+                owned = restore.ownedHeroes,
+                placed = restore.heroPlacements,
+                affinity = restore.heroAffinity,
+                discovered = restore.heroDiscovery
+            )
         }
         return base.copy(
             stage = GameStage.PLAY,
             introSeen = true,
             playerLordId = lord.id,
             selectedLordId = lord.id,
-            lords = base.lords.map {
-                if (it.id == lord.id) it.copy(name = "이광수", isPlayer = true) else it
+            lords = base.lords.map { view ->
+                if (view.id == lord.id) view.copy(name = "이광수", isPlayer = true)
+                else {
+                    val faction = restoredFactions.firstOrNull { it.id == "faction_${view.id}" }
+                    if (faction == null) view
+                    else view.copy(troops = faction.troops, incorporated = faction.incorporated)
+                }
             },
             registeredLords = 1,
             gold = restore.gold,
@@ -612,15 +659,8 @@ class SlgGameViewModel(
                 homeTroops = restore.troops
             ),
             selectedTerritoryCode = startRegion.code,
-            heroes = if (restore.ownedHeroes.isEmpty()) {
-                HeroRosterState.initial()
-            } else {
-                HeroRosterState.fromSaves(
-                    owned = restore.ownedHeroes,
-                    placed = restore.heroPlacements,
-                    affinity = restore.heroAffinity
-                )
-            },
+            heroes = HeroDispositionEngine.markCaptured(restoredRoster, restoredPending),
+            pendingDisposition = restoredPending,
             union = RegionUnion(
                 regionCode = startRegion.code,
                 regionName = startRegion.name,
@@ -640,7 +680,8 @@ class SlgGameViewModel(
                 HeroCareer(
                     heroId = career.substringBefore('|'),
                     heroName = career.substringAfter('|').substringBefore('|'),
-                    employerLordId = "ai_${startRegion.code}_1",
+                    employerLordId = career.split('|').getOrNull(6)?.takeIf { it.isNotBlank() }
+                        ?: "ai_${startRegion.code}_1",
                     employerLordName = career.split('|').getOrNull(2) ?: "리더",
                     employerTerritory = startRegion.name,
                     loyalty = career.split('|').getOrNull(3)?.toIntOrNull() ?: 70,
@@ -687,8 +728,13 @@ class SlgGameViewModel(
                 weaponTech = state.weaponTech.levels.mapKeys { it.key.name },
                 startMode = state.startMode.name,
                 heroCareer = state.heroCareer?.let {
-                    "${it.heroId}|${it.heroName}|${it.employerLordName}|${it.loyalty}|${it.merit}|${it.privateTroops}"
-                }
+                    "${it.heroId}|${it.heroName}|${it.employerLordName}|${it.loyalty}|${it.merit}|${it.privateTroops}|${it.employerLordId}"
+                },
+                factionStates = state.factions.map { "${it.id}|${it.troops}|${it.incorporated}" },
+                pendingDisposition = state.pendingDisposition.map { it.encode() },
+                heroDiscovery = state.heroes.records.values
+                    .filter { !it.owned && it.stage != HeroStage.UNDISCOVERED }
+                    .associate { it.id to "${it.stage.name}|${it.affinity}" }
             )
         )
     }
@@ -1006,6 +1052,11 @@ class SlgGameViewModel(
             val newTroops = (playerLord.troops + levies).coerceAtMost(cap)
             val message = "[절기 순환: ${season.displayName}] ${result.message}" + heroNote + baseNote +
                 empireNote + mercNote
+            // 처분하지 않은 편입 세력 소속 영웅은 다음 절기로 넘어가며 자동으로 재야가 된다(방치 페널티 없음)
+            val (releasedRoster, releasedCount) = HeroDispositionEngine.autoRelease(s.heroes, s.pendingDisposition)
+            val pendingNote = if (releasedCount > 0) {
+                "\n[처분] 절기가 바뀌어 처분 대기 영웅 ${releasedCount}명을 재야로 돌려보냈습니다."
+            } else ""
             season = nextSeason
 
             // 다음 절기에 찾아올 영웅 — 명성·민심·절기 조건을 만족하면 방문 이벤트가 열린다
@@ -1030,6 +1081,8 @@ class SlgGameViewModel(
                 territories = empire.territories,
                 mercenaries = mercMaintenance.bands,
                 heroVisit = visit,
+                heroes = releasedRoster,
+                pendingDisposition = if (releasedCount > 0) emptyList() else s.pendingDisposition,
                 boostUses = emptyMap(),
                 union = unionNext,
                 command = gained,
@@ -1043,8 +1096,8 @@ class SlgGameViewModel(
                     )
                 } else s.mapNodes,
                 levelUpMessage = if (gained.level != before.level) levelUpText(gained) else s.levelUpMessage,
-                log = (s.log + message + listOfNotNull(unionMessage)).takeLast(8),
-                statusMessage = message
+                log = (s.log + message + pendingNote + listOfNotNull(unionMessage)).takeLast(8),
+                statusMessage = message + pendingNote
             )
         }
         persist()
@@ -1734,6 +1787,85 @@ class SlgGameViewModel(
         persist()
     }
 
+    /**
+     * 처분 대기 영웅 등용 — 등급 기준가 20% 할인. 빈 슬롯이 있으면 그 자리에 바로 앉는다.
+     */
+    fun recruitPendingHero(heroId: String) {
+        val s = _uiState.value
+        if (s.pendingDisposition.none { it.heroId == heroId }) {
+            _uiState.update { it.copy(empireMessage = "[등용] 처분 대기 목록에 없는 영웅입니다.") }
+            return
+        }
+        val result = HeroDispositionEngine.recruit(s.heroes, heroId, s.gold)
+        if (!result.success) {
+            _uiState.update { it.copy(empireMessage = result.message, statusMessage = result.message) }
+            return
+        }
+        _uiState.update { state ->
+            state.copy(
+                heroes = result.roster,
+                gold = (state.gold + result.goldDelta).coerceAtLeast(0),
+                prestige = (state.prestige + result.prestigeDelta).coerceIn(0, 100),
+                pendingDisposition = state.pendingDisposition.filterNot { it.heroId == heroId },
+                heroMessage = result.message,
+                empireMessage = result.message,
+                statusMessage = result.message,
+                log = (state.log + result.message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 처분 대기 영웅 방출 — 재야로 돌려보낸다 (호감도 -15 · 명성 -1) */
+    fun releasePendingHero(heroId: String) {
+        val s = _uiState.value
+        if (s.pendingDisposition.none { it.heroId == heroId }) {
+            _uiState.update { it.copy(empireMessage = "[방출] 처분 대기 목록에 없는 영웅입니다.") }
+            return
+        }
+        val result = HeroDispositionEngine.release(s.heroes, heroId)
+        _uiState.update { state ->
+            state.copy(
+                heroes = result.roster,
+                prestige = (state.prestige + result.prestigeDelta).coerceIn(0, 100),
+                pendingDisposition = state.pendingDisposition.filterNot { it.heroId == heroId },
+                heroMessage = result.message,
+                empireMessage = result.message,
+                statusMessage = result.message,
+                log = (state.log + result.message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 내 영웅 내보내기 — 태수로 앉아 있으면 그 영지 연결부터 해제한다 */
+    fun dismissHero(heroId: String) {
+        val s = _uiState.value
+        val result = HeroDispositionEngine.dismiss(s.heroes, heroId)
+        if (!result.success) {
+            _uiState.update { it.copy(heroMessage = result.message, statusMessage = result.message) }
+            return
+        }
+        val clearedTerritories = s.territories.map {
+            if (it.viceroyHeroId == heroId) it.copy(viceroyHeroId = null, viceroyName = null, viceroyRole = null)
+            else it
+        }
+        val wasViceroy = clearedTerritories != s.territories
+        val message = result.message + if (wasViceroy) " (태수 직도 함께 해제됐습니다.)" else ""
+        _uiState.update { state ->
+            state.copy(
+                heroes = result.roster,
+                territories = clearedTerritories,
+                prestige = (state.prestige + result.prestigeDelta).coerceIn(0, 100),
+                heroMessage = message,
+                empireMessage = message,
+                statusMessage = message,
+                log = (state.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
     // ──────────────────────────────────────────────────────────────
     // 영토 흡수 · 일임 통치 · 병력/용병
     // ──────────────────────────────────────────────────────────────
@@ -1846,10 +1978,14 @@ class SlgGameViewModel(
                 if (s.territories.any { it.code == newTerritory.code }) s.territories
                 else s.territories + newTerritory
             } ?: s.territories
+            val (regularLeft, mercsLeft) = applyLosses(s.troops, s.mercenaries, outcome.troopLoss)
+            val captured = if (outcome.capturedHeroes.isEmpty()) emptyList()
+            else HeroDispositionEngine.capturesOf(faction)
             s.copy(
                 gold = (s.gold + outcome.goldDelta).coerceAtLeast(0),
                 food = (s.food + outcome.foodDelta).coerceAtLeast(0),
-                troops = (s.troops - outcome.troopLoss).coerceAtLeast(0),
+                troops = regularLeft,
+                mercenaries = mercsLeft,
                 prestige = (s.prestige + outcome.prestigeDelta).coerceIn(0, 100),
                 morale = (s.morale + outcome.moraleDelta).coerceIn(0, 100),
                 factions = s.factions.map { if (it.id == faction.id) outcome.faction else it },
@@ -1859,9 +1995,14 @@ class SlgGameViewModel(
                 empireMessage = outcome.message,
                 alliedTerritories = s.alliedTerritories + 1,
                 lords = s.lords.map { lord ->
-                    if (faction.id == "faction_${lord.id}") lord.copy(troops = outcome.faction.troops)
+                    if (faction.id == "faction_${lord.id}") lord.copy(
+                        troops = outcome.faction.troops,
+                        incorporated = outcome.faction.incorporated
+                    )
                     else lord
                 },
+                heroes = HeroDispositionEngine.markCaptured(s.heroes, captured),
+                pendingDisposition = s.pendingDisposition + captured,
                 log = (s.log + outcome.message).takeLast(8),
                 statusMessage = outcome.message
             )
@@ -2412,6 +2553,14 @@ class SlgGameViewModel(
         _uiState.update { s ->
             val target = s.lords.firstOrNull { it.id == lordId && !it.isPlayer }
                 ?: return@update s.copy(statusMessage = "[교전] 명부에 없는 리더입니다.")
+            if (target.incorporated) {
+                val message = "[교전] ${target.name} 리더는 이미 우리 연방에 편입된 세력입니다. " +
+                    "교전 대신 영토 탭에서 운영하세요."
+                return@update s.copy(
+                    statusMessage = message,
+                    log = (s.log + message).takeLast(8)
+                )
+            }
             val verdict = s.attackVerdict(AttackScope.SAME_REGION, AttackSide.EXPEDITION)
             if (!verdict.allowed) {
                 val message = RegionUnionEngine.unionBlockMessage(s.union)
@@ -2460,18 +2609,52 @@ class SlgGameViewModel(
                 enemyLossPercent = (strat.enemyLossRatio * 100).toInt()
             )
             val (regularLeft, mercsLeft) = applyLosses(s.troops, s.mercenaries, ourLosses)
+            val nextTroops = (target.troops - theirLosses).coerceAtLeast(0)
+            val factionId = "faction_${target.id}"
+            val faction = s.factions.firstOrNull { it.id == factionId }
+            // 상대 병력이 0 이 되면 추가 손실 없이 즉시 강제 편입 (A안 — 같은 지역 리더 전체 대상)
+            val forced = if (nextTroops <= 0 && faction != null && !faction.incorporated) {
+                val context = s.empireContext().copy(troops = regularLeft + mercsLeft.sumOf { it.troops })
+                AbsorptionEngine.forceConquest(faction, context)
+            } else null
+            val annexed = forced?.success == true
+            val captured = if (annexed) {
+                HeroDispositionEngine.capturesOf(faction!!)
+            } else emptyList()
+            val finalMessage = if (annexed) {
+                message + "\n" + forced!!.message
+            } else message
+            val territories = if (annexed) {
+                val newTerritory = forced!!.territory
+                if (newTerritory == null || s.territories.any { it.code == newTerritory.code }) s.territories
+                else s.territories + newTerritory
+            } else s.territories
             s.copy(
                 troops = regularLeft,
                 mercenaries = mercsLeft,
-                prestige = (s.prestige + if (win) 4 else -3).coerceIn(0, 100),
-                morale = (s.morale + if (win) 2 else -3).coerceIn(0, 100),
+                gold = (s.gold + (forced?.goldDelta ?: 0)).coerceAtLeast(0),
+                prestige = (s.prestige + (if (win) 4 else -3) + (forced?.prestigeDelta ?: 0)).coerceIn(0, 100),
+                morale = (s.morale + (if (win) 2 else -3) + (forced?.moraleDelta ?: 0)).coerceIn(0, 100),
                 lords = s.lords.map { lord ->
-                    if (lord.id == target.id) lord.copy(troops = (lord.troops - theirLosses).coerceAtLeast(0))
-                    else lord
+                    if (lord.id != target.id) lord
+                    else lord.copy(troops = if (annexed) 0 else nextTroops, incorporated = annexed)
                 },
+                factions = s.factions.map { current ->
+                    when {
+                        current.id != factionId -> current
+                        annexed -> forced!!.faction
+                        else -> current.copy(troops = nextTroops)
+                    }
+                },
+                territories = territories,
+                selectedManagedCode = if (annexed) forced!!.territory?.code ?: s.selectedManagedCode
+                else s.selectedManagedCode,
+                heroes = HeroDispositionEngine.markCaptured(s.heroes, captured),
+                pendingDisposition = s.pendingDisposition + captured,
+                lastAbsorption = if (annexed) forced else s.lastAbsorption,
                 lastReport = report,
-                log = (s.log + message).takeLast(8),
-                statusMessage = message
+                log = (s.log + finalMessage + listOfNotNull(forced?.message?.takeIf { annexed })).takeLast(8),
+                statusMessage = finalMessage
             )
         }
         persist()
@@ -2571,6 +2754,14 @@ class SlgGameViewModel(
      */
     private fun factionsOf(area: RegionArea, lords: List<AiLordProfile>, playerLordId: String? = null): List<Faction> {
         val perLord = (area.population / area.lordCapacity.coerceAtLeast(1)).coerceAtLeast(500)
+        // 소속 영웅 — 인계받은 리더까지 포함한 전원 순서로 배정해, 내가 누구를 골라도
+        // 다른 리더의 소속이 바뀌지 않게 한다(lord.id 시드라 재시작해도 같다).
+        val assigned = mutableSetOf<String>()
+        val heroesByLord = lords.associate { lord ->
+            val ids = HeroDispositionEngine.heroesForLord(lord.id, assigned)
+            assigned += ids
+            lord.id to ids
+        }
         return lords.filter { it.id != playerLordId }.mapIndexed { index, lord ->
             Faction(
                 id = "faction_${lord.id}",
@@ -2589,7 +2780,8 @@ class SlgGameViewModel(
                     lord.prestige >= 45 -> FactionRelation.NEUTRAL
                     else -> FactionRelation.WARY
                 },
-                commonEnemy = index % 3 == 0
+                commonEnemy = index % 3 == 0,
+                heroIds = heroesByLord[lord.id].orEmpty()
             )
         }
     }

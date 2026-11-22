@@ -109,7 +109,7 @@ object AbsorptionEngine {
                 faction = faction
             )
         }
-        return when (method) {
+        val outcome = when (method) {
             AbsorptionMethod.CONQUEST -> conquest(faction, ctx)
             AbsorptionMethod.SUBVERSION -> subversion(faction, ctx)
             AbsorptionMethod.TRIBUTE_PRESSURE -> tributePressure(faction, ctx)
@@ -117,6 +117,56 @@ object AbsorptionEngine {
             AbsorptionMethod.ECONOMIC_DEPENDENCE -> economicAid(faction, ctx)
             AbsorptionMethod.GOODWILL_AUTONOMY -> goodwill(faction, ctx)
         }
+        // 실제로 편입된 경우에만 소속 영웅이 처분 대기로 넘어간다 (경제 원조 1회차 같은 중간 단계 제외)
+        return if (outcome.absorbed && outcome.capturedHeroes.isEmpty()) {
+            outcome.copy(capturedHeroes = faction.heroIds)
+        } else outcome
+    }
+
+    /**
+     * 강제 편입 — 같은 지역 리더와 교전해 병력을 전부 소진시켰을 때, 추가 손실 없이 바로 편입한다.
+     *
+     * 교전에서 이미 아군 손실을 치렀으므로 전투 흡수의 12% 를 다시 물리지 않는다.
+     * 대상 세력은 0병력·편입 완료로 정리되고, 직할 영지가 새로 생긴다.
+     */
+    fun forceConquest(faction: Faction, ctx: EmpireContext): AbsorptionOutcome {
+        if (faction.incorporated) {
+            return AbsorptionOutcome(
+                success = false,
+                method = AbsorptionMethod.CONQUEST,
+                message = "[강제 편입] ${faction.name}은(는) 이미 우리 연방에 편입됐습니다.",
+                faction = faction
+            )
+        }
+        val territory = territoryOf(
+            faction = faction,
+            status = TerritoryStatus.DIRECT,
+            morale = 30,
+            development = 20,
+            troops = 0,
+            absorbedBy = "교전 강제 편입"
+        )
+        val loot = faction.gold / 2
+        return AbsorptionOutcome(
+            success = true,
+            method = AbsorptionMethod.CONQUEST,
+            message = "[강제 편입] ${faction.name} 리더의 병력을 전멸시켰습니다. " +
+                "${faction.territoryName}이(가) 직할로 넘어왔습니다 — 추가 손실 없음 · " +
+                "노획 ${"%,d".format(loot)}G · 명성 +6 (소속 영웅 ${faction.heroIds.size}명)",
+            faction = faction.copy(
+                troops = 0,
+                incorporated = true,
+                absorbedBy = "교전 강제 편입",
+                relation = FactionRelation.VASSAL
+            ),
+            goldDelta = loot,
+            prestigeDelta = 6,
+            moraleDelta = -2,
+            territory = territory,
+            troopLoss = 0,
+            lootLabel = "노획 ${"%,d".format(loot)}G",
+            capturedHeroes = faction.heroIds
+        )
     }
 
     private fun conquest(faction: Faction, ctx: EmpireContext): AbsorptionOutcome {

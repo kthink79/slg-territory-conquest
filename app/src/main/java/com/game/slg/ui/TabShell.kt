@@ -122,7 +122,8 @@ fun SlgTabSurface(
                     tabIndex = navigation.sub,
                     onSearch = { viewModel.searchHeroes() },
                     onAcceptVisit = { viewModel.acceptHeroVisit() },
-                    onDeclineVisit = { viewModel.declineHeroVisit() }
+                    onDeclineVisit = { viewModel.declineHeroVisit() },
+                    onDismiss = { viewModel.dismissHero(it) }
                 )
 
                 MainTab.WAR -> WarSurface(state, navigation.sub, viewModel)
@@ -142,6 +143,8 @@ fun SlgTabSurface(
                     onGatherPrivateTroops = { viewModel.gatherPrivateTroops() },
                     onReportMerit = { viewModel.reportMerit() },
                     onDeclareIndependence = { viewModel.declareIndependence() },
+                    onRecruitPending = { viewModel.recruitPendingHero(it) },
+                    onReleasePending = { viewModel.releasePendingHero(it) },
                     tabIndex = navigation.sub
                 )
             }

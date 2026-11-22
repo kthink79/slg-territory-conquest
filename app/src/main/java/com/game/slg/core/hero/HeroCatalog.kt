@@ -218,7 +218,12 @@ data class HeroRecord(
     val stage: HeroStage = HeroStage.UNDISCOVERED,
     val affinity: Int = 0,
     /** 배치된 역할 — null 이면 미배치 */
-    val assignedRole: HeroRole? = null
+    val assignedRole: HeroRole? = null,
+    /**
+     * 소속 리더 id — 다른 세력 밑에 있거나 처분 대기 중일 때 채워진다.
+     * 우리 로스터에 들어오면(등용·고용) null 이 된다.
+     */
+    val allegianceLordId: String? = null
 ) {
     val owned: Boolean get() = stage.owned
 }
@@ -231,6 +236,9 @@ data class HeroRosterState(
 
     private fun with(record: HeroRecord): HeroRosterState =
         copy(records = records + (record.id to record))
+
+    /** 기록 1건을 바꾼 새 상태 — 처분 엔진이 쓴다 */
+    fun withRecord(record: HeroRecord): HeroRosterState = with(record)
 
     val ownedHeroes: List<Hero> get() = HeroRoster.ALL.filter { recordOf(it.id).owned }
 
@@ -277,11 +285,16 @@ data class HeroRosterState(
             return roster
         }
 
-        /** 저장값에서 복원 — 모르는 id 는 버린다. 예전 2자리 id(`hero_02`)도 받아 준다. */
+        /**
+         * 저장값에서 복원 — 모르는 id 는 버린다. 예전 2자리 id(`hero_02`)도 받아 준다.
+         *
+         * @param discovered 보유하지 않은 영웅의 진행 기록 — id → "STAGE|affinity" (탐색·설득·재야 상태 보존)
+         */
         fun fromSaves(
             owned: Collection<String>,
             placed: Map<String, String>,
-            affinity: Map<String, Int> = emptyMap()
+            affinity: Map<String, Int> = emptyMap(),
+            discovered: Map<String, String> = emptyMap()
         ): HeroRosterState {
             // 옛 저장값의 id 표기를 3자리 id 로 맞춘다
             fun canonical(raw: String): String? = HeroRoster.byId(raw)?.id
@@ -304,6 +317,19 @@ data class HeroRosterState(
                         affinity = affinityById[hero.id] ?: 80,
                         assignedRole = role
                     )
+                )
+            }
+            // 보유하지 않은 영웅의 탐색·설득·재야 상태도 되살린다 (처분으로 재야가 된 영웅 포함)
+            discovered.entries.mapNotNull { (rawId, raw) ->
+                canonical(rawId)?.let { id -> id to raw }
+            }.forEach { (id, raw) ->
+                if (roster.recordOf(id).owned) return@forEach
+                val stage = HeroStage.entries.firstOrNull { it.name == raw.substringBefore("|") }
+                    ?: return@forEach
+                if (stage == HeroStage.HIRED) return@forEach
+                val saved = raw.substringAfter("|", "").toIntOrNull() ?: 0
+                roster = roster.with(
+                    HeroRecord(id = id, stage = stage, affinity = saved.coerceIn(0, 100))
                 )
             }
             return roster

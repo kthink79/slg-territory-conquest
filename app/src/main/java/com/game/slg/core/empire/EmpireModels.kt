@@ -132,7 +132,12 @@ data class Faction(
     /** 공동 적 여부 (연방 결성 조건) */
     val commonEnemy: Boolean = false,
     /** 절기 조공 */
-    val tributePerSeason: Int = 0
+    val tributePerSeason: Int = 0,
+    /**
+     * 이 세력 밑에 있는 영웅 id 목록 — lord.id 시드로 결정적으로 2~4명.
+     * 편입되면 이 영웅들이 처분 대기로 넘어간다.
+     */
+    val heroIds: List<String> = emptyList()
 ) {
     val troopRatioAgainstUs: Double get() = troops.toDouble()
 
@@ -201,7 +206,9 @@ data class AbsorptionOutcome(
     /** 이번에 받은 조공·노획 */
     val lootLabel: String = "",
     /** 전투 흡수에서 잃은 아군 병력 */
-    val troopLoss: Int = 0
+    val troopLoss: Int = 0,
+    /** 편입으로 처분 대기에 넘어간 상대 소속 영웅 id */
+    val capturedHeroes: List<String> = emptyList()
 ) {
     val absorbed: Boolean get() = success && territory != null
 }

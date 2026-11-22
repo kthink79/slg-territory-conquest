@@ -40,8 +40,14 @@ data class CampaignSave(
     val weaponTech: Map<String, Int> = emptyMap(),
     /** LORD / HERO */
     val startMode: String = "LORD",
-    /** 영웅 스타트 경력 — "heroId|heroName|lordName|loyalty|merit|privateTroops" */
-    val heroCareer: String? = null
+    /** 영웅 스타트 경력 — "heroId|heroName|lordName|loyalty|merit|privateTroops|employerLordId" */
+    val heroCareer: String? = null,
+    /** 적 리더 세력 상태 — "factionId|troops|incorporated" (교전으로 깎은 병력·편입 상태 유지) */
+    val factionStates: List<String> = emptyList(),
+    /** 처분 대기 영웅 — "heroId|lordId|lordName" */
+    val pendingDisposition: List<String> = emptyList(),
+    /** 보유하지 않은 영웅의 진행 기록 — heroId → "STAGE|affinity" */
+    val heroDiscovery: Map<String, String> = emptyMap()
 )
 
 interface CampaignStore {
