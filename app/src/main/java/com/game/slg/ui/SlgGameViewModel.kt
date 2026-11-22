@@ -2653,7 +2653,7 @@ class SlgGameViewModel(
                 pendingDisposition = s.pendingDisposition + captured,
                 lastAbsorption = if (annexed) forced else s.lastAbsorption,
                 lastReport = report,
-                log = (s.log + finalMessage + listOfNotNull(forced?.message?.takeIf { annexed })).takeLast(8),
+                log = (s.log + finalMessage).takeLast(8),
                 statusMessage = finalMessage
             )
         }
