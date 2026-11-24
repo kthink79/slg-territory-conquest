@@ -46,13 +46,14 @@ fun TerritoryScreen(
     onDismissCeremony: () -> Unit,
     tabIndex: Int = 0,
     onSelectTerritory: (String) -> Unit = {},
+    onOpenRegionDetail: (String) -> Unit = {},
     onBuildFacility: (FacilityType) -> BuildValidation = { BuildValidation(false, 0) }
 ) {
     SlgScreenFrame {
         PromotionCeremonyBanner(state = state, onDismissCeremony = onDismissCeremony)
         when (TerritoryTab.entries[tabIndex.coerceIn(0, TerritoryTab.entries.lastIndex)]) {
             TerritoryTab.HOME -> TerritoryOverview(state)
-            TerritoryTab.STATS -> TerritoryStats(state, onSelectTerritory)
+            TerritoryTab.STATS -> TerritoryStats(state, onSelectTerritory, onOpenRegionDetail)
             TerritoryTab.SEASON -> SeasonPanel(state, onAdvanceSeason)
             TerritoryTab.FACILITIES -> FacilityPanel(state, onBuildFacility)
         }
@@ -200,7 +201,11 @@ private fun TerritoryOverview(state: SlgGameState) {
 }
 
 @Composable
-private fun TerritoryStats(state: SlgGameState, onSelectTerritory: (String) -> Unit) {
+private fun TerritoryStats(
+    state: SlgGameState,
+    onSelectTerritory: (String) -> Unit,
+    onOpenRegionDetail: (String) -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SlgPill("해금 ${state.unlockedNodeCount}", SlgColors.Success)
@@ -265,6 +270,23 @@ private fun TerritoryStats(state: SlgGameState, onSelectTerritory: (String) -> U
                         }
                     }
                     if (selected) SlgPill("선택", SlgColors.Brass, filled = true)
+                    Spacer(Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(SlgColors.Steel.copy(alpha = 0.16f))
+                            .border(1.dp, SlgColors.Steel.copy(alpha = 0.5f), RoundedCornerShape(50))
+                            .clickable { onOpenRegionDetail(node.code) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            "🔍 확대",
+                            color = SlgColors.Steel,
+                            fontSize = SlgType.MICRO,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         SlgExpand(

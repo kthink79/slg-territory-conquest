@@ -210,6 +210,7 @@ private fun DomainSurface(
             onDismissCeremony = { viewModel.dismissCeremony() },
             tabIndex = 0,
             onSelectTerritory = { viewModel.selectTerritory(it) },
+            onOpenRegionDetail = { viewModel.openRegionDetail(it) },
             onBuildFacility = { viewModel.buildFacility(it) }
         )
 
@@ -219,6 +220,7 @@ private fun DomainSurface(
             onDismissCeremony = { viewModel.dismissCeremony() },
             tabIndex = 1,
             onSelectTerritory = { viewModel.selectTerritory(it) },
+            onOpenRegionDetail = { viewModel.openRegionDetail(it) },
             onBuildFacility = { viewModel.buildFacility(it) }
         )
 
@@ -228,6 +230,7 @@ private fun DomainSurface(
             onDismissCeremony = { viewModel.dismissCeremony() },
             tabIndex = 3,
             onSelectTerritory = { viewModel.selectTerritory(it) },
+            onOpenRegionDetail = { viewModel.openRegionDetail(it) },
             onBuildFacility = { viewModel.buildFacility(it) }
         )
 
@@ -237,6 +240,7 @@ private fun DomainSurface(
             onDismissCeremony = { viewModel.dismissCeremony() },
             tabIndex = 2,
             onSelectTerritory = { viewModel.selectTerritory(it) },
+            onOpenRegionDetail = { viewModel.openRegionDetail(it) },
             onBuildFacility = { viewModel.buildFacility(it) }
         )
 

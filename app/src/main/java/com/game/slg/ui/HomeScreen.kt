@@ -80,7 +80,8 @@ fun SlgMainScreen(
     onAdvanceSeason: () -> Unit,
     onOpenInfo: () -> Unit,
     onDismissLevelUp: () -> Unit = {},
-    onBoost: (String) -> Unit = {}
+    onBoost: (String) -> Unit = {},
+    onOpenRegionDetail: () -> Unit = {}
 ) {
     val alerts = StatusAlertBuilder.build(state)
     var boostSheet by remember { mutableStateOf<ResourceKind?>(null) }
@@ -99,7 +100,8 @@ fun SlgMainScreen(
                     state = state,
                     viewport = viewport,
                     onViewportChange = onViewportChange,
-                    onSelectTerritory = onSelectTerritory
+                    onSelectTerritory = onSelectTerritory,
+                    onOpenRegionDetail = onOpenRegionDetail
                 )
                 if (state.levelUpMessage != null) {
                     LevelUpBanner(
@@ -113,7 +115,8 @@ fun SlgMainScreen(
                 state = state,
                 alerts = alerts,
                 onOpenTab = onOpenTab,
-                onAdvanceSeason = onAdvanceSeason
+                onAdvanceSeason = onAdvanceSeason,
+                onOpenRegionDetail = onOpenRegionDetail
             )
         }
 
@@ -269,7 +272,8 @@ private fun HomeStatusStrip(
     state: SlgGameState,
     alerts: List<StatusAlert>,
     onOpenTab: (MainTab, Int) -> Unit,
-    onAdvanceSeason: () -> Unit
+    onAdvanceSeason: () -> Unit,
+    onOpenRegionDetail: () -> Unit
 ) {
     val selected = state.selectedTerritory
     Column(
@@ -348,10 +352,26 @@ private fun HomeStatusStrip(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(9.dp))
+                    .background(SlgColors.Steel.copy(alpha = 0.16f))
+                    .border(1.dp, SlgColors.Steel.copy(alpha = 0.5f), RoundedCornerShape(9.dp))
+                    .clickable { onOpenRegionDetail() }
+                    .padding(horizontal = 9.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    "🔍 확대",
+                    color = SlgColors.Steel,
+                    fontSize = SlgType.MICRO,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+            Spacer(Modifier.width(5.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(9.dp))
                     .background(SlgColors.Success.copy(alpha = 0.16f))
                     .border(1.dp, SlgColors.Success.copy(alpha = 0.5f), RoundedCornerShape(9.dp))
                     .clickable { onAdvanceSeason() }
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .padding(horizontal = 9.dp, vertical = 6.dp)
             ) {
                 Text(
                     "🌾 절기",

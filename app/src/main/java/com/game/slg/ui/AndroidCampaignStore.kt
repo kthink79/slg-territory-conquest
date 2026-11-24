@@ -70,7 +70,9 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
                     if (index <= 0) null
                     else entry.substring(0, index) to entry.substring(index + 1)
                 }
-                .toMap()
+                .toMap(),
+            lordStates = prefs.getStringSet(KEY_LORD_STATES, emptySet()).orEmpty().sorted(),
+            seasonTurn = prefs.getInt(KEY_SEASON_TURN, 0)
         )
     }
 
@@ -119,6 +121,8 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
                 KEY_HERO_DISCOVERY,
                 save.heroDiscovery.map { (id, raw) -> "$id|$raw" }.toSet()
             )
+            .putStringSet(KEY_LORD_STATES, save.lordStates.toSet())
+            .putInt(KEY_SEASON_TURN, save.seasonTurn)
             .apply()
     }
 
@@ -150,5 +154,7 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
         private const val KEY_FACTIONS = "faction_states"
         private const val KEY_PENDING_DISPOSITION = "pending_disposition"
         private const val KEY_HERO_DISCOVERY = "hero_discovery"
+        private const val KEY_LORD_STATES = "lord_states"
+        private const val KEY_SEASON_TURN = "season_turn"
     }
 }

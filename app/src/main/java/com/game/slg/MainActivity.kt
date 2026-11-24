@@ -32,6 +32,7 @@ import com.game.slg.ui.SlgBottomNav
 import com.game.slg.ui.SlgColors
 import com.game.slg.ui.SlgGameState
 import com.game.slg.ui.SlgGameViewModel
+import com.game.slg.ui.RegionDetailMapOverlay
 import com.game.slg.ui.SlgInfoOverlay
 import com.game.slg.ui.SlgIntroScreen
 import com.game.slg.ui.SlgMainScreen
@@ -83,6 +84,10 @@ fun SlgApp(viewModel: SlgGameViewModel) {
 
     // 📊 정보 모달이 열려 있으면 뒤로가기는 모달만 닫는다
     BackHandler(enabled = infoOpen) { infoOpen = false }
+    // 지역 세부맵이 열려 있으면 뒤로가기는 세부맵만 닫는다
+    BackHandler(enabled = !infoOpen && state.regionDetailCode != null) {
+        viewModel.closeRegionDetail()
+    }
     // 상세 탭에서 뒤로가기 → 지도
     BackHandler(enabled = !infoOpen && state.stage == GameStage.PLAY && !navigation.isHome) {
         viewModel.backToMain()
@@ -174,7 +179,8 @@ private fun PlaySurface(
                     onAdvanceSeason = { viewModel.advanceSeason() },
                     onOpenInfo = { onInfoOpenChange(true) },
                     onDismissLevelUp = { viewModel.dismissLevelUp() },
-                    onBoost = { viewModel.boostResource(it) }
+                    onBoost = { viewModel.boostResource(it) },
+                    onOpenRegionDetail = { viewModel.openRegionDetail() }
                 )
             } else {
                 SlgTabSurface(
@@ -192,6 +198,19 @@ private fun PlaySurface(
             badgeOf = { tab -> alerts.count { it.target == tab } },
             onSelect = { tab ->
                 if (tab == MainTab.MAP) viewModel.backToMain() else viewModel.openTab(tab, 0)
+            }
+        )
+    }
+
+    // 지역 세부맵 — 지도·탭 어느 화면에서든 위에 뜬다
+    state.regionDetailBoard?.let { board ->
+        RegionDetailMapOverlay(
+            board = board,
+            unionActive = state.union.active,
+            onClose = { viewModel.closeRegionDetail() },
+            onChallenge = { id ->
+                viewModel.closeRegionDetail()
+                viewModel.challengeRegionLord(id)
             }
         )
     }

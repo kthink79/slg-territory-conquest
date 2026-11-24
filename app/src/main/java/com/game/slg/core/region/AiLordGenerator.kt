@@ -39,7 +39,13 @@ data class AiLordProfile(
     val grain: Int,
     val gold: Int,
     val prestige: Int,
-    val arm: CombatArm
+    val arm: CombatArm,
+    /** 다른 AI 리더에게 병합·종속된 경우 우두머리 리더 id */
+    val masterId: String? = null,
+    /** 병합·종속 형태 — null 이면 독립 세력 */
+    val bond: LeaderBond? = null,
+    /** 최근 절기의 활동 한 줄 — 세부맵 카드에 그대로 보인다 */
+    val activity: String = ""
 ) {
     /** 명부 표시용 이름 */
     val title: String get() = "$name 리더"

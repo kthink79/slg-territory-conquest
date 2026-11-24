@@ -59,6 +59,39 @@ fun RegionLordsScreen(
         }
 
         SlgSectionCard(
+            title = "AI 리더 동향",
+            badge = if (state.aiNews.isEmpty()) "아직 기록 없음" else "최근 절기",
+            accent = SlgColors.Violet
+        ) {
+            if (state.aiNews.isEmpty()) {
+                Text(
+                    "절기를 넘기면 같은 지역 리더들이 성장·모병·병합·종속으로 세력을 넓힙니다. " +
+                        "결과는 여기와 지도 「확대」 세부맵에 남습니다.",
+                    color = SlgColors.Muted,
+                    fontSize = SlgType.MICRO,
+                    lineHeight = SlgLine.MICRO
+                )
+            } else {
+                state.aiNews.forEach { line ->
+                    Text(
+                        line,
+                        color = SlgColors.Text.copy(alpha = 0.9f),
+                        fontSize = SlgType.MICRO,
+                        lineHeight = SlgLine.MICRO
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                SlgPill("병합 ${state.lords.count { it.bond == com.game.slg.core.region.LeaderBond.MERGE }}명", SlgColors.Danger)
+                SlgPill(
+                    "종속 ${state.lords.count { it.bond == com.game.slg.core.region.LeaderBond.SUBORDINATION }}명",
+                    SlgColors.Violet
+                )
+                SlgPill("편입 ${state.incorporatedLordCount}명", SlgColors.Success)
+            }
+        }
+
+        SlgSectionCard(
             title = "같은 지역 리더",
             badge = if (state.incorporatedLordCount > 0) "${state.aiLordCount}명 · 편입 ${state.incorporatedLordCount}"
             else "${state.aiLordCount}명",
@@ -94,9 +127,16 @@ fun RegionLordsScreen(
                             maxLines = 1
                         )
                         Text(
-                            if (lord.incorporated) "🏳 ${lord.stronghold} · 편입 완료"
-                            else "${lord.stronghold} · ⚔ ${lord.troops} · ${lord.traitIcon} ${lord.traitLabel}",
-                            color = if (lord.incorporated) SlgColors.Success else SlgColors.Muted,
+                            when {
+                                lord.incorporated -> "🏳 ${lord.stronghold} · 편입 완료"
+                                lord.isBound -> "${lord.bond?.icon ?: "⛓"} ${lord.bond?.label ?: "예속"} · ${lord.stronghold}"
+                                else -> "${lord.stronghold} · ⚔ ${lord.troops} · ${lord.traitIcon} ${lord.traitLabel}"
+                            },
+                            color = when {
+                                lord.incorporated -> SlgColors.Success
+                                lord.isBound -> SlgColors.Violet
+                                else -> SlgColors.Muted
+                            },
                             fontSize = SlgType.MICRO,
                             maxLines = 1
                         )

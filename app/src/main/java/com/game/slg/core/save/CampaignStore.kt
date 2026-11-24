@@ -47,7 +47,11 @@ data class CampaignSave(
     /** 처분 대기 영웅 — "heroId|lordId|lordName" */
     val pendingDisposition: List<String> = emptyList(),
     /** 보유하지 않은 영웅의 진행 기록 — heroId → "STAGE|affinity" */
-    val heroDiscovery: Map<String, String> = emptyMap()
+    val heroDiscovery: Map<String, String> = emptyMap(),
+    /** AI 리더 성장·병합 기록 — "id|troops|gold|grain|prestige|masterId|bond|activity" */
+    val lordStates: List<String> = emptyList(),
+    /** 진행한 절기 횟수 — AI 턴 시드 */
+    val seasonTurn: Int = 0
 )
 
 interface CampaignStore {

@@ -83,6 +83,14 @@ import com.game.slg.core.model.Territory
 import com.game.slg.core.model.TreatyType
 import com.game.slg.core.region.AiLordGenerator
 import com.game.slg.core.region.AiLordProfile
+import com.game.slg.core.region.AiLordTurnEngine
+import com.game.slg.core.region.AiSeasonOrder
+import com.game.slg.core.region.LeaderBond
+import com.game.slg.core.region.LeaderStatus
+import com.game.slg.core.region.RegionBoard
+import com.game.slg.core.region.RegionBoardBuilder
+import com.game.slg.core.region.RegionLeaderSeed
+import com.game.slg.core.region.LordTrait
 import com.game.slg.core.region.CommandProgress
 import com.game.slg.core.region.ExpansionTier
 import com.game.slg.core.region.AttackScope
@@ -205,17 +213,29 @@ data class LordView(
     val id: String,
     val name: String,
     val stronghold: String,
-    val traitLabel: String,
-    val traitIcon: String,
+    val trait: LordTrait,
     val troops: Int,
     val gold: Int,
     val grain: Int,
     val prestige: Int,
-    val arms: String,
+    val arm: CombatArm,
     val isPlayer: Boolean = false,
     /** 이 리더의 세력이 우리 연방에 편입됐는지 — 교전 버튼이 잠긴다 */
-    val incorporated: Boolean = false
-)
+    val incorporated: Boolean = false,
+    /** 다른 AI 리더에게 병합·종속된 형태 — null 이면 독립 세력 */
+    val bond: LeaderBond? = null,
+    /** 병합·종속 대상(우두머리) 리더 id */
+    val masterId: String? = null,
+    /** 최근 절기의 AI 활동 한 줄 — 세부맵 카드에 보인다 */
+    val activity: String = ""
+) {
+    val traitLabel: String get() = trait.displayName
+    val traitIcon: String get() = trait.icon
+    val arms: String get() = arm.displayName
+
+    /** 다른 세력에 묶였는지 */
+    val isBound: Boolean get() = masterId != null && bond != null
+}
 
 object SlgWorld {
 
@@ -282,6 +302,8 @@ data class SlgGameState(
     // ── 지도 ──
     val mapNodes: List<MapNode> = emptyList(),
     val selectedTerritoryCode: String = RegionCatalog.DEFAULT_AREA_CODE,
+    /** 세부맵을 열어 둔 지역 코드 — null 이면 닫혀 있다 */
+    val regionDetailCode: String? = null,
     // ── 기본 지표 ──
     val seasonName: String = "봄 (예산 편성·지방세 징수)",
     val population: Int = 48604,
@@ -339,6 +361,11 @@ data class SlgGameState(
     val mercenaries: List<MercenaryBand> = emptyList(),
     val empireMessage: String? = null,
     val lastAbsorption: AbsorptionOutcome? = null,
+    // ── AI 리더 동향 ──
+    /** 지난 절기에 AI 리더들이 벌인 일 — 최대 4줄 */
+    val aiNews: List<String> = emptyList(),
+    /** 진행한 절기 횟수 — AI 턴 시드·세부맵 연출에 쓴다 */
+    val seasonTurn: Int = 0,
     // ── 전략 · 무기 기술 ──
     val weaponTech: WeaponTechState = WeaponTechState(),
     val battleStrategy: BattleStrategy = BattleStrategy.FRONTAL,
@@ -454,6 +481,78 @@ data class SlgGameState(
         get() = territories.firstOrNull { it.code == selectedManagedCode }
             ?: territories.firstOrNull { it.status == TerritoryStatus.DIRECT }
             ?: territories.firstOrNull()
+
+    // ── 지역 세부맵 ─────────────────────────────────────────────
+
+    /** 세부맵을 열어 둔 지역 노드 */
+    val regionDetailNode: MapNode?
+        get() = regionDetailCode?.let { TerritoryMapLayout.node(mapNodes, it) }
+
+    /** 세부맵 데이터 — 열려 있을 때만 계산한다 */
+    val regionDetailBoard: RegionBoard?
+        get() = regionDetailCode?.let { regionBoardFor(it) }
+
+    /**
+     * 지역 1곳의 리더 배치·현황.
+     *
+     * · 내 지역([regionCode])은 지금 운영 중인 리더 명부를 그대로 쓴다(실시간).
+     * · 다른 지역은 결정적으로 생성한 명부를 "정찰 전 추정"으로 보여 준다.
+     */
+    fun regionBoardFor(code: String): RegionBoard {
+        val node = TerritoryMapLayout.node(mapNodes, code)
+        val regionName = node?.name ?: regionCode
+        if (code == regionCode) {
+            val playerName = playerLord?.name ?: "이광수"
+            val seeds = lords.map { lord ->
+                val faction = factions.firstOrNull { it.id == "faction_${lord.id}" }
+                val territory = faction?.let { f -> territories.firstOrNull { it.code == f.territoryCode } }
+                val federation = if (lord.incorporated) territory?.status ?: TerritoryStatus.VASSAL else null
+                val note = when {
+                    lord.isPlayer -> "${regionName} 인계 세력"
+                    lord.isBound -> lord.activity
+                    federation != null -> listOfNotNull(
+                        territory?.absorbedBy?.let { "편입 경위 · $it" },
+                        lord.activity.takeIf { it.isNotBlank() }
+                    ).joinToString(" · ")
+                    else -> lord.activity
+                }
+                RegionLeaderSeed(
+                    id = lord.id,
+                    name = if (lord.isPlayer) playerName else lord.name,
+                    stronghold = lord.stronghold.ifBlank { regionName },
+                    traitLabel = lord.traitLabel,
+                    traitIcon = lord.traitIcon,
+                    troops = if (lord.isPlayer) troops else lord.troops,
+                    gold = if (lord.isPlayer) gold else lord.gold,
+                    food = if (lord.isPlayer) food else lord.grain,
+                    prestige = if (lord.isPlayer) prestige else lord.prestige,
+                    isPlayer = lord.isPlayer,
+                    federation = federation,
+                    aiBond = lord.bond,
+                    masterId = lord.masterId,
+                    note = note
+                )
+            }
+            return RegionBoardBuilder.build(code, regionName, seeds, live = true)
+        }
+        val area = RegionCatalog.area(code)
+        val generated = area?.let { AiLordGenerator.generate(it) }.orEmpty()
+        val seeds = generated.map { profile ->
+            RegionLeaderSeed(
+                id = profile.id,
+                name = profile.name,
+                stronghold = profile.stronghold,
+                traitLabel = profile.trait.displayName,
+                traitIcon = profile.trait.icon,
+                troops = profile.troops,
+                gold = profile.gold,
+                food = profile.grain,
+                prestige = profile.prestige,
+                note = if (node?.isLocked == true) "미개방 구역" else "정찰 전 추정 명부"
+            )
+        }
+        return RegionBoardBuilder.build(code, regionName, seeds, live = false)
+    }
 
     /** 아직 편입하지 않은 세력 */
     val openFactions: List<Faction>
@@ -616,6 +715,12 @@ class SlgGameViewModel(
             )
         }
         val restoredPending = restore.pendingDisposition.mapNotNull { PendingDisposition.decode(it) }
+        // AI 리더 성장·병합 기록 — 저장값이 있으면 생성값 대신 그쪽을 쓴다
+        val savedLordStates = restore.lordStates.mapNotNull { raw ->
+            val p = raw.split('|')
+            val id = p.getOrNull(0)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            id to p
+        }.toMap()
         val restoredRoster = if (restore.ownedHeroes.isEmpty()) {
             HeroRosterState.initial()
         } else {
@@ -634,9 +739,21 @@ class SlgGameViewModel(
             lords = base.lords.map { view ->
                 if (view.id == lord.id) view.copy(name = "이광수", isPlayer = true)
                 else {
-                    val faction = restoredFactions.firstOrNull { it.id == "faction_${view.id}" }
-                    if (faction == null) view
-                    else view.copy(troops = faction.troops, incorporated = faction.incorporated)
+                    val saved = savedLordStates[view.id]
+                    val grown = if (saved == null) view else view.copy(
+                        troops = saved.getOrNull(1)?.toIntOrNull() ?: view.troops,
+                        gold = saved.getOrNull(2)?.toIntOrNull() ?: view.gold,
+                        grain = saved.getOrNull(3)?.toIntOrNull() ?: view.grain,
+                        prestige = saved.getOrNull(4)?.toIntOrNull() ?: view.prestige,
+                        masterId = saved.getOrNull(5)?.takeIf { it.isNotBlank() },
+                        bond = saved.getOrNull(6)?.takeIf { it.isNotBlank() }?.let { name ->
+                            LeaderBond.entries.firstOrNull { it.name == name }
+                        },
+                        activity = saved.getOrNull(7) ?: ""
+                    )
+                    val faction = restoredFactions.firstOrNull { it.id == "faction_${grown.id}" }
+                    if (faction == null) grown
+                    else grown.copy(troops = faction.troops, incorporated = faction.incorporated)
                 }
             },
             registeredLords = 1,
@@ -689,6 +806,7 @@ class SlgGameViewModel(
                     privateTroops = career.split('|').getOrNull(5)?.toIntOrNull() ?: 0
                 )
             },
+            seasonTurn = restore.seasonTurn,
             statusMessage = "[이어서] ${startRegion.fullName} · Lv.${command.level} ${command.tier.label} — 저장된 진행을 불러왔습니다.",
             log = listOf("[이어서] ${startRegion.fullName}에서 플레이를 재개했습니다.")
         )
@@ -734,10 +852,24 @@ class SlgGameViewModel(
                 pendingDisposition = state.pendingDisposition.map { it.encode() },
                 heroDiscovery = state.heroes.records.values
                     .filter { !it.owned && it.stage != HeroStage.UNDISCOVERED }
-                    .associate { it.id to "${it.stage.name}|${it.affinity}" }
+                    .associate { it.id to "${it.stage.name}|${it.affinity}" },
+                lordStates = state.lords.filterNot { it.isPlayer }.map { encodeLordState(it) },
+                seasonTurn = state.seasonTurn
             )
         )
     }
+
+    /** AI 리더 한 명 상태 — "id|troops|gold|grain|prestige|masterId|bond|activity" */
+    private fun encodeLordState(lord: LordView): String = listOf(
+        lord.id,
+        lord.troops.toString(),
+        lord.gold.toString(),
+        lord.grain.toString(),
+        lord.prestige.toString(),
+        lord.masterId ?: "",
+        lord.bond?.name ?: "",
+        lord.activity.replace('|', '/')
+    ).joinToString("|")
 
     private fun encodeTerritory(t: ManagedTerritory): String = listOf(
         t.code, t.name, t.population.toString(), t.status.name, t.morale.toString(),
@@ -966,12 +1098,40 @@ class SlgGameViewModel(
                         "${tierForHopLabel(node.hopDistance)} 단계에서 열립니다."
                 )
             }
-            if (s.selectedTerritoryCode == node.code) s
-            else s.copy(
+            if (s.selectedTerritoryCode == node.code) {
+                // 이미 선택한 지역을 한 번 더 누르면 — 리더 배치·현황 세부맵을 연다
+                s.copy(
+                    regionDetailCode = node.code,
+                    statusMessage = "[세부맵] '${node.name}' 지역의 리더 배치와 현황을 엽니다."
+                )
+            } else s.copy(
                 selectedTerritoryCode = node.code,
-                statusMessage = "[지도] '${node.name}' 선택 — ${node.relationLabel}"
+                statusMessage = "[지도] '${node.name}' 선택 — ${node.relationLabel} · 한 번 더 누르면 세부맵"
             )
         }
+    }
+
+    /** 선택 지역(또는 지정 지역)의 리더 배치·현황 세부맵 열기 */
+    fun openRegionDetail(code: String = _uiState.value.selectedTerritoryCode) {
+        _uiState.update { s ->
+            val node = TerritoryMapLayout.node(s.mapNodes, code) ?: return@update s
+            if (!node.unlocked) {
+                return@update s.copy(
+                    statusMessage = "[미개방] '${node.name}'은(는) Lv.${tierForHop(node.hopDistance)} " +
+                        "${tierForHopLabel(node.hopDistance)} 단계에서 열립니다."
+                )
+            }
+            s.copy(
+                selectedTerritoryCode = code,
+                regionDetailCode = code,
+                statusMessage = "[세부맵] '${node.name}' — 리더 ${node.lordCapacity}석 배치·현황"
+            )
+        }
+    }
+
+    /** 세부맵 닫기 */
+    fun closeRegionDetail() {
+        _uiState.update { s -> s.copy(regionDetailCode = null) }
     }
 
     fun openTab(tab: MainTab, sub: Int = 0) {
@@ -1050,6 +1210,58 @@ class SlgGameViewModel(
             val cap = ManpowerEngine.capOf(capPopulation)
             val levies = empire.troopGain.coerceAtMost((cap - s.troops).coerceAtLeast(0))
             val newTroops = (playerLord.troops + levies).coerceAtMost(cap)
+            val foodBeforeAi = (playerLord.grain + (grainGain - result.grainChange) + heroGrain + baseFood + empire.foodGain)
+                .coerceAtLeast(0)
+            val goldBeforeAi = (goldBeforeMerc - mercMaintenance.paid).coerceAtLeast(0)
+
+            // ── AI 리더 능동 활동 — 성장 · 병합/종속 · 우리 영지 견제 ──
+            val aiArea = s.regionArea ?: RegionCatalog.defaultRegion()
+            val aiPlayer = AiLordProfile(
+                id = "lord_player",
+                name = playerName,
+                regionCode = aiArea.code,
+                regionName = aiArea.name,
+                stronghold = s.playerLord?.stronghold?.ifBlank { aiArea.name } ?: aiArea.name,
+                trait = s.playerLord?.trait ?: LordTrait.BALANCED,
+                troops = newTroops,
+                grain = foodBeforeAi,
+                gold = goldBeforeAi,
+                prestige = s.prestige,
+                arm = s.playerLord?.arm ?: CombatArm.INFANTRY
+            )
+            val aiOrder = AiSeasonOrder(
+                season = season,
+                turn = s.seasonTurn + 1,
+                // 이번 절기에 들어설 때의 연합 상태로 판단한다(보호가 막 끝난 절기에는 습격하지 않는다)
+                unionActive = s.union.active,
+                regionName = s.regionName
+            )
+            val aiOutcome = AiLordTurnEngine.runSeason(
+                // 우리 연방에 편입된 세력은 영토 탭에서 운영하므로 AI 턴에서 뺀다
+                lords = s.lords.filterNot { it.isPlayer || it.incorporated }.map { it.toProfile(aiArea) },
+                player = aiPlayer,
+                order = aiOrder
+            )
+            val aiLords = aiOutcome.lords.map { it.toView() }
+            val nextLords = s.lords.map { lord ->
+                if (lord.isPlayer || lord.incorporated) lord
+                else aiLords.firstOrNull { it.id == lord.id } ?: lord
+            }
+            // AI 성장·병합을 세력 목록에도 맞춰 둔다 — 영토 탭·세부맵의 숫자가 어긋나지 않게
+            val nextFactions = s.factions.map { faction ->
+                val lord = aiLords.firstOrNull { "faction_${it.id}" == faction.id } ?: return@map faction
+                if (faction.incorporated) faction
+                else faction.copy(
+                    troops = lord.troops,
+                    gold = lord.gold,
+                    food = lord.grain,
+                    prestige = lord.prestige
+                )
+            }
+            val aiNote = if (aiOutcome.hasNews) "\n" + aiOutcome.lines.joinToString("\n") else ""
+            val newTroopsAfterAi = (newTroops - aiOutcome.troopLoss).coerceAtLeast(0)
+            val goldAfterAi = (goldBeforeAi - aiOutcome.goldLoss).coerceAtLeast(0)
+            val foodAfterAi = (foodBeforeAi - aiOutcome.foodLoss).coerceAtLeast(0)
             val message = "[절기 순환: ${season.displayName}] ${result.message}" + heroNote + baseNote +
                 empireNote + mercNote
             // 처분하지 않은 편입 세력 소속 영웅은 다음 절기로 넘어가며 자동으로 재야가 된다(방치 페널티 없음)
@@ -1074,12 +1286,15 @@ class SlgGameViewModel(
 
             s.copy(
                 seasonName = nextSeason.displayName,
-                gold = (goldBeforeMerc - mercMaintenance.paid).coerceAtLeast(0),
-                food = (playerLord.grain + (grainGain - result.grainChange) + heroGrain + baseFood + empire.foodGain)
-                    .coerceAtLeast(0),
-                troops = newTroops,
+                gold = goldAfterAi,
+                food = foodAfterAi,
+                troops = newTroopsAfterAi,
                 territories = empire.territories,
                 mercenaries = mercMaintenance.bands,
+                lords = nextLords,
+                factions = nextFactions,
+                aiNews = aiOutcome.lines,
+                seasonTurn = aiOrder.turn,
                 heroVisit = visit,
                 heroes = releasedRoster,
                 pendingDisposition = if (releasedCount > 0) emptyList() else s.pendingDisposition,
@@ -1092,12 +1307,12 @@ class SlgGameViewModel(
                         start = s.regionArea ?: RegionCatalog.defaultRegion(),
                         unlockedHop = gained.unlockedHop,
                         playerName = playerName,
-                        homeTroops = playerLord.troops
+                        homeTroops = newTroopsAfterAi
                     )
                 } else s.mapNodes,
                 levelUpMessage = if (gained.level != before.level) levelUpText(gained) else s.levelUpMessage,
-                log = (s.log + message + pendingNote + listOfNotNull(unionMessage)).takeLast(8),
-                statusMessage = message + pendingNote
+                log = (s.log + message + pendingNote + listOfNotNull(unionMessage) + aiOutcome.lines).takeLast(8),
+                statusMessage = message + pendingNote + aiNote
             )
         }
         persist()
@@ -2637,7 +2852,14 @@ class SlgGameViewModel(
                 morale = (s.morale + (if (win) 2 else -3) + (forced?.moraleDelta ?: 0)).coerceIn(0, 100),
                 lords = s.lords.map { lord ->
                     if (lord.id != target.id) lord
-                    else lord.copy(troops = if (annexed) 0 else nextTroops, incorporated = annexed)
+                    else lord.copy(
+                        troops = if (annexed) 0 else nextTroops,
+                        incorporated = annexed,
+                        // 병합·종속된 세력을 우리가 빼앗으면 예속 관계는 끊기고 우리 연방으로 들어온다
+                        bond = if (annexed) null else lord.bond,
+                        masterId = if (annexed) null else lord.masterId,
+                        activity = if (annexed) "우리 연방으로 강제 편입" else lord.activity
+                    )
                 },
                 factions = s.factions.map { current ->
                     when {
@@ -2719,13 +2941,33 @@ class SlgGameViewModel(
         id = id,
         name = name,
         stronghold = stronghold,
-        traitLabel = trait.displayName,
-        traitIcon = trait.icon,
+        trait = trait,
         troops = troops,
         gold = gold,
         grain = grain,
         prestige = prestige,
-        arms = arm.displayName
+        arm = arm,
+        bond = bond,
+        masterId = masterId,
+        activity = activity
+    )
+
+    /** 화면용 리더 → AI 턴 엔진 입력값 */
+    private fun LordView.toProfile(region: RegionArea): AiLordProfile = AiLordProfile(
+        id = id,
+        name = name,
+        regionCode = region.code,
+        regionName = region.name,
+        stronghold = stronghold,
+        trait = trait,
+        troops = troops,
+        grain = grain,
+        gold = gold,
+        prestige = prestige,
+        arm = arm,
+        masterId = masterId,
+        bond = bond,
+        activity = activity
     )
 
     // ──────────────────────────────────────────────────────────────

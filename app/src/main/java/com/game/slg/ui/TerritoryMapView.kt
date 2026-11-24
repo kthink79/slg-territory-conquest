@@ -55,11 +55,13 @@ fun TerritoryMapPane(
     state: SlgGameState,
     viewport: MapViewport,
     onViewportChange: (MapViewport) -> Unit,
-    onSelectTerritory: (String) -> Unit
+    onSelectTerritory: (String) -> Unit,
+    onOpenRegionDetail: () -> Unit = {}
 ) {
     val currentViewport by rememberUpdatedState(viewport)
     val currentOnViewportChange by rememberUpdatedState(onViewportChange)
     val currentOnSelect by rememberUpdatedState(onSelectTerritory)
+    val currentOnRegionDetail by rememberUpdatedState(onOpenRegionDetail)
     val nodes = state.mapNodes
     val selectedCode = state.selectedTerritoryCode
 
@@ -134,6 +136,16 @@ fun TerritoryMapPane(
         ) {
             MapControlButton("＋") { currentOnViewportChange(currentViewport.zoomIn()) }
             MapControlButton("－") { currentOnViewportChange(currentViewport.zoomOut()) }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(SlgColors.Steel.copy(alpha = 0.20f))
+                    .border(1.dp, SlgColors.Steel.copy(alpha = 0.65f), RoundedCornerShape(50))
+                    .clickable { currentOnRegionDetail() }
+                    .padding(horizontal = 8.dp, vertical = 5.dp)
+            ) {
+                Text("⤢ 확대", color = SlgColors.Steel, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
+            }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
