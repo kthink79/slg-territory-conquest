@@ -63,7 +63,7 @@ data class AiSeasonOutcome(
  *  1. 내정 — 성향에 맞춰 자금·식량을 확보한다(물류 성향은 자금, 기갑·균형은 병력).
  *  2. 병력 양성 — 모집비를 쓰고, 명성으로 정해지는 상한까지 병력을 늘린다. 유지비를 못 대면 이탈한다.
  *  3. 세력 확장 — 가장 강한 독립 리더가 약한 이웃을 ① 흡수 병합 ② 조공 종속으로 묶는다(절기당 1건).
- *  4. 견제 — 연합이 끝난 뒤에는 우리보다 큰 리더가 외곽을 습격한다(절기당 최대 1건).
+ *  4. 견제 — 연합이 끝난 뒤에는 우리와 비등하거나 더 큰 리더가 외곽을 습격한다(절기당 최대 1건).
  *
  * · 시드가 같으면 결과가 같다(재현 가능) — 테스트와 저장 복원에 쓴다.
  * · 병합된 세력도 거점 병력은 남겨 두어, 세부맵에서 "병합/종속" 관계와 남은 병력을 함께 볼 수 있다.
@@ -86,8 +86,8 @@ object AiLordTurnEngine {
     /** 종속 세력이 절기마다 바치는 조공 비율(자금) */
     const val TRIBUTE_RATIO = 0.18
 
-    /** 우리 영지를 습격할 수 있는 병력 배수 */
-    const val RAID_RATIO = 1.2
+    /** 우리 영지를 습격할 수 있는 병력 배수 — 우리와 비등해도 건드린다 */
+    const val RAID_RATIO = 1.05
 
     /** 절기당 확장(병합·종속) 건수 */
     const val MAX_EXPANSION_PER_SEASON = 1
@@ -116,10 +116,11 @@ object AiLordTurnEngine {
         var gold = lord.gold + goldIncome
         var grain = lord.grain + foodIncome
 
-        // 2) 병력 양성 — 모집비(1명당 4G)를 쓰고 상한까지만 채운다
+        // 2) 병력 양성 — 모집비(1명당 4G)를 쓰고 상한까지만 채운다. 금고에는 40%를 남긴다(조공·비상금)
         val ceiling = troopCeiling(lord.prestige)
         val room = (ceiling - lord.troops).coerceAtLeast(0)
-        val recruits = minOf(room, gold / 4, 120 + lord.prestige + trait.troopBonus.coerceAtLeast(0))
+        val budget = (gold * 0.6).toInt()
+        val recruits = minOf(room, budget / 4, 120 + lord.prestige + trait.troopBonus.coerceAtLeast(0))
         val spent = recruits * 4
         gold -= spent
         var troops = lord.troops + recruits
@@ -181,7 +182,7 @@ object AiLordTurnEngine {
         }.toMutableList()
 
         // ── 2단계: 종속 조공 ──────────────────────────────────────────
-        val tributeNotes = mutableListOf<String>()
+        val tributeTotals = mutableMapOf<String, Int>()
         working.forEachIndexed { index, lord ->
             val masterId = lord.masterId ?: return@forEachIndexed
             if (lord.bond != LeaderBond.SUBORDINATION) return@forEachIndexed
@@ -192,17 +193,26 @@ object AiLordTurnEngine {
             val master = working[masterIndex]
             working[masterIndex] = master.copy(gold = master.gold + tribute)
             working[index] = lord.copy(gold = (lord.gold - tribute).coerceAtLeast(0))
-            tributeNotes += "[AI 동향] ${lord.name} 리더가 ${master.name} 리더에게 조공 ${format(tribute)}G를 바쳤습니다."
+            tributeTotals[master.name] = (tributeTotals[master.name] ?: 0) + tribute
         }
+        val tributeNotes = tributeTotals.entries
+            .sortedByDescending { it.value }
+            .take(2)
+            .map { (name, amount) ->
+                "[AI 동향] 종속 세력이 $name 리더에게 조공 ${format(amount)}G를 바쳤습니다."
+            }
 
-        // ── 3단계: 세력 확장 — 가장 강한 독립 리더가 약한 이웃을 묶는다 ──
+        // ── 3단계: 세력 확장 — 힘 있는 독립 리더가 약한 이웃을 병합하거나 종속시킨다 ──
         var mergedCount = working.count { it.bond == LeaderBond.MERGE }
         var subordinatedCount = working.count { it.bond == LeaderBond.SUBORDINATION }
         val expansionRng = Random(baseSeed + 977L)
         val independent = working.filter { it.masterId == null }
-        val leader = independent
+        // 세력권 상위 3명 중 한 명이 이번 절기에 움직인다 — 매번 같은 패권자만 자라지 않게
+        val actors = independent
             .filter { it.troops >= MIN_PROJECTION }
-            .maxByOrNull { it.troops + it.prestige * 8L }
+            .sortedByDescending { it.troops + it.prestige * 8L }
+            .take(3)
+        val leader = if (actors.isEmpty()) null else actors[expansionRng.nextInt(actors.size)]
         if (leader != null) {
             val candidates = working.filter { target ->
                 target.id != leader.id &&
@@ -212,20 +222,25 @@ object AiLordTurnEngine {
             }
             val chance = (18 + leader.prestige / 2).coerceIn(18, 70)
             if (candidates.isNotEmpty() && expansionRng.nextInt(100) < chance) {
-                // 가장 약한 세력을 먼저 노린다 — 병합이면 편제 흡수, 종속이면 조공
-                val target = candidates.minByOrNull { it.troops }!!
+                // 약한 쪽이면 병합(편제 흡수), 힘 있는 쪽이면 종속(조공) — 둘 다 나오게 번갈아 노린다
+                val target = if (expansionRng.nextBoolean()) {
+                    candidates.minByOrNull { it.troops }!!
+                } else {
+                    candidates.maxByOrNull { it.troops }!!
+                }
                 val leaderIndex = working.indexOfFirst { it.id == leader.id }
                 val targetIndex = working.indexOfFirst { it.id == target.id }
-                if (leader.troops >= target.troops * MERGE_RATIO) {
-                    val absorbed = (target.troops * (1.0 - SERVANT_KEEP_RATIO)).toInt()
+                val ceiling = troopCeiling(leader.prestige)
+                val room = (ceiling - leader.troops).coerceAtLeast(0)
+                if (leader.troops >= target.troops * MERGE_RATIO && room >= 30) {
+                    val absorbed = (target.troops * (1.0 - SERVANT_KEEP_RATIO)).toInt().coerceAtMost(room)
                     val keep = (target.troops * SERVANT_KEEP_RATIO).toInt()
-                    val ceiling = troopCeiling(leader.prestige)
-                    val leaderTroops = (leader.troops + absorbed).coerceAtMost(ceiling)
+                    val leaderTroops = leader.troops + absorbed
                     working[leaderIndex] = working[leaderIndex].copy(
                         troops = leaderTroops,
                         gold = working[leaderIndex].gold + target.gold / 3,
                         grain = working[leaderIndex].grain + target.grain / 3,
-                        activity = "${target.name} 리더를 병합 — 편제 +${format(leaderTroops - leader.troops)}명"
+                        activity = "${target.name} 리더를 병합 — 편제 +${format(absorbed)}명"
                     )
                     working[targetIndex] = working[targetIndex].copy(
                         masterId = leader.id,
@@ -237,7 +252,7 @@ object AiLordTurnEngine {
                     )
                     mergedCount += 1
                     news += "[AI 동향] ${leader.name} 리더가 ${target.name} 리더 세력을 병합했습니다 — " +
-                        "편제 +${format(leaderTroops - leader.troops)}명 · 거점 병력 ${format(keep)}명 유지."
+                        "편제 +${format(absorbed)}명 · 거점 병력 ${format(keep)}명 유지."
                 } else {
                     working[leaderIndex] = working[leaderIndex].copy(
                         prestige = (leader.prestige + 2).coerceAtMost(100),

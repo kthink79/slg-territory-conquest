@@ -119,8 +119,9 @@ class AiLordTurnEngineTest {
         assertEquals("절기당 확장은 1건", 1, bound.size)
         val servant = bound.first()
         val master = result.lords.first { it.id == servant.masterId }
-        assertEquals("ai_1", master.id)
         assertTrue(servant.bond == LeaderBond.MERGE || servant.bond == LeaderBond.SUBORDINATION)
+        assertTrue("확장은 힘 있는 리더가 한다", master.troops >= AiLordTurnEngine.MIN_PROJECTION)
+        assertTrue("우두머리는 예속 리더보다 크다", master.troops > servant.troops)
         assertTrue("예속 리더는 거점 병력을 유지한다", servant.troops >= 0)
         assertTrue("우두머리 병력은 상한 이하", master.troops <= AiLordTurnEngine.troopCeiling(master.prestige))
         assertTrue(result.lines.any { it.contains("병합") || it.contains("종속") })
