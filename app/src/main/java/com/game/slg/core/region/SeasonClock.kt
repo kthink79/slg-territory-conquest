@@ -153,7 +153,11 @@ object SeasonClockEngine {
         val news = aiNews.firstOrNull { it.contains("AI 동향") }
         if (news != null) append("\n$news")
         if (emergency != null && emergency.troopsLost > 0) {
-            append("\n⚔ ${emergency.invaderName}의 침공으로 병력 ${"%,d".format(emergency.troopsLost)}명을 잃었습니다 — 긴급 의회가 열렸습니다.")
+            append("\n⚔ ${emergency.invaderName}의 침공으로 병력 ${"%,d".format(emergency.troopsLost)}명을 잃었습니다")
+            append(
+                if (emergency.passed == true) " — 긴급 방어 결의를 AI가 대행 가결해 방어 태세(+12%)에 들어갔습니다."
+                else " — 긴급 의회가 열렸습니다(영지 › 의회 › 긴급에서 확인)."
+            )
         }
         append("\nAI는 내정·모병·방어 기본 운영을 이어 갔습니다. 확인 후 다음 절기를 조정하세요.")
     }

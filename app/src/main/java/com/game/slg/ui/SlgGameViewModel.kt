@@ -2117,6 +2117,21 @@ class SlgGameViewModel(
         var emergency: EmergencyCouncil? = before.emergency
         repeat(applyDue) {
             state = nextSeasonState(state, dikeMaintenanceDone = true)
+            // 미접속 동안에는 AI가 긴급 의회 방어 결의까지 대신 처리한다
+            if (tick.offline && before.clock.aiAutopilot) {
+                val council = state.emergency
+                if (council != null && council.pending) {
+                    val voted = EmergencyCouncilEngine.autopilotResolve(
+                        council = council,
+                        opposingVotes = (state.aiLordCount / 4).coerceAtLeast(0),
+                        ourVotes = state.councilVotingPower
+                    )
+                    state = state.copy(
+                        emergency = voted,
+                        defensePostureTurns = if (voted.passed == true) 2 else 0
+                    )
+                }
+            }
             if (state.aiNews.isNotEmpty()) lastNews = state.aiNews
             if (state.emergency != null) emergency = state.emergency
         }

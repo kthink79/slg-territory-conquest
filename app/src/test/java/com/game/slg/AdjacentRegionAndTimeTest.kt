@@ -236,6 +236,16 @@ class AdjacentRegionAndTimeTest {
     }
 
     @Test
+    fun `미접속 AI 대행은 열린 긴급 의회를 대신 표결한다`() {
+        val council = EmergencyCouncilEngine.call("김도현", "탕정면", troopsLost = 90, turn = 6)
+        val resolved = EmergencyCouncilEngine.autopilotResolve(council, opposingVotes = 2, ourVotes = 4)
+        assertTrue(resolved.resolved)
+        // 이미 끝난 안건은 다시 건드리지 않는다
+        val again = EmergencyCouncilEngine.autopilotResolve(resolved, opposingVotes = 99, ourVotes = 1)
+        assertEquals(resolved, again)
+    }
+
+    @Test
     fun `방어 지원 요청은 우호 리더에게서만 병력을 받는다`() {
         val council = EmergencyCouncilEngine.call("김도현", "탕정면", troopsLost = 80, turn = 2)
         val sources = listOf(

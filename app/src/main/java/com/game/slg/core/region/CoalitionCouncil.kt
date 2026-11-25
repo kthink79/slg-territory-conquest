@@ -256,6 +256,15 @@ object EmergencyCouncilEngine {
     }
 
     /**
+     * 미접속 AI 대행 — 열린 긴급 의회를 AI가 대신 표결한다.
+     * 사용자가 자리에 없어도 방어 기본 운영은 이어진다(요청 2026-11-25 ④).
+     */
+    fun autopilotResolve(council: EmergencyCouncil, opposingVotes: Int, ourVotes: Int): EmergencyCouncil {
+        if (!council.resolved) return vote(council, opposingVotes, ourVotes)
+        return council
+    }
+
+    /**
      * 방어 도움 요청 — 우호 리더만 응한다. 외교력·명성이 높을수록 많이 보낸다.
      * 상대 병력의 8~15%를 보내며, 최대 3명까지 응답한다.
      */
