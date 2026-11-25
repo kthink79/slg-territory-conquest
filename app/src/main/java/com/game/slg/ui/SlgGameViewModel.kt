@@ -413,6 +413,8 @@ data class SlgGameState(
     val adjacentSheet: AdjacentSheet? = null,
     /** 인접 지역 행동 결과 한 번 */
     val adjacentMessage: String? = null,
+    /** 인접 지역 교전으로 깎은 리더 병력 — leaderId → 누적 손실 */
+    val adjacentDamage: Map<String, Int> = emptyMap(),
     // ── 지역 리더 연합 의회 (공동 전투·외교·전략) ──
     val coalition: CoalitionState = CoalitionState(),
     // ── 긴급 의회 · 상호 방어 지원 ──
@@ -587,7 +589,7 @@ data class SlgGameState(
                 stronghold = profile.stronghold,
                 traitLabel = profile.trait.displayName,
                 traitIcon = profile.trait.icon,
-                troops = profile.troops,
+                troops = (profile.troops - (adjacentDamage[profile.id] ?: 0)).coerceAtLeast(0),
                 gold = profile.gold,
                 food = profile.grain,
                 prestige = profile.prestige,
@@ -891,6 +893,11 @@ class SlgGameViewModel(
                 )
             },
             seasonTurn = restore.seasonTurn,
+            adjacentDamage = restore.adjacentDamage.mapNotNull { raw ->
+                val id = raw.substringBefore('|').takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val damage = raw.substringAfter('|', "0").toIntOrNull() ?: 0
+                if (damage <= 0) null else id to damage
+            }.toMap(),
             clock = SeasonClock(
                 seasonMinutes = restore.seasonMinutes.coerceIn(1, 1440),
                 lastTickMillis = if (restore.lastTickMillis > 0L) restore.lastTickMillis
@@ -949,7 +956,8 @@ class SlgGameViewModel(
                 lastTickMillis = state.clock.lastTickMillis,
                 seasonMinutes = state.clock.seasonMinutes,
                 autoAdvance = state.clock.autoAdvance,
-                aiAutopilot = state.clock.aiAutopilot
+                aiAutopilot = state.clock.aiAutopilot,
+                adjacentDamage = state.adjacentDamage.map { (id, damage) -> "$id|$damage" }
             )
         )
     }
@@ -1387,7 +1395,6 @@ class SlgGameViewModel(
             val expansion = aiOutcome.expansion
             val aidNext: AidCall? = when {
                 expansion == null -> s.aidCall
-                s.aidCall != null && !s.aidCall.answered -> s.aidCall
                 else -> AidCall(
                     attackerName = expansion.leaderName,
                     victimName = expansion.targetName,
@@ -1754,6 +1761,9 @@ class SlgGameViewModel(
             s.copy(
                 troops = regularLeft,
                 mercenaries = mercsLeft,
+                adjacentDamage = s.adjacentDamage + (
+                    info.id to ((s.adjacentDamage[info.id] ?: 0) + theirLosses)
+                    ),
                 gold = (s.gold + loot).coerceAtLeast(0),
                 prestige = (s.prestige + (if (win) 4 else -3)).coerceIn(0, 100),
                 morale = (s.morale + (if (win) 2 else -3)).coerceIn(0, 100),
@@ -1876,7 +1886,14 @@ class SlgGameViewModel(
                 )
             }
             val supporters = (if (s.union.active) s.aiLordCount else s.treaties.size).coerceAtMost(12)
-            val bill = CoalitionCouncilEngine.sponsor(kind, node.code, node.name, s.seasonTurn, supporters)
+            val bill = CoalitionCouncilEngine.sponsor(
+                kind = kind,
+                regionCode = node.code,
+                regionName = node.name,
+                seasonTurn = s.seasonTurn,
+                supporters = supporters,
+                sequence = s.coalition.bills.size
+            )
             val message = "[의회 상정] ${bill.title} — 참여 리더 ${supporters}명 · " +
                 "${s.councilVotingLabel}. 영지 › 의회 › 연합에서 표결하세요."
             s.copy(

@@ -59,7 +59,9 @@ data class CampaignSave(
     /** 자동 절기 진행 켜기/끄기 */
     val autoAdvance: Boolean = true,
     /** 미접속 동안 AI 대행 켜기/끄기 */
-    val aiAutopilot: Boolean = true
+    val aiAutopilot: Boolean = true,
+    /** 인접 지역 교전으로 깎은 리더 병력 — "leaderId|damage" */
+    val adjacentDamage: List<String> = emptyList()
 )
 
 interface CampaignStore {

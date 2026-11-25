@@ -69,14 +69,16 @@ object CoalitionCouncilEngine {
         regionCode: String,
         regionName: String,
         seasonTurn: Int,
-        supporters: Int
+        supporters: Int,
+        sequence: Int = 0
     ): CoalitionBill {
         val title = when (kind) {
             AdjacentActionKind.WAR -> "[공동 전투] $regionName 연합 원정"
             AdjacentActionKind.DIPLOMACY -> "[공동 외교] $regionName 연합 교섭"
             AdjacentActionKind.STRATEGY -> "[공동 전략] $regionName 연합 공작"
         }
-        val id = "coalition_${kind.name.lowercase()}_${regionCode}_$seasonTurn"
+        val id = "coalition_${kind.name.lowercase()}_${regionCode}_${seasonTurn}" +
+            if (sequence > 0) "_$sequence" else ""
         return CoalitionBill(
             id = id,
             kind = kind,

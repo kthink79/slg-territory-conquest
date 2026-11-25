@@ -429,6 +429,40 @@ class AdjacentRegionAndTimeTest {
     }
 
     @Test
+    fun `인접 지역 교전 피해가 명부에 남아 다음 공격에 반영된다`() {
+        val vm = playAtLevelTwo()
+        val adjacent = vm.uiState.value.mapNodes.first { it.hopDistance == 1 && it.unlocked }
+        vm.selectTerritory(adjacent.code)
+        val panelBefore = vm.uiState.value.selectedAdjacentPanel!!
+        val target = panelBefore.warTargets.first()
+
+        vm.openAdjacentAction(AdjacentActionKind.WAR)
+        vm.challengeAdjacentLeader(target.id)
+
+        val after = vm.uiState.value
+        val damage = after.adjacentDamage[target.id]
+        assertNotNull(damage)
+        val targetAfter = after.selectedAdjacentPanel!!.leaders.first { it.id == target.id }
+        assertEquals((target.troops - damage!!).coerceAtLeast(0), targetAfter.troops)
+    }
+
+    @Test
+    fun `같은 절기에 같은 종류 안건을 다시 올려도 id가 겹치지 않는다`() {
+        val vm = playAtLevelTwo()
+        val adjacent = vm.uiState.value.mapNodes.first { it.hopDistance == 1 && it.unlocked }
+        vm.selectTerritory(adjacent.code)
+
+        vm.sponsorCoalitionBill(AdjacentActionKind.STRATEGY)
+        val first = vm.uiState.value.coalition.bills.first { it.kind == AdjacentActionKind.STRATEGY }
+        vm.voteCoalitionBill(first.id)
+        vm.sponsorCoalitionBill(AdjacentActionKind.STRATEGY)
+        vm.sponsorCoalitionBill(AdjacentActionKind.STRATEGY)
+
+        val strat = vm.uiState.value.coalition.bills.filter { it.kind == AdjacentActionKind.STRATEGY }
+        assertEquals(strat.size, strat.map { it.id }.distinct().size)
+    }
+
+    @Test
     fun `자동 시계가 흐르면 절기가 따라잡히고 미접속 리포트가 남는다`() {
         val vm = playAtLevelTwo()
         val before = vm.uiState.value
