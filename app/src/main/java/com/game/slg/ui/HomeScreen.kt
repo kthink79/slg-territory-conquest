@@ -81,7 +81,9 @@ fun SlgMainScreen(
     onOpenInfo: () -> Unit,
     onDismissLevelUp: () -> Unit = {},
     onBoost: (String) -> Unit = {},
-    onOpenRegionDetail: () -> Unit = {}
+    onOpenRegionDetail: () -> Unit = {},
+    onAdjacentAction: (com.game.slg.core.region.AdjacentActionKind) -> Unit = {},
+    onDismissOfflineReport: () -> Unit = {}
 ) {
     val alerts = StatusAlertBuilder.build(state)
     var boostSheet by remember { mutableStateOf<ResourceKind?>(null) }
@@ -103,11 +105,21 @@ fun SlgMainScreen(
                     onSelectTerritory = onSelectTerritory,
                     onOpenRegionDetail = onOpenRegionDetail
                 )
-                if (state.levelUpMessage != null) {
-                    LevelUpBanner(
-                        message = state.levelUpMessage,
-                        onDismiss = onDismissLevelUp
-                    )
+                if (state.levelUpMessage != null || state.offlineReport != null) {
+                    Column(modifier = Modifier.align(Alignment.TopCenter)) {
+                        if (state.offlineReport != null) {
+                            OfflineReportBanner(
+                                message = state.offlineReport,
+                                onDismiss = onDismissOfflineReport
+                            )
+                        }
+                        if (state.levelUpMessage != null) {
+                            LevelUpBanner(
+                                message = state.levelUpMessage,
+                                onDismiss = onDismissLevelUp
+                            )
+                        }
+                    }
                 }
             }
 
@@ -116,7 +128,8 @@ fun SlgMainScreen(
                 alerts = alerts,
                 onOpenTab = onOpenTab,
                 onAdvanceSeason = onAdvanceSeason,
-                onOpenRegionDetail = onOpenRegionDetail
+                onOpenRegionDetail = onOpenRegionDetail,
+                onAdjacentAction = onAdjacentAction
             )
         }
 
@@ -266,6 +279,52 @@ private fun LevelUpBanner(message: String, onDismiss: () -> Unit) {
     }
 }
 
+/** 미접속 AI 대행 리포트 — 지도 위에 한 번 뜨고 닫힌다 */
+@Composable
+private fun OfflineReportBanner(message: String, onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xF2141B26))
+                .border(1.dp, SlgColors.Steel.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 11.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "AI 대행 리포트",
+                    color = SlgColors.Steel,
+                    fontSize = SlgType.LABEL,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Spacer(Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(SlgColors.SurfaceAlt)
+                        .clickable { onDismiss() }
+                        .padding(horizontal = 9.dp, vertical = 3.dp)
+                ) {
+                    Text("✕", color = SlgColors.Muted, fontSize = SlgType.MICRO, fontWeight = FontWeight.Bold)
+                }
+            }
+            Text(
+                message,
+                color = SlgColors.Text.copy(alpha = 0.92f),
+                fontSize = SlgType.MICRO,
+                lineHeight = SlgLine.MICRO,
+                maxLines = 7
+            )
+        }
+    }
+}
+
 /** 선택 영지 1줄 + 지역 연합 상태 + 경보 칩 가로 스크롤 */
 @Composable
 private fun HomeStatusStrip(
@@ -273,13 +332,17 @@ private fun HomeStatusStrip(
     alerts: List<StatusAlert>,
     onOpenTab: (MainTab, Int) -> Unit,
     onAdvanceSeason: () -> Unit,
-    onOpenRegionDetail: () -> Unit
+    onOpenRegionDetail: () -> Unit,
+    onAdjacentAction: (com.game.slg.core.region.AdjacentActionKind) -> Unit = {}
 ) {
     val selected = state.selectedTerritory
+    val adjacent = state.selectedAdjacentPanel
+    // 인접 지역을 고르면 하단 패널이 전투·외교·전략 메뉴만큼 높아진다
+    val stripHeight = if (adjacent != null) 198 else HomeLayout.STATUS_STRIP
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(HomeLayout.STATUS_STRIP.dp)
+            .height(stripHeight.dp)
             .background(Color(0xFF0E1218))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
@@ -382,8 +445,62 @@ private fun HomeStatusStrip(
             }
         }
 
+        // ── 인접 지역 하단 패널: 전투 · 외교 · 전략 (2026-11-25 요청) ──
+        if (adjacent != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    adjacent.headline,
+                    color = SlgColors.Text,
+                    fontSize = SlgType.MICRO,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SlgPill(adjacent.relationLabel, relationColor(adjacent.relationLabel))
+                    Spacer(Modifier.width(4.dp))
+                    SlgPill(
+                        adjacent.headcountLabel,
+                        if (adjacent.unified) SlgColors.Danger else SlgColors.Steel
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    SlgPill("⚔ ${adjacent.totalTroops}", SlgColors.Muted)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    com.game.slg.core.region.AdjacentActionKind.entries.forEach { kind ->
+                        val tone = when (kind) {
+                            com.game.slg.core.region.AdjacentActionKind.WAR -> SlgColors.Danger
+                            com.game.slg.core.region.AdjacentActionKind.DIPLOMACY -> SlgColors.Success
+                            else -> SlgColors.Violet
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(tone.copy(alpha = 0.18f))
+                                .border(1.dp, tone.copy(alpha = 0.65f), RoundedCornerShape(9.dp))
+                                .clickable { onAdjacentAction(kind) }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "${kind.icon} ${kind.label}",
+                                color = tone,
+                                fontSize = SlgType.LABEL,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         if (alerts.isEmpty()) {
-            Text("✅ 미결 사건 없음", color = SlgColors.Success, fontSize = SlgType.MICRO)
+            Text(
+                "✅ 미결 사건 없음 · 인접 지역을 누르면 전투·외교·전략",
+                color = SlgColors.Success,
+                fontSize = SlgType.MICRO
+            )
         } else {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 items(alerts, key = { it.id }) { alert ->

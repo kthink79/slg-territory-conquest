@@ -129,9 +129,11 @@ enum class TerritoryTab(val label: String) {
     FACILITIES("시설")
 }
 
-/** 의회 화면 안쪽 탭 — 안건 / 리더 명부 */
+/** 의회 화면 안쪽 탭 — 안건 / 연합 / 긴급 / 리더 */
 enum class CouncilTab(val label: String) {
     BILLS("안건"),
+    COALITION("연합"),
+    EMERGENCY("긴급"),
     LORDS("리더")
 }
 
@@ -369,6 +371,43 @@ object StatusAlertBuilder {
                 targetSub = HeroTab.RECRUIT.ordinal
             )
         }
+        // ── 인접 지역 · 연합 의회 · 긴급 방어 (2026-11-25) ──
+        val pendingCoalition = state.coalition.pendingCount
+        if (pendingCoalition > 0) {
+            alerts += StatusAlert(
+                id = "alert_coalition",
+                icon = "🏛",
+                short = "연합 안건 ${pendingCoalition}건",
+                title = "지역 리더 연합 공동 작전 안건 ${pendingCoalition}건 표결 대기",
+                severity = AlertSeverity.INFO,
+                target = MainTab.DOMAIN,
+                targetSub = DomainTab.COUNCIL.ordinal
+            )
+        }
+        val emergency = state.emergency
+        if (emergency != null && emergency.pending) {
+            alerts += StatusAlert(
+                id = "alert_emergency",
+                icon = "🚨",
+                short = "긴급 의회",
+                title = "${emergency.invaderName}의 침공 — 긴급 방어 의회 소집",
+                severity = AlertSeverity.CRITICAL,
+                target = MainTab.DOMAIN,
+                targetSub = DomainTab.COUNCIL.ordinal
+            )
+        }
+        val aidCall = state.openAidCall
+        if (aidCall != null) {
+            alerts += StatusAlert(
+                id = "alert_aid_call",
+                icon = "🤝",
+                short = "지원 요청",
+                title = aidCall.headline,
+                severity = AlertSeverity.WARNING,
+                target = MainTab.DOMAIN,
+                targetSub = DomainTab.COUNCIL.ordinal
+            )
+        }
         // 태수 없는 편입 영지
         val noViceroy = state.territories.count { it.needsViceroy && it.absorbedBy != "인계" }
         if (noViceroy > 0) {
@@ -479,4 +518,52 @@ object MainInfoPanel {
 
     fun hasUrgentAlert(state: SlgGameState): Boolean =
         StatusAlertBuilder.build(state).any { it.severity == AlertSeverity.CRITICAL }
+}
+
+/**
+ * 하단 탭 배지 → 상단 서브 메뉴 배지 분배.
+ *
+ * 사용자 요청(2026-11-25 07:45): *"하단 탭(영지 3, 작전 1, 외교 1, 영토 1)에 표시되는 숫자 배지가
+ * 해당 탭 내부의 상단 서브 메뉴 버튼(내정/지표/시설/절기/기술/의회/승격/사건 등)에도 동일하게
+ * 연동·분배되어 어디를 확인해야 하는지 바로 알 수 있게 한다."*
+ *
+ * 경보 1건은 이미 (탭, 서브) 위치를 알고 있으므로, 그 위치로 숫자를 나눠 주기만 하면 된다.
+ * 하단 탭 숫자 = 그 탭 서브 배지의 합 — 두 숫자가 어긋나지 않는다.
+ */
+object SubMenuBadges {
+
+    /** 탭의 서브 메뉴별 배지 수 (서브 탭이 없으면 빈 목록) */
+    fun countsOf(state: SlgGameState, tab: MainTab): List<Int> {
+        val count = ScreenTabs.countOf(tab)
+        if (count <= 0) return emptyList()
+        val alerts = StatusAlertBuilder.build(state).filter { it.target == tab }
+        return List(count) { sub -> alerts.count { it.targetSub == sub } }
+    }
+
+    /** 하단 탭 배지 — 그 탭의 모든 상단 서브 배지 합 */
+    fun tabBadge(state: SlgGameState, tab: MainTab): Int {
+        val counts = countsOf(state, tab)
+        return if (counts.isEmpty()) {
+            StatusAlertBuilder.build(state).count { it.target == tab }
+        } else {
+            counts.sum()
+        }
+    }
+
+    /** 상단 서브 메뉴 배지 하나 */
+    fun subBadge(state: SlgGameState, tab: MainTab, sub: Int): Int =
+        countsOf(state, tab).getOrElse(sub) { 0 }
+
+    /** 의회 안쪽 탭(안건·연합·긴급·리더) 배지 — 3단 분배 */
+    fun councilInnerCounts(state: SlgGameState): List<Int> {
+        val alerts = StatusAlertBuilder.build(state).filter {
+            it.target == MainTab.DOMAIN && it.targetSub == DomainTab.COUNCIL.ordinal
+        }
+        return listOf(
+            alerts.count { it.id == "alert_bills" },
+            alerts.count { it.id == "alert_coalition" },
+            alerts.count { it.id == "alert_emergency" || it.id == "alert_aid_call" },
+            0
+        )
+    }
 }

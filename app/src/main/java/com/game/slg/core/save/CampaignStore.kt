@@ -51,7 +51,15 @@ data class CampaignSave(
     /** AI 리더 성장·병합 기록 — "id|troops|gold|grain|prestige|masterId|bond|activity" */
     val lordStates: List<String> = emptyList(),
     /** 진행한 절기 횟수 — AI 턴 시드 */
-    val seasonTurn: Int = 0
+    val seasonTurn: Int = 0,
+    /** 마지막 시계 정렬 시각 (epoch millis) — 미접속 경과를 계산한다 */
+    val lastTickMillis: Long = 0L,
+    /** 절기 1회에 걸리는 시간(분) */
+    val seasonMinutes: Int = 30,
+    /** 자동 절기 진행 켜기/끄기 */
+    val autoAdvance: Boolean = true,
+    /** 미접속 동안 AI 대행 켜기/끄기 */
+    val aiAutopilot: Boolean = true
 )
 
 interface CampaignStore {

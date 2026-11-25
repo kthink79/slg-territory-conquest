@@ -143,6 +143,7 @@ fun SlgTabBar(
     selectedIndex: Int,
     modifier: Modifier = Modifier,
     accent: Color = SlgColors.Brass,
+    badges: List<Int> = emptyList(),
     onSelect: (Int) -> Unit
 ) {
     if (tabs.isEmpty()) return
@@ -189,6 +190,27 @@ fun SlgTabBar(
                             textAlign = TextAlign.Center,
                             maxLines = 1
                         )
+                        // 상단 서브 메뉴 배지 — 하단 탭 숫자를 메뉴별로 나눠 보여 준다
+                        val badge = badges.getOrElse(index) { 0 }
+                        if (badge > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 3.dp, end = 4.dp)
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(if (selected) Color(0xFF10131A) else SlgColors.Danger),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    if (badge > 9) "9+" else "$badge",
+                                    color = if (selected) accent else Color(0xFF10131A),
+                                    fontSize = SlgType.MICRO,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
                 repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }

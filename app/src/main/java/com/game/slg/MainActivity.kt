@@ -22,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.game.slg.core.map.MapViewport
+import com.game.slg.ui.AdjacentActionSheetOverlay
 import com.game.slg.ui.AndroidCampaignStore
 import com.game.slg.ui.GameStage
 import com.game.slg.ui.LordSelectScreen
@@ -38,6 +39,8 @@ import com.game.slg.ui.SlgIntroScreen
 import com.game.slg.ui.SlgMainScreen
 import com.game.slg.ui.SlgTabSurface
 import com.game.slg.ui.StatusAlertBuilder
+import com.game.slg.ui.SubMenuBadges
+import kotlinx.coroutines.delay
 
 /**
  * 「단일 연방의 황혼」 — 2020년대 대한민국 자치구 영지전.
@@ -84,8 +87,12 @@ fun SlgApp(viewModel: SlgGameViewModel) {
 
     // 📊 정보 모달이 열려 있으면 뒤로가기는 모달만 닫는다
     BackHandler(enabled = infoOpen) { infoOpen = false }
+    // 인접 지역 행동 시트가 열려 있으면 뒤로가기는 시트만 닫는다
+    BackHandler(enabled = !infoOpen && state.adjacentSheet != null) {
+        viewModel.closeAdjacentAction()
+    }
     // 지역 세부맵이 열려 있으면 뒤로가기는 세부맵만 닫는다
-    BackHandler(enabled = !infoOpen && state.regionDetailCode != null) {
+    BackHandler(enabled = !infoOpen && state.adjacentSheet == null && state.regionDetailCode != null) {
         viewModel.closeRegionDetail()
     }
     // 상세 탭에서 뒤로가기 → 지도
@@ -154,6 +161,16 @@ fun SlgApp(viewModel: SlgGameViewModel) {
             }
         }
     }
+
+    // 지속 시간 흐름 — 15초마다 시계를 점검해 절기를 자동으로 진행한다.
+    // 앱을 닫아 둔 동안 흐른 시간은 다음 점검에서 한꺼번에 따라잡고 AI 대행 리포트를 남긴다.
+    LaunchedEffect(state.stage, state.playerLordId) {
+        if (state.stage != GameStage.PLAY) return@LaunchedEffect
+        while (true) {
+            viewModel.tickRealTime()
+            delay(15_000L)
+        }
+    }
 }
 
 @Composable
@@ -180,7 +197,9 @@ private fun PlaySurface(
                     onOpenInfo = { onInfoOpenChange(true) },
                     onDismissLevelUp = { viewModel.dismissLevelUp() },
                     onBoost = { viewModel.boostResource(it) },
-                    onOpenRegionDetail = { viewModel.openRegionDetail() }
+                    onOpenRegionDetail = { viewModel.openRegionDetail() },
+                    onAdjacentAction = { viewModel.openAdjacentAction(it) },
+                    onDismissOfflineReport = { viewModel.dismissOfflineReport() }
                 )
             } else {
                 SlgTabSurface(
@@ -195,10 +214,22 @@ private fun PlaySurface(
         // 하단 탭 — 어느 화면에서든 한 번에 다른 탭으로 이동
         SlgBottomNav(
             selected = navigation.tab,
-            badgeOf = { tab -> alerts.count { it.target == tab } },
+            badgeOf = { tab -> SubMenuBadges.tabBadge(state, tab) },
             onSelect = { tab ->
                 if (tab == MainTab.MAP) viewModel.backToMain() else viewModel.openTab(tab, 0)
             }
+        )
+    }
+
+    // 인접 지역 전투·외교·전략 시트 — 지도 하단 패널에서 열린다
+    if (state.adjacentSheet != null) {
+        AdjacentActionSheetOverlay(
+            state = state,
+            onClose = { viewModel.closeAdjacentAction() },
+            onChallenge = { viewModel.challengeAdjacentLeader(it) },
+            onDiplomacy = { viewModel.proposeAdjacentDiplomacy(it) },
+            onStrategy = { viewModel.runAdjacentStrategy(it) },
+            onSponsor = { viewModel.sponsorCoalitionBill(it) }
         )
     }
 

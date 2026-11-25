@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -95,6 +97,7 @@ fun SlgTabSurface(
                 selectedIndex = navigation.sub,
                 accent = accent,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                badges = SubMenuBadges.countsOf(state, tab),
                 onSelect = { index -> viewModel.selectSubTab(index) }
             )
         }
@@ -160,6 +163,7 @@ fun SlgInlineTabs(
     selectedIndex: Int,
     accent: Color,
     modifier: Modifier = Modifier,
+    badges: List<Int> = emptyList(),
     onSelect: (Int) -> Unit
 ) {
     Row(
@@ -168,6 +172,7 @@ fun SlgInlineTabs(
     ) {
         labels.forEachIndexed { index, label ->
             val selected = index == selectedIndex
+            val badge = badges.getOrElse(index) { 0 }
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -189,6 +194,24 @@ fun SlgInlineTabs(
                     fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
                     maxLines = 1
                 )
+                if (badge > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 2.dp, end = 4.dp)
+                            .size(15.dp)
+                            .clip(CircleShape)
+                            .background(SlgColors.Danger),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (badge > 9) "9+" else "$badge",
+                            color = Color(0xFF10131A),
+                            fontSize = SlgType.MICRO,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
             }
         }
     }
@@ -211,7 +234,10 @@ private fun DomainSurface(
             tabIndex = 0,
             onSelectTerritory = { viewModel.selectTerritory(it) },
             onOpenRegionDetail = { viewModel.openRegionDetail(it) },
-            onBuildFacility = { viewModel.buildFacility(it) }
+            onBuildFacility = { viewModel.buildFacility(it) },
+            onSetSeasonSpeed = { viewModel.setSeasonSpeed(it) },
+            onToggleAutoAdvance = { viewModel.setAutoAdvance(it) },
+            onToggleAutopilot = { viewModel.setAiAutopilot(it) }
         )
 
         DomainTab.STATS -> TerritoryScreen(
@@ -221,7 +247,10 @@ private fun DomainSurface(
             tabIndex = 1,
             onSelectTerritory = { viewModel.selectTerritory(it) },
             onOpenRegionDetail = { viewModel.openRegionDetail(it) },
-            onBuildFacility = { viewModel.buildFacility(it) }
+            onBuildFacility = { viewModel.buildFacility(it) },
+            onSetSeasonSpeed = { viewModel.setSeasonSpeed(it) },
+            onToggleAutoAdvance = { viewModel.setAutoAdvance(it) },
+            onToggleAutopilot = { viewModel.setAiAutopilot(it) }
         )
 
         DomainTab.FACILITIES -> TerritoryScreen(
@@ -231,7 +260,10 @@ private fun DomainSurface(
             tabIndex = 3,
             onSelectTerritory = { viewModel.selectTerritory(it) },
             onOpenRegionDetail = { viewModel.openRegionDetail(it) },
-            onBuildFacility = { viewModel.buildFacility(it) }
+            onBuildFacility = { viewModel.buildFacility(it) },
+            onSetSeasonSpeed = { viewModel.setSeasonSpeed(it) },
+            onToggleAutoAdvance = { viewModel.setAutoAdvance(it) },
+            onToggleAutopilot = { viewModel.setAiAutopilot(it) }
         )
 
         DomainTab.SEASON -> TerritoryScreen(
@@ -241,7 +273,10 @@ private fun DomainSurface(
             tabIndex = 2,
             onSelectTerritory = { viewModel.selectTerritory(it) },
             onOpenRegionDetail = { viewModel.openRegionDetail(it) },
-            onBuildFacility = { viewModel.buildFacility(it) }
+            onBuildFacility = { viewModel.buildFacility(it) },
+            onSetSeasonSpeed = { viewModel.setSeasonSpeed(it) },
+            onToggleAutoAdvance = { viewModel.setAutoAdvance(it) },
+            onToggleAutopilot = { viewModel.setAiAutopilot(it) }
         )
 
         DomainTab.TECH -> {
@@ -270,12 +305,18 @@ private fun DomainSurface(
                     labels = CouncilTab.entries.map { it.label },
                     selectedIndex = inner,
                     accent = SlgColors.Steel,
+                    badges = SubMenuBadges.councilInnerCounts(state),
                     onSelect = { inner = it }
                 )
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     CouncilScreen(
                         state = state,
                         onVoteBill = { viewModel.voteBill(it) },
+                        onSponsorCoalition = { viewModel.sponsorCoalitionBill(it) },
+                        onVoteCoalition = { viewModel.voteCoalitionBill(it) },
+                        onVoteEmergency = { viewModel.voteEmergencyBill() },
+                        onRequestAid = { viewModel.requestDefenseAid() },
+                        onAnswerAidCall = { viewModel.answerAidCall() },
                         tabIndex = inner
                     )
                 }

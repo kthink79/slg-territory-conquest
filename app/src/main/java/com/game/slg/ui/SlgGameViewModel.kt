@@ -85,6 +85,24 @@ import com.game.slg.core.region.AiLordGenerator
 import com.game.slg.core.region.AiLordProfile
 import com.game.slg.core.region.AiLordTurnEngine
 import com.game.slg.core.region.AiSeasonOrder
+import com.game.slg.core.region.AdjacentActionKind
+import com.game.slg.core.region.AdjacentDiplomacyEngine
+import com.game.slg.core.region.AdjacentActionResult
+import com.game.slg.core.region.AdjacentRegionEngine
+import com.game.slg.core.region.AdjacentRegionPanel
+import com.game.slg.core.region.AdjacentStrategyEngine
+import com.game.slg.core.region.AdjacentStrategyOp
+import com.game.slg.core.region.AidCall
+import com.game.slg.core.region.AidDirection
+import com.game.slg.core.region.AidSource
+import com.game.slg.core.region.CoalitionCouncilEngine
+import com.game.slg.core.region.CoalitionState
+import com.game.slg.core.region.CouncilVotingPower
+import com.game.slg.core.region.DefenseAid
+import com.game.slg.core.region.EmergencyCouncil
+import com.game.slg.core.region.EmergencyCouncilEngine
+import com.game.slg.core.region.SeasonClock
+import com.game.slg.core.region.SeasonClockEngine
 import com.game.slg.core.region.LeaderBond
 import com.game.slg.core.region.LeaderStatus
 import com.game.slg.core.region.RegionBoard
@@ -184,6 +202,14 @@ data class TreatyView(
     val partner: String,
     val remainingTurns: Int,
     val benefit: String
+)
+
+/** 인접 지역 행동 시트 — 전투·외교·전략 중 무엇을 열었는지 */
+data class AdjacentSheet(
+    val kind: AdjacentActionKind,
+    val code: String,
+    val name: String,
+    val result: AdjacentActionResult? = null
 )
 
 /** 히든 인재(위장 신분) 동향 */
@@ -381,7 +407,24 @@ data class SlgGameState(
     val heroCareer: HeroCareer? = null,
     val pendingEmployment: EmploymentRequest? = null,
     // ── 편입 세력 소속 영웅 처분 (등용·방출) ──
-    val pendingDisposition: List<PendingDisposition> = emptyList()
+    val pendingDisposition: List<PendingDisposition> = emptyList(),
+    // ── 인접 지역 전투·외교·전략 패널 ──
+    /** 지도에서 연 인접 지역 행동 시트 — 닫혀 있으면 null */
+    val adjacentSheet: AdjacentSheet? = null,
+    /** 인접 지역 행동 결과 한 번 */
+    val adjacentMessage: String? = null,
+    // ── 지역 리더 연합 의회 (공동 전투·외교·전략) ──
+    val coalition: CoalitionState = CoalitionState(),
+    // ── 긴급 의회 · 상호 방어 지원 ──
+    val emergency: EmergencyCouncil? = null,
+    val aidCall: AidCall? = null,
+    val aidLog: List<DefenseAid> = emptyList(),
+    /** 긴급 방어 결의로 얻은 방어 보너스가 남은 절기 */
+    val defensePostureTurns: Int = 0,
+    // ── 지속 시간 흐름 · 미접속 AI 대행 ──
+    val clock: SeasonClock = SeasonClock(),
+    /** 미접속 동안 AI가 대신 운영한 결과 — 한 번 뜨고 닫친다 */
+    val offlineReport: String? = null
 ) {
     /** 배치된 영웅이 주는 실제 보너스 */
     val heroBonus: HeroBonus
@@ -610,6 +653,45 @@ data class SlgGameState(
     val incorporatedLordCount: Int
         get() = lords.count { !it.isPlayer && it.incorporated }
 
+    // ── 인접 지역 패널 · 연합 의회 · 방어 (2026-11-25) ───────────────
+
+    /**
+     * 선택한 인접 지역의 하단 패널 — 내 지역·잠긴 지역이면 null.
+     * 통합 리더가 있으면 지역 단위, 없으면 개별 리더 단위로 전투 대상을 돌려준다.
+     */
+    val selectedAdjacentPanel: AdjacentRegionPanel?
+        get() {
+            val node = selectedTerritory ?: return null
+            if (node.code == regionCode || node.isLocked) return null
+            return AdjacentRegionEngine.panel(
+                code = node.code,
+                name = node.name,
+                relationLabel = node.relationLabel,
+                board = regionBoardFor(node.code),
+                unionActive = union.active
+            )
+        }
+
+    /** 의회 의결권 — 기본 1표 + 직할·편입 리더 수 */
+    val councilVotingPower: Int
+        get() = CouncilVotingPower.of(incorporatedLordCount)
+
+    val councilVotingLabel: String
+        get() = CouncilVotingPower.label(councilVotingPower, incorporatedLordCount)
+
+    /** 긴급 방어 결의가 살아 있는 동안의 방어 보너스 (%) */
+    val defensePostureBonusPercent: Int
+        get() = if (defensePostureTurns > 0) 12 else 0
+
+    /** 연합 의회 대기 안건 수 */
+    val coalitionPendingCount: Int get() = coalition.pendingCount
+
+    /** 긴급 의회가 열려 있는지 */
+    val emergencyOpen: Boolean get() = emergency != null
+
+    /** 지금 바로 보낼 수 있는 지원 요청 하나 — 이미 처리했으면 null */
+    val openAidCall: AidCall? get() = aidCall?.takeIf { !it.answered }
+
     companion object {
         const val NIGHT_MEETING_SUSPICION: Int = 50
     }
@@ -675,7 +757,9 @@ class SlgGameViewModel(
                 regionCode = startRegion.code,
                 regionName = startRegion.name,
                 remainingTurns = 0
-            )
+            ),
+            // 시간은 계속 흐른다 — 새 게임도 지금부터 시계를 센다
+            clock = SeasonClock.start(System.currentTimeMillis())
         )
         val restore = saved ?: return base
         val lord = startLords.firstOrNull { it.id == restore.lordId } ?: return base
@@ -807,6 +891,13 @@ class SlgGameViewModel(
                 )
             },
             seasonTurn = restore.seasonTurn,
+            clock = SeasonClock(
+                seasonMinutes = restore.seasonMinutes.coerceIn(1, 1440),
+                lastTickMillis = if (restore.lastTickMillis > 0L) restore.lastTickMillis
+                else System.currentTimeMillis(),
+                autoAdvance = restore.autoAdvance,
+                aiAutopilot = restore.aiAutopilot
+            ),
             statusMessage = "[이어서] ${startRegion.fullName} · Lv.${command.level} ${command.tier.label} — 저장된 진행을 불러왔습니다.",
             log = listOf("[이어서] ${startRegion.fullName}에서 플레이를 재개했습니다.")
         )
@@ -854,7 +945,11 @@ class SlgGameViewModel(
                     .filter { !it.owned && it.stage != HeroStage.UNDISCOVERED }
                     .associate { it.id to "${it.stage.name}|${it.affinity}" },
                 lordStates = state.lords.filterNot { it.isPlayer }.map { encodeLordState(it) },
-                seasonTurn = state.seasonTurn
+                seasonTurn = state.seasonTurn,
+                lastTickMillis = state.clock.lastTickMillis,
+                seasonMinutes = state.clock.seasonMinutes,
+                autoAdvance = state.clock.autoAdvance,
+                aiAutopilot = state.clock.aiAutopilot
             )
         )
     }
@@ -1152,7 +1247,19 @@ class SlgGameViewModel(
 
     /** 절기 진행 — 4계절 순환 (봄 세수 · 여름 재난 · 가을 결산 · 겨울 유지비) */
     fun advanceSeason(dikeMaintenanceDone: Boolean = true) {
+        val now = System.currentTimeMillis()
         _uiState.update { s ->
+            nextSeasonState(s, dikeMaintenanceDone)
+                // 수동 진행도 시계를 현재에 맞춘다 — 다음 자동 절기는 여기서부터 센다
+                .copy(clock = s.clock.copy(lastTickMillis = now))
+        }
+        persist()
+    }
+
+    /**
+     * 절기 1회 진행의 실제 계산 — 수동 버튼과 자동 시계(미접속 대행)가 같은 엔진을 쓴다.
+     */
+    private fun nextSeasonState(s: SlgGameState, dikeMaintenanceDone: Boolean): SlgGameState {
             val playerName = s.playerLord?.name ?: "이광수"
             val playerLord = Lord(
                 id = "lord_player",
@@ -1264,6 +1371,32 @@ class SlgGameViewModel(
             val foodAfterAi = (foodBeforeAi - aiOutcome.foodLoss).coerceAtLeast(0)
             val message = "[절기 순환: ${season.displayName}] ${result.message}" + heroNote + baseNote +
                 empireNote + mercNote
+            // ── 긴급 의회 · 상호 방어 · 방어 태세 ──────────────────────
+            // 타 지역 세력이 우리 외곽을 습격하면 긴급 의회가 열린다(이미 열려 있으면 갱신).
+            val raid = aiOutcome.raids.firstOrNull()
+            val emergencyNext: EmergencyCouncil? = when {
+                raid != null -> EmergencyCouncilEngine.call(
+                    invaderName = raid.lordName,
+                    regionName = s.regionName,
+                    troopsLost = raid.troopLoss,
+                    turn = aiOrder.turn
+                )
+                else -> s.emergency?.let { EmergencyCouncilEngine.decay(it) }
+            }
+            // 다른 리더가 공격받았다 — 지원군을 보낼 기회를 남긴다
+            val expansion = aiOutcome.expansion
+            val aidNext: AidCall? = when {
+                expansion == null -> s.aidCall
+                s.aidCall != null && !s.aidCall.answered -> s.aidCall
+                else -> AidCall(
+                    attackerName = expansion.leaderName,
+                    victimName = expansion.targetName,
+                    victimId = expansion.targetId,
+                    kind = expansion.kind,
+                    absorbedTroops = expansion.absorbedTroops
+                )
+            }
+            val defenseTurns = (s.defensePostureTurns - 1).coerceAtLeast(0)
             // 처분하지 않은 편입 세력 소속 영웅은 다음 절기로 넘어가며 자동으로 재야가 된다(방치 페널티 없음)
             val (releasedRoster, releasedCount) = HeroDispositionEngine.autoRelease(s.heroes, s.pendingDisposition)
             val pendingNote = if (releasedCount > 0) {
@@ -1284,7 +1417,7 @@ class SlgGameViewModel(
                 )
             } else s.heroVisit
 
-            s.copy(
+            return s.copy(
                 seasonName = nextSeason.displayName,
                 gold = goldAfterAi,
                 food = foodAfterAi,
@@ -1298,6 +1431,10 @@ class SlgGameViewModel(
                 heroVisit = visit,
                 heroes = releasedRoster,
                 pendingDisposition = if (releasedCount > 0) emptyList() else s.pendingDisposition,
+                emergency = emergencyNext,
+                aidCall = aidNext,
+                defensePostureTurns = defenseTurns,
+                coalition = CoalitionCouncilEngine.prune(s.coalition),
                 boostUses = emptyMap(),
                 union = unionNext,
                 command = gained,
@@ -1314,8 +1451,6 @@ class SlgGameViewModel(
                 log = (s.log + message + pendingNote + listOfNotNull(unionMessage) + aiOutcome.lines).takeLast(8),
                 statusMessage = message + pendingNote + aiNote
             )
-        }
-        persist()
     }
 
     /** 이벤트 A — 인접 물류 상인회의 야간 보급 협약 */
@@ -1463,13 +1598,15 @@ class SlgGameViewModel(
                 troopLevyAmount = state.levy
             )
             val lords = buildCouncilLords(s)
-            val result = councilEngine.voteOnBill(bill, lords)
+            // 내가 직할·편입한 리더 수만큼 의결권을 행사한다 (2026-11-25 요청)
+            val result = councilEngine.voteOnBill(bill, lords, s.councilVotingPower)
 
             val passed = result.isPassed
             val rebellion = result.isRebellionTriggered
             val message = buildString {
                 append("[리더 의회 표결] '${state.title}' — 찬성 ${result.votesInFavor} : 반대 ${result.votesAgainst} → ")
                 append(if (passed) "가결" else "부결")
+                append("\n${s.councilVotingLabel}으로 표를 행사했습니다.")
                 if (rebellion) append("\n반대 65% 이상! 반대 리더들이 연합해 대표 리더에 불복합니다.")
             }
 
@@ -1481,6 +1618,10 @@ class SlgGameViewModel(
                 when (state.type) {
                     BillType.TROOP_LEVY -> troops += state.levy
                     BillType.SPECIAL_TAX -> gold += 700
+                    BillType.JOINT_WAR -> troops += state.levy / 2
+                    BillType.JOINT_DIPLOMACY -> Unit
+                    BillType.JOINT_STRATEGY -> Unit
+                    BillType.EMERGENCY_DEFENSE -> Unit
                     else -> Unit
                 }
                 morale = (morale - 3).coerceAtLeast(0)
@@ -1514,6 +1655,474 @@ class SlgGameViewModel(
                 statusMessage = message
             )
         }
+        persist()
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 인접 지역 전투·외교·전략 — 지도 하단 패널 (2026-11-25)
+    // ──────────────────────────────────────────────────────────────
+
+    /** 지도에서 고른 인접 지역의 전투·외교·전략 시트를 연다 */
+    fun openAdjacentAction(kind: AdjacentActionKind) {
+        _uiState.update { s ->
+            val node = s.selectedTerritory
+                ?: return@update s.copy(statusMessage = "[지도] 먼저 지역을 선택하세요.")
+            if (node.code == s.regionCode) {
+                return@update s.copy(statusMessage = "[지도] 내 지역입니다 — 영지·작전 탭에서 운영하세요.")
+            }
+            if (node.isLocked) {
+                return@update s.copy(statusMessage = "[미개방] '${node.name}'은(는) 아직 열리지 않은 구역입니다.")
+            }
+            s.copy(adjacentSheet = AdjacentSheet(kind, node.code, node.name), adjacentMessage = null)
+        }
+    }
+
+    fun closeAdjacentAction() {
+        _uiState.update { it.copy(adjacentSheet = null) }
+    }
+
+    fun dismissAdjacentMessage() {
+        _uiState.update { it.copy(adjacentMessage = null) }
+    }
+
+    /**
+     * 인접 지역 리더와 교전한다.
+     *
+     * 통합 리더가 없는 지역은 개별 리더 한 명씩,
+     * 통합 리더가 있는 지역은 그 지배자를 지역 대표로 상대한다.
+     */
+    fun challengeAdjacentLeader(leaderId: String) {
+        _uiState.update { s ->
+            val sheet = s.adjacentSheet
+                ?: return@update s.copy(statusMessage = "[전투] 먼저 지도에서 인접 지역을 고르세요.")
+            val board = s.regionBoardFor(sheet.code)
+            val info = board.leaderOf(leaderId)
+                ?: return@update s.copy(statusMessage = "[전투] 그 지역 명부에 없는 리더입니다.")
+            if (info.status.isBound) {
+                return@update s.copy(
+                    statusMessage = "[전투] ${info.name} 리더은(는) ${info.masterName ?: "우두머리"} 리더에게 " +
+                        "${info.status.label}된 세력입니다 — 우두머리를 상대하세요."
+                )
+            }
+            val verdict = AdjacentRegionEngine.expeditionVerdict(s.union)
+            if (!verdict.allowed) {
+                return@update s.copy(statusMessage = verdict.label)
+            }
+            val area = RegionCatalog.area(sheet.code) ?: (s.regionArea ?: RegionCatalog.defaultRegion())
+            val own = ForceComposition.standard(
+                (s.totalTroops * (1.0 + s.heroBonus.combatPercent / 100.0)).toInt()
+            )
+            val enemy = ForceComposition.standard(info.troops.coerceAtLeast(60))
+            val enemyStrategy = StrategyBattleEngine.enemyStrategyFor(area.terrain, info.name.hashCode())
+            val opsBonus = (
+                s.heroBonus.combatPercent + s.coalition.battleBonusPercent + s.defensePostureBonusPercent
+                ).coerceAtMost(70)
+            val strat = StrategyBattleEngine.resolve(
+                own = own,
+                enemy = enemy,
+                terrain = area.terrain,
+                ownStrategy = s.battleStrategy,
+                enemyStrategy = enemyStrategy,
+                ownTech = s.weaponTech,
+                enemyTechLevel = StrategyBattleEngine.enemyTechLevel(s.unlockedHop, info.name.hashCode()),
+                ownOpsBonusPercent = opsBonus,
+                defending = false
+            )
+            val win = strat.ownWon
+            val ourLosses = strat.ownLosses
+            val theirLosses = strat.enemyLosses
+            val loot = if (win) 60 + info.gold / 10 else 0
+            val message = "[인접 원정] ${sheet.name} · ${info.name} 리더 — ${if (win) "압박 성공" else "공격 실패"} · " +
+                "적 사상자 ${theirLosses}, 아군 사상자 $ourLosses (교환비 ${strat.exchangeLabel})" +
+                if (s.coalition.battleBonusPercent > 0) " · 연합 공동 전투 +${s.coalition.battleBonusPercent}%" else ""
+            val report = OperationReport(
+                operation = "인접 지역 원정",
+                defenderWon = !win,
+                attackerLosses = theirLosses,
+                defenderLosses = ourLosses,
+                message = message,
+                verdict = if (win) "${info.name} 거점 압박" else "원정 실패 — 재편성 필요",
+                targetName = info.name,
+                composition = "아군 ${own.describe()} / 적 ${enemy.describe()}",
+                strategyLabel = "${s.battleStrategy.icon} ${s.battleStrategy.label} vs ${enemyStrategy.icon} ${enemyStrategy.label}",
+                exchangeLabel = strat.exchangeLabel,
+                breakdown = strat.lines,
+                ownLossPercent = (strat.ownLossRatio * 100).toInt(),
+                enemyLossPercent = (strat.enemyLossRatio * 100).toInt()
+            )
+            val (regularLeft, mercsLeft) = applyLosses(s.troops, s.mercenaries, ourLosses)
+            s.copy(
+                troops = regularLeft,
+                mercenaries = mercsLeft,
+                gold = (s.gold + loot).coerceAtLeast(0),
+                prestige = (s.prestige + (if (win) 4 else -3)).coerceIn(0, 100),
+                morale = (s.morale + (if (win) 2 else -3)).coerceIn(0, 100),
+                coalition = s.coalition.consumeBattleBonus(),
+                lastReport = report,
+                adjacentMessage = message,
+                adjacentSheet = sheet.copy(result = null),
+                log = (s.log + message).takeLast(8),
+                statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    /** 인접 지역과 조약을 맺는다 — 통합 리더가 없으면 리더 연합 전체와 협상한다 */
+    fun proposeAdjacentDiplomacy(type: TreatyType) {
+        _uiState.update { s ->
+            val sheet = s.adjacentSheet
+                ?: return@update s.copy(statusMessage = "[외교] 먼저 지도에서 인접 지역을 고르세요.")
+            val node = TerritoryMapLayout.node(s.mapNodes, sheet.code)
+            val panel = AdjacentRegionEngine.panel(
+                code = sheet.code,
+                name = sheet.name,
+                relationLabel = node?.relationLabel ?: "경계 세력",
+                board = s.regionBoardFor(sheet.code),
+                unionActive = s.union.active
+            )
+            val cost = AdjacentDiplomacyEngine.costOf(type)
+            if (s.gold < cost) {
+                return@update s.copy(adjacentMessage = "[외교] 자금이 부족합니다. (필요 ${cost}G / 보유 ${s.gold}G)")
+            }
+            val base = AdjacentDiplomacyEngine.resolve(
+                type = type,
+                partnerName = panel.diplomacyPartner,
+                unified = panel.unified,
+                diplomacy = (s.diplomacy + s.coalition.diplomacyBonus).coerceAtMost(100),
+                prestige = s.prestige,
+                leaderCount = panel.leaders.size,
+                seed = s.seasonTurn * 131L + sheet.code.hashCode()
+            )
+            val res = base
+            val view = if (res.success) TreatyView(
+                id = "treaty_${type.name}_${sheet.code}",
+                typeLabel = AdjacentDiplomacyEngine.typeLabel(type),
+                partner = panel.diplomacyPartner,
+                remainingTurns = AdjacentDiplomacyEngine.durationOf(type),
+                benefit = AdjacentDiplomacyEngine.benefitOf(type)
+            ) else null
+            val message = res.oneLine()
+            s.copy(
+                gold = (s.gold + res.goldDelta).coerceAtLeast(0),
+                diplomacy = (s.diplomacy + res.diplomacyDelta).coerceIn(0, 100),
+                prestige = (s.prestige + res.prestigeDelta).coerceIn(0, 100),
+                treaties = if (view != null) s.treaties + view else s.treaties,
+                adjacentMessage = message,
+                adjacentSheet = sheet.copy(result = res),
+                log = (s.log + message).takeLast(8),
+                statusMessage = message
+            ).let { next -> next.copy(alliedTerritories = alliedTerritoryCount(next)) }
+        }
+        persist()
+    }
+
+    /** 인접 지역에 전략 공작을 편다 — 보급로 차단·여론전·정찰 */
+    fun runAdjacentStrategy(opId: String) {
+        val op = AdjacentStrategyOp.byId(opId) ?: return
+        _uiState.update { s ->
+            val sheet = s.adjacentSheet
+                ?: return@update s.copy(statusMessage = "[전략] 먼저 지도에서 인접 지역을 고르세요.")
+            val discount = s.coalition.strategyDiscountPercent
+            val cost = (op.cost * (100 - discount) / 100).coerceAtLeast(1)
+            if (s.gold < cost) {
+                return@update s.copy(adjacentMessage = "[전략] 자금이 부족합니다. (필요 ${cost}G / 보유 ${s.gold}G)")
+            }
+            val base = AdjacentStrategyEngine.resolve(
+                op = op,
+                regionName = sheet.name,
+                espionagePower = s.espionagePower,
+                heroIntelBonus = s.heroBonus.intelBonus,
+                prestige = s.prestige,
+                seed = s.seasonTurn * 97L + op.id.hashCode()
+            )
+            val res = base.copy(goldDelta = -cost)
+            val message = res.oneLine() +
+                if (discount > 0) " (연합 공동 전략 -${discount}% · ${cost}G)" else ""
+            s.copy(
+                gold = (s.gold + res.goldDelta).coerceAtLeast(0),
+                food = (s.food + res.foodDelta).coerceAtLeast(0),
+                enemyFood = (s.enemyFood + res.enemyFoodDelta).coerceAtLeast(0),
+                prestige = (s.prestige + res.prestigeDelta).coerceIn(0, 100),
+                morale = (s.morale + res.moraleDelta).coerceIn(0, 100),
+                diplomacy = (s.diplomacy + res.diplomacyDelta).coerceIn(0, 100),
+                espionagePower = (s.espionagePower + res.espionagePowerDelta).coerceIn(0, 100),
+                intelGained = s.intelGained || res.intelGained,
+                coalition = s.coalition.consumeStrategyDiscount(),
+                adjacentMessage = message,
+                adjacentSheet = sheet.copy(result = res),
+                log = (s.log + message).takeLast(8),
+                statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 지역 리더 연합 의회 · 긴급 의회 · 상호 방어
+    // ──────────────────────────────────────────────────────────────
+
+    /** 선택한 인접 지역에 대한 공동 전투·외교·전략 안건을 의회에 올린다 */
+    fun sponsorCoalitionBill(kind: AdjacentActionKind) {
+        _uiState.update { s ->
+            val sheet = s.adjacentSheet
+            val node = sheet?.let { TerritoryMapLayout.node(s.mapNodes, it.code) } ?: s.selectedTerritory
+            if (node == null || node.code == s.regionCode) {
+                return@update s.copy(statusMessage = "[의회] 인접 지역을 먼저 고르세요.")
+            }
+            if (s.coalition.pendingOf(kind).any { it.regionCode == node.code }) {
+                return@update s.copy(
+                    statusMessage = "[의회] 같은 지역·같은 종류의 안건이 이미 표결 대기 중입니다."
+                )
+            }
+            val supporters = (if (s.union.active) s.aiLordCount else s.treaties.size).coerceAtMost(12)
+            val bill = CoalitionCouncilEngine.sponsor(kind, node.code, node.name, s.seasonTurn, supporters)
+            val message = "[의회 상정] ${bill.title} — 참여 리더 ${supporters}명 · " +
+                "${s.councilVotingLabel}. 영지 › 의회 › 연합에서 표결하세요."
+            s.copy(
+                coalition = s.coalition.copy(
+                    bills = s.coalition.bills + bill,
+                    supporters = supporters
+                ),
+                adjacentMessage = message,
+                log = (s.log + message).takeLast(8),
+                statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    /** 연합 안건 표결 — 내 의결권(편입 리더 수)만큼 표를 행사한다 */
+    fun voteCoalitionBill(billId: String) {
+        _uiState.update { s ->
+            val bill = s.coalition.bills.firstOrNull { it.id == billId }
+                ?: return@update s.copy(statusMessage = "[의회] 안건을 찾을 수 없습니다.")
+            if (!bill.pending) {
+                return@update s.copy(statusMessage = "[의회] 이미 표결이 끝난 안건입니다.")
+            }
+            val opponents = (bill.favor / 3 + 1)
+            val voted = CoalitionCouncilEngine.vote(bill, opponents, s.councilVotingPower)
+            val next = CoalitionCouncilEngine.applyPassed(
+                s.coalition.copy(
+                    bills = s.coalition.bills.map { if (it.id == billId) voted else it }
+                ),
+                voted
+            )
+            val bonusNote = if (voted.passed == true) when (voted.kind) {
+                AdjacentActionKind.WAR -> "\n공동 전투 보너스 +${next.battleBonusPercent}% — 다음 인접 교전에 적용"
+                AdjacentActionKind.DIPLOMACY -> "\n공동 외교 +${next.diplomacyBonus} — 다음 혈상에 적용"
+                AdjacentActionKind.STRATEGY -> "\n공동 전략 비용 -${next.strategyDiscountPercent}% — 다음 공작에 적용"
+            } else ""
+            val message = (voted.message ?: "") + bonusNote
+            s.copy(
+                coalition = next,
+                morale = (s.morale + if (voted.passed == true) 2 else 0).coerceAtMost(100),
+                log = (s.log + message).takeLast(8),
+                statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    /** 긴급 방어 결의 표결 */
+    fun voteEmergencyBill() {
+        _uiState.update { s ->
+            val council = s.emergency
+                ?: return@update s.copy(statusMessage = "[긴급 의회] 지금은 열린 긴급 의회가 없습니다.")
+            if (council.resolved) {
+                return@update s.copy(statusMessage = "[긴급 의회] 이미 표결이 끝났습니다.")
+            }
+            val opponents = (s.aiLordCount / 4).coerceAtLeast(0)
+            val voted = EmergencyCouncilEngine.vote(council, opponents, s.councilVotingPower)
+            val message = voted.message ?: ""
+            s.copy(
+                emergency = voted,
+                defensePostureTurns = if (voted.passed == true) 2 else 0,
+                morale = (s.morale + if (voted.passed == true) 4 else -2).coerceIn(0, 100),
+                log = (s.log + message).takeLast(8),
+                statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    /** 인근 우호 리더들에게 방어 도움을 요청한다 */
+    fun requestDefenseAid() {
+        _uiState.update { s ->
+            val council = s.emergency
+                ?: return@update s.copy(statusMessage = "[방어 지원] 지금은 지원을 요청할 침공이 없습니다.")
+            if (council.aids.any { it.direction == AidDirection.REQUESTED }) {
+                return@update s.copy(statusMessage = "[방어 지원] 이미 지원을 요청했습니다.")
+            }
+            val sources = s.lords.filterNot { it.isPlayer }.map { lord ->
+                AidSource(
+                    leaderId = lord.id,
+                    leaderName = lord.name,
+                    troops = lord.troops,
+                    friendly = s.union.active || s.treaties.isNotEmpty()
+                )
+            }
+            val next = EmergencyCouncilEngine.requestAid(council, sources, s.diplomacy, s.prestige)
+            val gained = (next.requestedTroops - council.requestedTroops).coerceAtLeast(0)
+            val message = next.message ?: ""
+            s.copy(
+                emergency = next,
+                troops = s.troops + gained,
+                aidLog = s.aidLog + next.aids.filter { it.direction == AidDirection.REQUESTED },
+                log = (s.log + message).takeLast(8),
+                statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    /** 다른 리더가 공격받을 때 지원군을 보낸다 — 병합·종속을 막아낸다 */
+    fun answerAidCall() {
+        _uiState.update { s ->
+            val call = s.aidCall
+                ?: return@update s.copy(statusMessage = "[방어 지원] 지금은 지원을 요청받은 리더가 없습니다.")
+            if (call.answered) {
+                return@update s.copy(statusMessage = "[방어 지원] 이미 응답한 요청입니다.")
+            }
+            val (answered, sent) = EmergencyCouncilEngine.answerCall(call, s.totalTroops)
+            val (regularLeft, mercsLeft) = applyLosses(s.troops, s.mercenaries, sent)
+            val message = answered.result ?: ""
+            s.copy(
+                troops = regularLeft,
+                mercenaries = mercsLeft,
+                prestige = (s.prestige + 5).coerceIn(0, 100),
+                diplomacy = (s.diplomacy + 6).coerceIn(0, 100),
+                lords = s.lords.map { lord ->
+                    if (lord.id != call.victimId) lord
+                    else lord.copy(
+                        masterId = null,
+                        bond = null,
+                        troops = (lord.troops + call.absorbedTroops / 2).coerceAtLeast(1),
+                        activity = "우리 지원군이 방어 — 독립 유지"
+                    )
+                },
+                aidCall = answered,
+                aidLog = s.aidLog + DefenseAid(
+                    leaderName = call.victimName,
+                    troops = sent,
+                    direction = AidDirection.SENT,
+                    note = "${call.attackerName}의 ${call.kind.label} 차단"
+                ),
+                log = (s.log + message).takeLast(8),
+                statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 지속 시간 흐름 · 미접속 AI 대행 (2026-11-25)
+    // ──────────────────────────────────────────────────────────────
+
+    /** 절기 한 칸에 걸리는 시간을 바꾼다 (10·3０·60·180분) */
+    fun setSeasonSpeed(minutes: Int) {
+        _uiState.update {
+            it.copy(
+                clock = it.clock.copy(
+                    seasonMinutes = minutes.coerceIn(1, 1440),
+                    lastTickMillis = System.currentTimeMillis()
+                )
+            )
+        }
+        persist()
+    }
+
+    /** 자동 절기 진행 켜기/끄기 — 기존 수동 '절기' 버튼과 함께 쓴다 */
+    fun setAutoAdvance(on: Boolean) {
+        _uiState.update {
+            it.copy(
+                clock = it.clock.copy(
+                    autoAdvance = on,
+                    lastTickMillis = System.currentTimeMillis()
+                ),
+                statusMessage = if (on) "[시간] 자동 절기 진행을 켰습니다." else "[시간] 자동 진행을 멈췄습니다 — '절기' 버튼으로 진행하세요."
+            )
+        }
+        persist()
+    }
+
+    /** 미접속 AI 대행 켜기/끄기 */
+    fun setAiAutopilot(on: Boolean) {
+        _uiState.update {
+            it.copy(
+                clock = it.clock.copy(aiAutopilot = on, lastTickMillis = System.currentTimeMillis()),
+                statusMessage = if (on) "[AI 대행] 미접속 동안 AI가 내정·방어를 이어갑니다."
+                else "[AI 대행] 미접속 동안에는 절기를 진행하지 않습니다."
+            )
+        }
+        persist()
+    }
+
+    fun dismissOfflineReport() {
+        _uiState.update { it.copy(offlineReport = null) }
+    }
+
+    /**
+     * 화면 시계가 15초마다 부른다 — 흐른 시간만큼 절기를 자동으로 진행한다.
+     *
+     * · 지난 시간이 절기 한 칸을 넘으면 그만큼 [nextSeasonState] 를 돌린다(수동 버튼과 같은 엔진).
+     * · 5분 이상 비었으면 '미접속'으로 보고 AI 대행 리포트를 남긴다.
+     */
+    fun tickRealTime(nowMillis: Long = System.currentTimeMillis()) {
+        val before = _uiState.value
+        if (before.stage != GameStage.PLAY || before.playerLordId == null) return
+        if (before.clock.lastTickMillis <= 0L) {
+            _uiState.update { it.copy(clock = it.clock.copy(lastTickMillis = nowMillis)) }
+            return
+        }
+        val tick = SeasonClockEngine.tick(before.clock, nowMillis, before.clock.autoAdvance)
+        // 미접속 AI 대행이 꺼져 있으면 비어 있는 시간은 건너뛴다(권리를 침해하지 않는 선)
+        val applyDue = if (tick.offline && !before.clock.aiAutopilot) 0 else tick.due
+        if (applyDue <= 0) {
+            if (tick.clock != before.clock) {
+                val note = if (tick.offline && !before.clock.aiAutopilot) {
+                    "[AI 대행] 미접속 ${SeasonClockEngine.awayLabel(tick.awayMillis)} 동안 자동 진행이 꺼져 있어 절기가 흐르지 않았습니다."
+                } else null
+                _uiState.update {
+                    it.copy(
+                        clock = tick.clock,
+                        statusMessage = note ?: it.statusMessage
+                    )
+                }
+            }
+            return
+        }
+        val goldBefore = before.gold
+        val foodBefore = before.food
+        val troopsBefore = before.troops
+        var state = before
+        var lastNews: List<String> = emptyList()
+        var emergency: EmergencyCouncil? = before.emergency
+        repeat(applyDue) {
+            state = nextSeasonState(state, dikeMaintenanceDone = true)
+            if (state.aiNews.isNotEmpty()) lastNews = state.aiNews
+            if (state.emergency != null) emergency = state.emergency
+        }
+        val report = if (tick.offline && before.clock.aiAutopilot) {
+            SeasonClockEngine.offlineSummary(
+                seasons = applyDue,
+                awayMillis = tick.awayMillis,
+                goldBefore = goldBefore,
+                goldAfter = state.gold,
+                foodBefore = foodBefore,
+                foodAfter = state.food,
+                troopsBefore = troopsBefore,
+                troopsAfter = state.troops,
+                aiNews = lastNews,
+                emergency = emergency
+            )
+        } else state.offlineReport
+        _uiState.value = state.copy(
+            clock = tick.clock,
+            offlineReport = report,
+            statusMessage = "[시간] 절기 " + ("%d".format(applyDue)) + "회가 자동으로 흘렀습니다 — " +
+                state.seasonName.substringBefore(" (")
+        )
         persist()
     }
 
@@ -3107,7 +3716,8 @@ class SlgGameViewModel(
 
     /** 의회 구성 — 플레이어를 제외한 AI 리더 (최대 12석) */
     private fun buildCouncilLords(s: SlgGameState): List<Lord> {
-        val aiLords = s.lords.filter { !it.isPlayer }.take(12)
+        // 우리 연방으로 편입된 리더는 의결권(내 표)으로 이미 반영되므로 AI 의석에서 뺀다
+        val aiLords = s.lords.filter { !it.isPlayer && !it.incorporated }.take(12)
         if (aiLords.isEmpty()) {
             return listOf(
                 Lord("lord_1", "인접 리더 A", false, s.regionCode, troops = 300, grain = 1200, gold = 800, prestige = 55)

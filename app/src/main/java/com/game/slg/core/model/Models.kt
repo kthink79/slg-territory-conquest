@@ -127,7 +127,11 @@ enum class BillType {
     TROOP_LEVY,       // 예비군·경비 인력 소집
     SPECIAL_TAX,      // 긴급 재정 조례
     FORTRESS_EXPAND,  // 방호 시설 증설
-    DECLARE_WAR       // 인접 세력에 대한 무력 대응 결의
+    DECLARE_WAR,      // 인접 세력에 대한 무력 대응 결의
+    JOINT_WAR,        // 지역 리더 연합 공동 전투
+    JOINT_DIPLOMACY,  // 지역 리더 연합 공동 외교
+    JOINT_STRATEGY,   // 지역 리더 연합 공동 전략
+    EMERGENCY_DEFENSE // 외부 침공 시 긴급 방어 결의
 }
 
 /**

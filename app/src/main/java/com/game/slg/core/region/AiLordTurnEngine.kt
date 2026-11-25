@@ -34,6 +34,19 @@ data class AiPlayerRaid(
     val message: String
 )
 
+/**
+ * 이번 절기에 일어난 세력 확장 1건 — 우호 리더가 공격받았을 때 지원군을 보낼 근거가 된다.
+ * (사용자 요청 2026-11-25: "다른 리더가 공격받을 때 내가 지원군/도움을 보낼 수도 있어야 한다")
+ */
+data class AiExpansion(
+    val leaderId: String,
+    val leaderName: String,
+    val targetId: String,
+    val targetName: String,
+    val kind: LeaderBond,
+    val absorbedTroops: Int = 0
+)
+
 /** 한 절기의 AI 동향 */
 data class AiSeasonOutcome(
     val lords: List<AiLordProfile>,
@@ -41,7 +54,9 @@ data class AiSeasonOutcome(
     val raids: List<AiPlayerRaid> = emptyList(),
     val mergedCount: Int = 0,
     val subordinatedCount: Int = 0,
-    val independentCount: Int = 0
+    val independentCount: Int = 0,
+    /** 이번 절기 확장 1건 — 없으면 null */
+    val expansion: AiExpansion? = null
 ) {
     val troopLoss: Int get() = raids.sumOf { it.troopLoss }
     val goldLoss: Int get() = raids.sumOf { it.goldLoss }
@@ -207,6 +222,7 @@ object AiLordTurnEngine {
         var subordinatedCount = working.count { it.bond == LeaderBond.SUBORDINATION }
         val expansionRng = Random(baseSeed + 977L)
         val independent = working.filter { it.masterId == null }
+        var expansion: AiExpansion? = null
         // 세력권 상위 3명 중 한 명이 이번 절기에 움직인다 — 매번 같은 패권자만 자라지 않게
         val actors = independent
             .filter { it.troops >= MIN_PROJECTION }
@@ -251,6 +267,14 @@ object AiLordTurnEngine {
                         activity = "${leader.name} 리더에게 병합 — 거점 병력 ${format(keep)}명 유지"
                     )
                     mergedCount += 1
+                    expansion = AiExpansion(
+                        leaderId = leader.id,
+                        leaderName = leader.name,
+                        targetId = target.id,
+                        targetName = target.name,
+                        kind = LeaderBond.MERGE,
+                        absorbedTroops = absorbed
+                    )
                     news += "[AI 동향] ${leader.name} 리더가 ${target.name} 리더 세력을 병합했습니다 — " +
                         "편제 +${format(absorbed)}명 · 거점 병력 ${format(keep)}명 유지."
                 } else {
@@ -265,6 +289,14 @@ object AiLordTurnEngine {
                         activity = "${leader.name} 리더에게 종속 — 조공 ${format((target.gold * TRIBUTE_RATIO).toInt())}G/절기"
                     )
                     subordinatedCount += 1
+                    expansion = AiExpansion(
+                        leaderId = leader.id,
+                        leaderName = leader.name,
+                        targetId = target.id,
+                        targetName = target.name,
+                        kind = LeaderBond.SUBORDINATION,
+                        absorbedTroops = (target.troops - (target.troops * 0.9).toInt()).coerceAtLeast(0)
+                    )
                     news += "[AI 동향] ${leader.name} 리더가 ${target.name} 리더를 종속시켰습니다 — " +
                         "절기 조공 ${format((target.gold * TRIBUTE_RATIO).toInt())}G · 병력 차출."
                 }
@@ -318,7 +350,8 @@ object AiLordTurnEngine {
             raids = raids,
             mergedCount = mergedCount,
             subordinatedCount = subordinatedCount,
-            independentCount = stillIndependent
+            independentCount = stillIndependent,
+            expansion = expansion
         )
     }
 

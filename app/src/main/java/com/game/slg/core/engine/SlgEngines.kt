@@ -7,6 +7,13 @@ import com.game.slg.core.model.*
  */
 interface CouncilEngineContract {
     fun voteOnBill(bill: CouncilBill, lords: List<Lord>): CouncilBill
+
+    /**
+     * 의결권을 반영한 표결 — 내가 직할·편입한 리더 수만큼 표를 행사한다.
+     * (사용자 요청 2026-11-25: "플레이어 기본 1표가 아니라 편입한 리더 수만큼 표를 가져가")
+     */
+    fun voteOnBill(bill: CouncilBill, lords: List<Lord>, playerVotePower: Int): CouncilBill =
+        voteOnBill(bill, lords)
 }
 
 interface InfiltrationEngineContract {
@@ -87,7 +94,16 @@ class CouncilEngine : CouncilEngineContract {
     /**
      * 대표 리더이 지역 정책(경비 인력 소집 등)을 리더 의회에 상정
      */
-    override fun voteOnBill(bill: CouncilBill, lords: List<Lord>): CouncilBill {
+    override fun voteOnBill(bill: CouncilBill, lords: List<Lord>): CouncilBill =
+        voteOnBill(bill, lords, playerVotePower = 0)
+
+    /**
+     * 의결권 반영 표결.
+     *
+     * [playerVotePower] 는 내가 행사하는 표 수다 — 기본 1표에 직할·편입 리더 수가 더해진다.
+     * 안건은 내가 상정하므로 내 표는 찬성으로 들어간다. 반대 65% 이상이면 연합 불복.
+     */
+    override fun voteOnBill(bill: CouncilBill, lords: List<Lord>, playerVotePower: Int): CouncilBill {
         var favor = 0
         var against = 0
 
@@ -102,17 +118,23 @@ class CouncilEngine : CouncilEngineContract {
                 BillType.SPECIAL_TAX -> lord.grain > 1000
                 BillType.FORTRESS_EXPAND -> true
                 BillType.DECLARE_WAR -> lord.troops > 2000
+                BillType.JOINT_WAR, BillType.JOINT_STRATEGY -> lord.troops > 400
+                BillType.JOINT_DIPLOMACY, BillType.EMERGENCY_DEFENSE -> true
             }
 
             if (acceptsLevy) favor++ else against++
         }
+
+        // 내 의결권 — 상정한 쪽이므로 찬성
+        favor += playerVotePower.coerceAtLeast(0)
 
         bill.votesInFavor = favor
         bill.votesAgainst = against
         bill.isPassed = favor > against
 
         // 반대표가 65% 이상일 경우 다른 리더들과 연합해 대표 리더에 대한 불복·반란을 일으킬 수 있음 (리더이 없을 경우 방지)
-        if (lords.isNotEmpty() && (against.toDouble() / lords.size >= 0.65)) {
+        val total = favor + against
+        if (total > 0 && (against.toDouble() / total >= 0.65)) {
             bill.isRebellionTriggered = true
         } else {
             bill.isRebellionTriggered = false

@@ -96,7 +96,7 @@ class MainUiNavigationTest {
     fun `기존 세부 탭 구성이 유지된다`() {
         assertEquals(listOf("유민", "상인", "정찰대"), EventTab.entries.map { it.label })
         assertEquals(4, TerritoryTab.entries.size)
-        assertEquals(2, CouncilTab.entries.size)
+        assertEquals(listOf("안건", "연합", "긴급", "리더"), CouncilTab.entries.map { it.label })
         assertEquals(5, WarTab.entries.size)
         assertEquals(3, com.game.slg.ui.EmpireTab.entries.size)
         assertEquals(3, DiplomacyTab.entries.size)

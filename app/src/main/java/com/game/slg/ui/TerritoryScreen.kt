@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +37,8 @@ import com.game.slg.core.map.TerritoryMapLayout
 import com.game.slg.core.model.FacilityCategory
 import com.game.slg.core.model.FacilityType
 import com.game.slg.core.model.TerrainType
+import com.game.slg.core.region.SeasonClock
+import kotlinx.coroutines.delay
 
 /**
  * 서브 메뉴 「영지·내정」 — 탭 4개: 영지 / 지표 / 절기 / 시설.
@@ -47,14 +51,23 @@ fun TerritoryScreen(
     tabIndex: Int = 0,
     onSelectTerritory: (String) -> Unit = {},
     onOpenRegionDetail: (String) -> Unit = {},
-    onBuildFacility: (FacilityType) -> BuildValidation = { BuildValidation(false, 0) }
+    onBuildFacility: (FacilityType) -> BuildValidation = { BuildValidation(false, 0) },
+    onSetSeasonSpeed: (Int) -> Unit = {},
+    onToggleAutoAdvance: (Boolean) -> Unit = {},
+    onToggleAutopilot: (Boolean) -> Unit = {}
 ) {
     SlgScreenFrame {
         PromotionCeremonyBanner(state = state, onDismissCeremony = onDismissCeremony)
         when (TerritoryTab.entries[tabIndex.coerceIn(0, TerritoryTab.entries.lastIndex)]) {
             TerritoryTab.HOME -> TerritoryOverview(state)
             TerritoryTab.STATS -> TerritoryStats(state, onSelectTerritory, onOpenRegionDetail)
-            TerritoryTab.SEASON -> SeasonPanel(state, onAdvanceSeason)
+            TerritoryTab.SEASON -> SeasonPanel(
+                state = state,
+                onAdvanceSeason = onAdvanceSeason,
+                onSetSeasonSpeed = onSetSeasonSpeed,
+                onToggleAutoAdvance = onToggleAutoAdvance,
+                onToggleAutopilot = onToggleAutopilot
+            )
             TerritoryTab.FACILITIES -> FacilityPanel(state, onBuildFacility)
         }
     }
@@ -304,7 +317,109 @@ private fun TerritoryStats(
 }
 
 @Composable
-private fun SeasonPanel(state: SlgGameState, onAdvanceSeason: () -> Unit) {
+private fun SeasonPanel(
+    state: SlgGameState,
+    onAdvanceSeason: () -> Unit,
+    onSetSeasonSpeed: (Int) -> Unit = {},
+    onToggleAutoAdvance: (Boolean) -> Unit = {},
+    onToggleAutopilot: (Boolean) -> Unit = {}
+) {
+    // 1초마다 현재 시각을 다시 읽어 남은 시간을 보여 준다
+    val now by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(1_000L)
+        }
+    }
+    val clock = state.clock
+
+    // ── 지속 시간 흐름 — 절기가 저절로 흐른다 (2026-11-25 요청) ──
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SlgColors.Surface)
+            .border(1.dp, SlgColors.Steel.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("⏱ 절기 시계", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            SlgPill(clock.speedLabel, if (clock.autoAdvance) SlgColors.Success else SlgColors.Muted)
+        }
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                if (clock.autoAdvance) "다음 절기까지" else "자동 진행 멈춤",
+                color = SlgColors.Muted,
+                fontSize = SlgType.MICRO,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                clock.countdownLabel(now),
+                color = if (clock.autoAdvance) SlgColors.Brass else SlgColors.Muted,
+                fontSize = SlgType.TITLE,
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+        SlgStatBar(
+            ratio = clock.progress(now),
+            color = SlgColors.Brass,
+            height = 7
+        )
+        Text(
+            "시간이 흐르면 절기가 자동으로 넘어가고, AI가 내정·모병·방어를 대신 운영합니다. " +
+                "미접속 동안 흐른 시간도 돌아오면 그만큼 진행됩니다.",
+            color = SlgColors.Muted,
+            fontSize = SlgType.MICRO,
+            lineHeight = SlgLine.MICRO
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            SeasonClock.SPEED_MINUTES.forEach { minutes ->
+                val selected = clock.seasonMinutes == minutes
+                val label = if (minutes >= 60) "${minutes / 60}시간" else "${minutes}분"
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (selected) SlgColors.Brass.copy(alpha = 0.22f) else SlgColors.SurfaceAlt)
+                        .border(
+                            1.dp,
+                            if (selected) SlgColors.Brass.copy(alpha = 0.8f) else SlgColors.Line,
+                            RoundedCornerShape(50)
+                        )
+                        .clickable { onSetSeasonSpeed(minutes) }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        label,
+                        color = if (selected) SlgColors.Brass else SlgColors.Muted,
+                        fontSize = SlgType.LABEL,
+                        fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            ToggleChip(
+                label = "자동 진행",
+                on = clock.autoAdvance,
+                accent = SlgColors.Success,
+                modifier = Modifier.weight(1f)
+            ) { onToggleAutoAdvance(!clock.autoAdvance) }
+            ToggleChip(
+                label = "AI 대행",
+                on = clock.aiAutopilot,
+                accent = SlgColors.Steel,
+                modifier = Modifier.weight(1f)
+            ) { onToggleAutopilot(!clock.aiAutopilot) }
+        }
+        if (state.offlineReport != null) {
+            ResultBox(state.offlineReport, SlgColors.Steel)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -453,4 +568,43 @@ fun SlgGameState.seasonWheelIndex(): Int = when {
     seasonName.startsWith("여름") -> 1
     seasonName.startsWith("가을") -> 2
     else -> 3
+}
+
+/** 켜기/끄기 칩 — 자동 진행·AI 대행 */
+@Composable
+private fun ToggleChip(
+    label: String,
+    on: Boolean,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (on) accent.copy(alpha = 0.18f) else SlgColors.SurfaceAlt)
+            .border(
+                1.dp,
+                if (on) accent.copy(alpha = 0.7f) else SlgColors.Line,
+                RoundedCornerShape(50)
+            )
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            if (on) "●" else "○",
+            color = if (on) accent else SlgColors.Muted,
+            fontSize = SlgType.MICRO
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            "$label ${if (on) "켜짐" else "꺼짐"}",
+            color = if (on) accent else SlgColors.Muted,
+            fontSize = SlgType.LABEL,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
 }
