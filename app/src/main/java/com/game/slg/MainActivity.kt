@@ -38,7 +38,6 @@ import com.game.slg.ui.SlgInfoOverlay
 import com.game.slg.ui.SlgIntroScreen
 import com.game.slg.ui.SlgMainScreen
 import com.game.slg.ui.SlgTabSurface
-import com.game.slg.ui.StatusAlertBuilder
 import com.game.slg.ui.SubMenuBadges
 import kotlinx.coroutines.delay
 
@@ -183,7 +182,6 @@ private fun PlaySurface(
     infoOpen: Boolean,
     onInfoOpenChange: (Boolean) -> Unit
 ) {
-    val alerts = StatusAlertBuilder.build(state)
     Column(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().weight(1f)) {
             if (navigation.isHome) {
