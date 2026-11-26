@@ -61,7 +61,13 @@ data class CampaignSave(
     /** 미접속 동안 AI 대행 켜기/끄기 */
     val aiAutopilot: Boolean = true,
     /** 인접 지역 교전으로 깎은 리더 병력 — "leaderId|damage" */
-    val adjacentDamage: List<String> = emptyList()
+    val adjacentDamage: List<String> = emptyList(),
+    /** 행정 단위 — AdminTier 이름 (DONG/CITY/PROVINCE/STATE) */
+    val adminTier: String = "DONG",
+    /** 무력 병합·외교 편입한 인접 리더 — "leaderId|regionCode|status|name|population|leaderName" */
+    val conquests: List<String> = emptyList(),
+    /** 의회 전쟁 안건 — "id|kind|regionCode|regionName|targetName|title|season|favor|against|ourVotes|passed|consumed" */
+    val warAgendas: List<String> = emptyList()
 )
 
 interface CampaignStore {

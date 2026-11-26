@@ -72,7 +72,11 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
                 }
                 .toMap(),
             lordStates = prefs.getStringSet(KEY_LORD_STATES, emptySet()).orEmpty().sorted(),
-            seasonTurn = prefs.getInt(KEY_SEASON_TURN, 0)
+            seasonTurn = prefs.getInt(KEY_SEASON_TURN, 0),
+            adjacentDamage = prefs.getStringSet(KEY_ADJACENT_DAMAGE, emptySet()).orEmpty().sorted(),
+            adminTier = prefs.getString(KEY_ADMIN_TIER, "DONG") ?: "DONG",
+            conquests = prefs.getStringSet(KEY_CONQUESTS, emptySet()).orEmpty().sorted(),
+            warAgendas = prefs.getStringSet(KEY_WAR_AGENDAS, emptySet()).orEmpty().sorted()
         )
     }
 
@@ -123,6 +127,10 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
             )
             .putStringSet(KEY_LORD_STATES, save.lordStates.toSet())
             .putInt(KEY_SEASON_TURN, save.seasonTurn)
+            .putStringSet(KEY_ADJACENT_DAMAGE, save.adjacentDamage.toSet())
+            .putString(KEY_ADMIN_TIER, save.adminTier)
+            .putStringSet(KEY_CONQUESTS, save.conquests.toSet())
+            .putStringSet(KEY_WAR_AGENDAS, save.warAgendas.toSet())
             .apply()
     }
 
@@ -156,5 +164,9 @@ class AndroidCampaignStore(context: Context) : CampaignStore {
         private const val KEY_HERO_DISCOVERY = "hero_discovery"
         private const val KEY_LORD_STATES = "lord_states"
         private const val KEY_SEASON_TURN = "season_turn"
+        private const val KEY_ADJACENT_DAMAGE = "adjacent_damage"
+        private const val KEY_ADMIN_TIER = "admin_tier"
+        private const val KEY_CONQUESTS = "conquests"
+        private const val KEY_WAR_AGENDAS = "war_agendas"
     }
 }

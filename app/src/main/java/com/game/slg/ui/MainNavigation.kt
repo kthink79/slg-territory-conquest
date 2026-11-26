@@ -72,83 +72,85 @@ enum class MainTab(
     }
 }
 
-/** 영지 탭 상단 탭 — 내정·시설·기술·의회·승격·사건 */
-enum class DomainTab(val label: String) {
-    HOME("내정"),
-    STATS("지표"),
-    FACILITIES("시설"),
-    SEASON("절기"),
-    TECH("기술"),
-    COUNCIL("의회"),
-    PROMOTION("승격"),
-    EVENTS("사건")
+/** 영지 탭 상단 탭 — 내정·지표·시설·절기·기술·의회·승격·사건·행정 */
+enum class DomainTab(val label: String, val icon: String) {
+    HOME("내정", "🏠"),
+    STATS("지표", "📊"),
+    FACILITIES("시설", "🏗"),
+    SEASON("절기", "🌾"),
+    TECH("기술", "🔬"),
+    COUNCIL("의회", "🏛"),
+    PROMOTION("승격", "👑"),
+    EVENTS("사건", "🎭"),
+    ADMIN("행정", "🏢")
 }
 
 /** 영웅 탭 상단 탭 — 배치 / 영입 */
-enum class HeroTab(val label: String) {
-    PLACE("배치"),
-    RECRUIT("영입")
+enum class HeroTab(val label: String, val icon: String) {
+    PLACE("배치", "🎖"),
+    RECRUIT("영입", "🔎")
 }
 
 /** 작전 탭 상단 탭 */
-enum class WarTab(val label: String) {
-    OPS("작전"),
-    STRATEGY("전략"),
-    REGION("지역"),
-    REPORT("전과"),
-    DOCTRINE("원칙")
+enum class WarTab(val label: String, val icon: String) {
+    OPS("작전", "⚔"),
+    STRATEGY("전략", "🧠"),
+    REGION("지역", "🗺"),
+    REPORT("전과", "📜"),
+    DOCTRINE("원칙", "📕")
 }
 
 /** 영토 탭 상단 탭 — 흡수 / 통치 / 병력 */
-enum class EmpireTab(val label: String) {
-    ABSORB("흡수"),
-    GOVERN("통치"),
-    MANPOWER("병력")
+enum class EmpireTab(val label: String, val icon: String) {
+    ABSORB("흡수", "🤝"),
+    GOVERN("통치", "🏛"),
+    MANPOWER("병력", "⚔")
 }
 
 /** 외교 탭 상단 탭 */
-enum class DiplomacyTab(val label: String) {
-    TREATY("조약"),
-    ESPIONAGE("첩보"),
-    TALENT("인재")
+enum class DiplomacyTab(val label: String, val icon: String) {
+    TREATY("조약", "📜"),
+    ESPIONAGE("첩보", "🕵"),
+    TALENT("인재", "👤")
 }
 
 /** 기술 계통 탭 — 영지 탭 안 기술 화면의 계통 선택 */
-enum class TechTab(val branch: String, val label: String) {
-    ADMIN("내정", "내정"),
-    SCIENCE("과학기술", "과학"),
-    CULTURE("문화", "문화"),
-    MILITARY("군사", "군사")
+enum class TechTab(val branch: String, val label: String, val icon: String) {
+    ADMIN("내정", "내정", "🏠"),
+    SCIENCE("과학기술", "과학", "🔬"),
+    CULTURE("문화", "문화", "🎭"),
+    MILITARY("군사", "군사", "⚔")
 }
 
 /** 영지 화면 안쪽 탭 — TerritoryScreen 이 쓰는 4개 */
-enum class TerritoryTab(val label: String) {
-    HOME("영지"),
-    STATS("지표"),
-    SEASON("절기"),
-    FACILITIES("시설")
+enum class TerritoryTab(val label: String, val icon: String) {
+    HOME("영지", "🏠"),
+    STATS("지표", "📊"),
+    SEASON("절기", "🌾"),
+    FACILITIES("시설", "🏗")
 }
 
-/** 의회 화면 안쪽 탭 — 안건 / 연합 / 긴급 / 리더 */
-enum class CouncilTab(val label: String) {
-    BILLS("안건"),
-    COALITION("연합"),
-    EMERGENCY("긴급"),
-    LORDS("리더")
+/** 의회 화면 안쪽 탭 — 안건 / 연합 / 전쟁 / 긴급 / 리더 */
+enum class CouncilTab(val label: String, val icon: String) {
+    BILLS("안건", "📜"),
+    COALITION("연합", "🤝"),
+    WAR("전쟁", "⚔"),
+    EMERGENCY("긴급", "🚨"),
+    LORDS("리더", "👥")
 }
 
 /** 사건 화면 안쪽 탭 — 유민 / 상인 / 정찰대 */
-enum class EventTab(val label: String) {
-    REFUGEE("유민"),
-    MERCHANT("상인"),
-    SCOUT("정찰대")
+enum class EventTab(val label: String, val icon: String) {
+    REFUGEE("유민", "🚪"),
+    MERCHANT("상인", "🌙"),
+    SCOUT("정찰대", "🛰")
 }
 
 /** 승격 화면 안쪽 탭 — 로드맵 / 조건 / 경로 */
-enum class PromotionTab(val label: String) {
-    ROADMAP("로드맵"),
-    CONDITIONS("조건"),
-    PATH("경로")
+enum class PromotionTab(val label: String, val icon: String) {
+    ROADMAP("로드맵", "🗺"),
+    CONDITIONS("조건", "✅"),
+    PATH("경로", "➡")
 }
 
 /** 화면 탭 목록 */
@@ -164,6 +166,16 @@ object ScreenTabs {
         MainTab.WAR -> WarTab.entries.map { it.label }
         MainTab.DIPLOMACY -> DiplomacyTab.entries.map { it.label }
         MainTab.EMPIRE -> EmpireTab.entries.map { it.label }
+    }
+
+    /** 탭 라벨 앞에 붙는 아이콘 — "아이콘 + 1~2단어 라벨" 구성 */
+    fun iconsOf(tab: MainTab): List<String> = when (tab) {
+        MainTab.MAP -> emptyList()
+        MainTab.DOMAIN -> DomainTab.entries.map { it.icon }
+        MainTab.HERO -> HeroTab.entries.map { it.icon }
+        MainTab.WAR -> WarTab.entries.map { it.icon }
+        MainTab.DIPLOMACY -> DiplomacyTab.entries.map { it.icon }
+        MainTab.EMPIRE -> EmpireTab.entries.map { it.icon }
     }
 
     fun countOf(tab: MainTab): Int = labelsOf(tab).size
@@ -433,6 +445,41 @@ object StatusAlertBuilder {
                 targetSub = EmpireTab.MANPOWER.ordinal
             )
         }
+        // ── 편입 대기 · 의회 전쟁 안건 (v0.10.0) ──
+        if (state.pendingConquest != null) {
+            alerts += StatusAlert(
+                id = "alert_conquest",
+                icon = "🏳",
+                short = "편입 선택",
+                title = state.pendingConquest.headline,
+                severity = AlertSeverity.CRITICAL,
+                target = MainTab.WAR,
+                targetSub = WarTab.REGION.ordinal
+            )
+        }
+        val pendingWar = state.warAgendas.count { it.pending }
+        if (pendingWar > 0) {
+            alerts += StatusAlert(
+                id = "alert_war_agenda",
+                icon = "⚔",
+                short = "전쟁 안건 ${pendingWar}건",
+                title = "의회 전쟁 안건 ${pendingWar}건 표결 대기",
+                severity = AlertSeverity.WARNING,
+                target = MainTab.DOMAIN,
+                targetSub = DomainTab.COUNCIL.ordinal
+            )
+        }
+        if (state.adminEvaluation.isEligible) {
+            alerts += StatusAlert(
+                id = "alert_admin_promote",
+                icon = "🏢",
+                short = "행정 승격",
+                title = "${state.adminTier.label} → ${state.adminTier.next?.label ?: "최종"} 승격 가능",
+                severity = AlertSeverity.INFO,
+                target = MainTab.DOMAIN,
+                targetSub = DomainTab.ADMIN.ordinal
+            )
+        }
         return alerts
     }
 }
@@ -554,7 +601,7 @@ object SubMenuBadges {
     fun subBadge(state: SlgGameState, tab: MainTab, sub: Int): Int =
         countsOf(state, tab).getOrElse(sub) { 0 }
 
-    /** 의회 안쪽 탭(안건·연합·긴급·리더) 배지 — 3단 분배 */
+    /** 의회 안쪽 탭(안건·연합·전쟁·긴급·리더) 배지 — 3단 분배 */
     fun councilInnerCounts(state: SlgGameState): List<Int> {
         val alerts = StatusAlertBuilder.build(state).filter {
             it.target == MainTab.DOMAIN && it.targetSub == DomainTab.COUNCIL.ordinal
@@ -562,6 +609,7 @@ object SubMenuBadges {
         return listOf(
             alerts.count { it.id == "alert_bills" },
             alerts.count { it.id == "alert_coalition" },
+            alerts.count { it.id == "alert_war_agenda" },
             alerts.count { it.id == "alert_emergency" || it.id == "alert_aid_call" },
             0
         )

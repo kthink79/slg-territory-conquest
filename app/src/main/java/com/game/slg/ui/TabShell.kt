@@ -98,6 +98,7 @@ fun SlgTabSurface(
                 accent = accent,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                 badges = SubMenuBadges.countsOf(state, tab),
+                icons = ScreenTabs.iconsOf(tab),
                 onSelect = { index -> viewModel.selectSubTab(index) }
             )
         }
@@ -148,6 +149,12 @@ fun SlgTabSurface(
                     onDeclareIndependence = { viewModel.declareIndependence() },
                     onRecruitPending = { viewModel.recruitPendingHero(it) },
                     onReleasePending = { viewModel.releasePendingHero(it) },
+                    onSetTax = { code, level -> viewModel.setTerritoryTax(code, level) },
+                    onSetLevy = { code, quota -> viewModel.setTerritoryLevy(code, quota) },
+                    onPatrol = { viewModel.patrolTerritory(it) },
+                    onInvestFacility = { code, id -> viewModel.investTerritoryFacility(code, id) },
+                    onSetTribute = { code, rate -> viewModel.setTerritoryTribute(code, rate) },
+                    onCallSupport = { viewModel.callTerritorySupport(it) },
                     tabIndex = navigation.sub
                 )
             }
@@ -164,11 +171,12 @@ fun SlgInlineTabs(
     accent: Color,
     modifier: Modifier = Modifier,
     badges: List<Int> = emptyList(),
+    icons: List<String> = emptyList(),
     onSelect: (Int) -> Unit
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         labels.forEachIndexed { index, label ->
             val selected = index == selectedIndex
@@ -184,16 +192,23 @@ fun SlgInlineTabs(
                         RoundedCornerShape(50)
                     )
                     .clickable { onSelect(index) }
-                    .padding(vertical = 9.dp),
+                    .padding(vertical = 7.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    label,
-                    color = if (selected) accent else SlgColors.Muted,
-                    fontSize = SlgType.LABEL,
-                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                    maxLines = 1
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                ) {
+                    val icon = icons.getOrElse(index) { "" }
+                    if (icon.isNotBlank()) Text(icon, fontSize = SlgType.LABEL)
+                    Text(
+                        label,
+                        color = if (selected) accent else SlgColors.Muted,
+                        fontSize = SlgType.LABEL,
+                        fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
                 if (badge > 0) {
                     Box(
                         modifier = Modifier
@@ -286,6 +301,7 @@ private fun DomainSurface(
                     labels = TechTab.entries.map { it.label },
                     selectedIndex = branch,
                     accent = Color(0xFF64B5F6),
+                    icons = TechTab.entries.map { it.icon },
                     onSelect = { branch = it }
                 )
                 Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -306,6 +322,7 @@ private fun DomainSurface(
                     selectedIndex = inner,
                     accent = SlgColors.Steel,
                     badges = SubMenuBadges.councilInnerCounts(state),
+                    icons = CouncilTab.entries.map { it.icon },
                     onSelect = { inner = it }
                 )
                 Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -317,6 +334,8 @@ private fun DomainSurface(
                         onVoteEmergency = { viewModel.voteEmergencyBill() },
                         onRequestAid = { viewModel.requestDefenseAid() },
                         onAnswerAidCall = { viewModel.answerAidCall() },
+                        onSponsorWar = { viewModel.sponsorWarAgenda(it) },
+                        onVoteWar = { viewModel.voteWarAgenda(it) },
                         tabIndex = inner
                     )
                 }
@@ -330,6 +349,7 @@ private fun DomainSurface(
                     labels = PromotionTab.entries.map { it.label },
                     selectedIndex = inner,
                     accent = SlgColors.Brass,
+                    icons = PromotionTab.entries.map { it.icon },
                     onSelect = { inner = it }
                 )
                 Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -343,6 +363,24 @@ private fun DomainSurface(
             }
         }
 
+        // 행정 단위 4단계 — 승격하면 단계별 관리 메뉴가 실제로 열린다 (v0.10.0)
+        DomainTab.ADMIN -> {
+            AdminTierScreen(
+                state = state,
+                onPromote = { viewModel.promoteAdminTier() },
+                onPerform = { menuId ->
+                    viewModel.performAdminMenu(menuId)
+                    val menu = com.game.slg.core.region.AdminMenu.byId(menuId)
+                    val target = menu?.targetTabId?.let { id ->
+                        MainTab.entries.firstOrNull { it.name == id }
+                    }
+                    if (menu?.kind == com.game.slg.core.region.AdminActionKind.NAVIGATE && target != null) {
+                        viewModel.openTab(target, menu.targetSub)
+                    }
+                }
+            )
+        }
+
         DomainTab.EVENTS -> {
             var inner by rememberSaveable { mutableIntStateOf(0) }
             Column(Modifier.fillMaxSize()) {
@@ -350,6 +388,7 @@ private fun DomainSurface(
                     labels = EventTab.entries.map { it.label },
                     selectedIndex = inner,
                     accent = SlgColors.Violet,
+                    icons = EventTab.entries.map { it.icon },
                     onSelect = { inner = it }
                 )
                 Box(Modifier.fillMaxWidth().weight(1f)) {

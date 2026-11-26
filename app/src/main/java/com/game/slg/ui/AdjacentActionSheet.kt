@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.game.slg.core.map.TerritoryMapLayout
 import com.game.slg.core.model.TreatyType
 import com.game.slg.core.region.AdjacentActionKind
+import com.game.slg.core.region.CasusBelli
 import com.game.slg.core.region.AdjacentDiplomacyEngine
 import com.game.slg.core.region.AdjacentRegionEngine
 import com.game.slg.core.region.AdjacentStrategyOp
@@ -51,7 +52,8 @@ fun AdjacentActionSheetOverlay(
     onChallenge: (String) -> Unit,
     onDiplomacy: (TreatyType) -> Unit,
     onStrategy: (String) -> Unit,
-    onSponsor: (AdjacentActionKind) -> Unit
+    onSponsor: (AdjacentActionKind) -> Unit,
+    onConquestMode: (com.game.slg.core.empire.TerritoryStatus) -> Unit = {}
 ) {
     val sheet = state.adjacentSheet ?: return
     val node = TerritoryMapLayout.node(state.mapNodes, sheet.code)
@@ -120,11 +122,43 @@ fun AdjacentActionSheetOverlay(
                 lineHeight = SlgLine.MICRO
             )
 
+            // ── 전멸·항복 편입 선택 — 교전 직후 이 자리에서 고른다 ──
+            val conquest = state.pendingConquest
+            if (conquest != null) {
+                SlgSectionCard(
+                    title = conquest.headline,
+                    badge = "${conquest.reasonLabel} · ${conquest.populationLabel}",
+                    accent = SlgColors.Brass
+                ) {
+                    SlgIconMenuGrid(
+                        entries = com.game.slg.core.empire.TerritoryStatus.entries.map { mode ->
+                            SlgIconEntry(
+                                id = mode.name,
+                                icon = mode.icon,
+                                label = conquest.optionLabel(mode),
+                                tone = when (mode) {
+                                    com.game.slg.core.empire.TerritoryStatus.DIRECT -> SlgColors.Brass
+                                    com.game.slg.core.empire.TerritoryStatus.VASSAL -> SlgColors.Success
+                                    else -> SlgColors.Steel
+                                }
+                            )
+                        },
+                        columns = 3,
+                        onSelect = { entry ->
+                            com.game.slg.core.empire.TerritoryStatus.entries
+                                .firstOrNull { it.name == entry.id }
+                                ?.let(onConquestMode)
+                        }
+                    )
+                }
+            }
+
             when (sheet.kind) {
                 AdjacentActionKind.WAR -> WarSection(
                     panel = panel,
                     unionActive = state.union.active,
                     coalitionBonus = state.coalition.battleBonusPercent,
+                    casusBelli = state.casusBelliFor(sheet.code),
                     onChallenge = onChallenge
                 )
 
@@ -210,6 +244,7 @@ private fun WarSection(
     panel: com.game.slg.core.region.AdjacentRegionPanel,
     unionActive: Boolean,
     coalitionBonus: Int,
+    casusBelli: com.game.slg.core.region.CasusBelli,
     onChallenge: (String) -> Unit
 ) {
     SlgSectionCard(
@@ -217,29 +252,28 @@ private fun WarSection(
         badge = panel.headcountLabel,
         accent = SlgColors.Danger
     ) {
-        Text(
-            panel.warHint,
-            color = SlgColors.Muted,
-            fontSize = SlgType.MICRO,
-            lineHeight = SlgLine.MICRO
-        )
-        if (unionActive) {
-            Text(
-                "🛡 지역 연합 기간 — 같은 지역 안에서만 교전이 막힙니다. 인접 지역 원정은 지금도 가능합니다.",
-                color = SlgColors.Success,
-                fontSize = SlgType.MICRO,
-                lineHeight = SlgLine.MICRO
-            )
+        // 규칙 설명은 한 줄만 — 전투 판단에 필요한 것은 수치·배지로 보인다
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (casusBelli != CasusBelli.NONE) {
+                SlgPill("의회 명분 ${casusBelli.label}", SlgColors.Success)
+            }
+            if (coalitionBonus > 0) {
+                SlgPill("연합 +$coalitionBonus%", SlgColors.Brass)
+            }
+            if (panel.absorbedLeaders.isNotEmpty()) {
+                SlgPill("편입 ${panel.absorbedLeaders.size}명", SlgColors.Success)
+            }
         }
-        if (coalitionBonus > 0) {
-            SlgPill("연합 공동 전투 +$coalitionBonus%", SlgColors.Brass)
+        if (unionActive) {
+            SlgPill("🛡 지역 연합 중 · 인접 원정 가능", SlgColors.Success)
         }
         val targets = panel.warTargets
         if (targets.isEmpty()) {
             Text(
-                "개별 교전 대상이 없습니다 — 이 지역은 이미 우두머리에게 묶여 있습니다.",
+                if (panel.absorbedLeaders.isNotEmpty()) "이 지역 리더들이 모두 우리 연합에 들어왔습니다 — 영토 › 통치에서 운영하세요."
+                else "개별 교전 대상이 없습니다 — 이 지역은 이미 우두머리에게 묶여 있습니다.",
                 color = SlgColors.Muted,
-                fontSize = SlgType.MICRO
+                fontSize = SlgType.LABEL
             )
         }
         targets.take(14).forEach { target ->
@@ -247,7 +281,7 @@ private fun WarSection(
         }
         if (targets.size > 14) {
             Text(
-                "외 ${targets.size - 14}명은 「확대」 세부맵에서 확인할 수 있습니다.",
+                "외 ${targets.size - 14}명은 「확대」 세부맵에서",
                 color = SlgColors.Muted,
                 fontSize = SlgType.MICRO
             )

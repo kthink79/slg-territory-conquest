@@ -48,6 +48,8 @@ object EmpireEngine {
 
         val updated = territories.map { territory ->
             population += territory.population
+            // 통치 정책(세율·치안·징병·시설)이 세수·식량·징병·민심에 먼저 작용한다
+            val policySeason = GovernanceEngine.season(territory)
             val stats = territory.viceroyHeroId?.let { heroStats[it] }
             if (stats != null) {
                 val gov = ViceroyEngine.govern(
@@ -58,28 +60,41 @@ object EmpireEngine {
                     ops = stats.ops,
                     diplomacy = stats.diplomacy
                 )
-                val gained = gov.troopGain.coerceAtMost(room)
+                val gained = (gov.troopGain * policySeason.levyRatio).toInt().coerceAtMost(room)
                 room -= gained
-                gold += gov.goldGain + (territory.taxIncome() * territory.status.taxRate).toInt()
+                gold += gov.goldGain + territory.taxIncome()
                 food += gov.foodGain + territory.foodIncome()
                 levies += gained
                 lines += ViceroyEngine.reportLine(territory, gov)
+                lines += policySeason.line
                 territory.copy(
                     development = (territory.development + gov.developmentGain).coerceIn(0, 100),
-                    morale = (territory.morale + gov.moraleGain).coerceIn(0, 100),
+                    morale = (territory.morale + gov.moraleGain + policySeason.moraleDelta)
+                        .coerceIn(0, 100),
                     defense = (territory.defense + gov.defenseGain).coerceIn(0, 100),
-                    troops = (territory.troops + gained).coerceAtMost(territory.troopCap),
+                    troops = (territory.troops + gained - policySeason.troopLoss)
+                        .coerceAtLeast(0).coerceAtMost(territory.troopCap),
                     food = territory.food + gov.foodGain,
-                    gold = territory.gold + gov.goldGain
+                    gold = territory.gold + gov.goldGain,
+                    policy = territory.policy.copy(
+                        security = (territory.policy.security + policySeason.securityDelta)
+                            .coerceIn(0, 100)
+                    )
                 )
             } else {
                 val tax = (territory.taxIncome() * NEGLECTED_TAX_RATE).toInt()
                 gold += tax
                 food += (territory.foodIncome() * NEGLECTED_TAX_RATE).toInt()
                 lines += "[미일임] ${territory.name} — 태수 없이 방치되어 세수 ${"%,d".format(tax)}G, 민심 -1"
+                lines += policySeason.line
                 territory.copy(
-                    morale = (territory.morale - 1).coerceAtLeast(0),
-                    defense = (territory.defense - 1).coerceAtLeast(0)
+                    morale = (territory.morale - 1 + policySeason.moraleDelta).coerceIn(0, 100),
+                    defense = (territory.defense - 1).coerceIn(0, 100),
+                    troops = (territory.troops - policySeason.troopLoss).coerceAtLeast(0),
+                    policy = territory.policy.copy(
+                        security = (territory.policy.security + policySeason.securityDelta)
+                            .coerceIn(0, 100)
+                    )
                 )
             }
         }

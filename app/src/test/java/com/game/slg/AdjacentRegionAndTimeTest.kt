@@ -358,7 +358,7 @@ class AdjacentRegionAndTimeTest {
         val state = vm.uiState.value
 
         val inner = SubMenuBadges.councilInnerCounts(state)
-        assertEquals(4, inner.size)
+        assertEquals(5, inner.size)
         // 기본 안건 2건이 표결 대기 → 안건 배지
         assertTrue(inner[0] >= 1)
         val councilBadge = SubMenuBadges.subBadge(state, MainTab.DOMAIN, 5)

@@ -149,7 +149,7 @@ private fun TerritoryOverview(state: SlgGameState) {
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("관할 구역", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Text("관할 구역", color = SlgColors.Text, fontSize = SlgType.SECTION, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             SlgPill("🏙 ${state.lordCapacity}석", SlgColors.Brass)
         }
@@ -163,20 +163,11 @@ private fun TerritoryOverview(state: SlgGameState) {
             SlgSummaryChip("🏙", "리더 ${state.aiLordCount}", SlgColors.Steel, Modifier.weight(1f))
             SlgSummaryChip("📐", "1,000명/석", SlgColors.Brass, Modifier.weight(1f))
         }
-        Text(
-            "인구 ${state.regionPopulation}명 ÷ 1,000 = 리더 ${state.lordCapacity}석 · 인계 ${state.registeredLords}석 · " +
-                "나머지 ${state.aiLordCount}석은 다른 리더 운영",
-            color = SlgColors.Muted,
-            fontSize = SlgType.MICRO,
-            lineHeight = SlgLine.MICRO
-        )
         SlgPill(state.expansionTier.label, SlgColors.Steel, filled = true)
         Text(
-            "${state.expansionTier.detail} — 지휘 Lv.${state.command.level} " +
-                "(다음 Lv.까지 ${state.command.xpRemaining} XP)",
+            "다음 Lv.까지 ${state.command.xpRemaining} XP",
             color = SlgColors.Text.copy(alpha = 0.85f),
-            fontSize = SlgType.MICRO,
-            lineHeight = SlgLine.MICRO
+            fontSize = SlgType.MICRO
         )
     }
 
@@ -190,7 +181,7 @@ private fun TerritoryOverview(state: SlgGameState) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("통치 지표", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Text("통치 지표", color = SlgColors.Text, fontSize = SlgType.SECTION, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             SlgPill("민심 ${state.morale}", SlgColors.Success)
         }
@@ -344,7 +335,7 @@ private fun SeasonPanel(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("⏱ 절기 시계", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Text("⏱ 절기 시계", color = SlgColors.Text, fontSize = SlgType.SECTION, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             SlgPill(clock.speedLabel, if (clock.autoAdvance) SlgColors.Success else SlgColors.Muted)
         }
@@ -368,11 +359,10 @@ private fun SeasonPanel(
             height = 7
         )
         Text(
-            "시간이 흐르면 절기가 자동으로 넘어가고, AI가 내정·모병·방어를 대신 운영합니다. " +
-                "미접속 동안 흐른 시간도 돌아오면 그만큼 진행됩니다.",
+            "⏱ 자동 진행 중 — 미접속 시간도 따라잡습니다.",
             color = SlgColors.Muted,
             fontSize = SlgType.MICRO,
-            lineHeight = SlgLine.MICRO
+            maxLines = 1
         )
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             SeasonClock.SPEED_MINUTES.forEach { minutes ->
@@ -439,10 +429,10 @@ private fun SeasonPanel(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    "다음 절기에 지방세·결산·유지비가 정산됩니다.",
+                    "절기 정산 · 세수 · 보급",
                     color = SlgColors.Muted,
-                    fontSize = SlgType.MICRO,
-                    maxLines = 2
+                    fontSize = SlgType.LABEL,
+                    maxLines = 1
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     SlgPill("🌱 예산", SlgColors.Success)
@@ -486,7 +476,7 @@ private fun FacilityPanel(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("현대 시설", color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Text("현대 시설", color = SlgColors.Text, fontSize = SlgType.SECTION, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             SlgPill("${state.facilities.size}/${FacilityType.entries.size} 건설", SlgColors.Brass)
         }

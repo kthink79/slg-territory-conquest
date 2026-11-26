@@ -76,7 +76,7 @@ class MainUiNavigationTest {
         MainTab.entries.filter { it != MainTab.MAP }.forEach { tab ->
             val tabs = ScreenTabs.labelsOf(tab)
             assertTrue("$tab 탭이 없다", tabs.isNotEmpty())
-            assertTrue("$tab 탭이 8개를 넘는다", tabs.size <= 8)
+            assertTrue("$tab 탭이 9개를 넘는다", tabs.size <= 9)
             assertTrue("$tab 탭 라벨이 길다", tabs.all { it.length <= 4 })
             assertEquals("$tab 탭 중복", tabs.size, tabs.distinct().size)
         }
@@ -84,19 +84,19 @@ class MainUiNavigationTest {
     }
 
     @Test
-    fun `영지 탭은 8개 상단 탭으로 나뉜다`() {
+    fun `영지 탭은 9개 상단 탭으로 나뉜다`() {
         assertEquals(
-            listOf("내정", "지표", "시설", "절기", "기술", "의회", "승격", "사건"),
+            listOf("내정", "지표", "시설", "절기", "기술", "의회", "승격", "사건", "행정"),
             DomainTab.entries.map { it.label }
         )
-        assertEquals(8, ScreenTabs.labelsOf(MainTab.DOMAIN).size)
+        assertEquals(9, ScreenTabs.labelsOf(MainTab.DOMAIN).size)
     }
 
     @Test
     fun `기존 세부 탭 구성이 유지된다`() {
         assertEquals(listOf("유민", "상인", "정찰대"), EventTab.entries.map { it.label })
         assertEquals(4, TerritoryTab.entries.size)
-        assertEquals(listOf("안건", "연합", "긴급", "리더"), CouncilTab.entries.map { it.label })
+        assertEquals(listOf("안건", "연합", "전쟁", "긴급", "리더"), CouncilTab.entries.map { it.label })
         assertEquals(5, WarTab.entries.size)
         assertEquals(3, com.game.slg.ui.EmpireTab.entries.size)
         assertEquals(3, DiplomacyTab.entries.size)

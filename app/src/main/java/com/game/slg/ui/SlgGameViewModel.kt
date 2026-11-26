@@ -92,6 +92,27 @@ import com.game.slg.core.region.AdjacentRegionEngine
 import com.game.slg.core.region.AdjacentRegionPanel
 import com.game.slg.core.region.AdjacentStrategyEngine
 import com.game.slg.core.region.AdjacentStrategyOp
+import com.game.slg.core.region.AdminActionResult
+import com.game.slg.core.region.AdminContext
+import com.game.slg.core.region.AdminEvaluation
+import com.game.slg.core.region.AdminMenu
+import com.game.slg.core.region.AdminPromotionResult
+import com.game.slg.core.region.AdminTier
+import com.game.slg.core.region.AdminTierEngine
+import com.game.slg.core.region.CasusBelli
+import com.game.slg.core.region.ConquestEngine
+import com.game.slg.core.region.ConquestOffer
+import com.game.slg.core.region.ConquestRecord
+import com.game.slg.core.region.WarAgenda
+import com.game.slg.core.region.WarAgendaCodec
+import com.game.slg.core.region.WarAgendaEngine
+import com.game.slg.core.region.WarTargetKind
+import com.game.slg.core.empire.GovernanceActionResult
+import com.game.slg.core.empire.GovernanceEngine
+import com.game.slg.core.empire.GovernancePolicy
+import com.game.slg.core.empire.LevyQuota
+import com.game.slg.core.empire.TaxLevel
+import com.game.slg.core.empire.TerritoryFacility
 import com.game.slg.core.region.AidCall
 import com.game.slg.core.region.AidDirection
 import com.game.slg.core.region.AidSource
@@ -426,7 +447,26 @@ data class SlgGameState(
     // ── 지속 시간 흐름 · 미접속 AI 대행 ──
     val clock: SeasonClock = SeasonClock(),
     /** 미접속 동안 AI가 대신 운영한 결과 — 한 번 뜨고 닫친다 */
-    val offlineReport: String? = null
+    val offlineReport: String? = null,
+
+    // ── v0.10.0: 무력 병합 · 의회 전쟁 안건 · 세부 통치 · 행정 단위 ──
+    /** 무력 병합·외교 편입으로 우리 연합에 들어온 인접 리더 */
+    val conquests: List<ConquestRecord> = emptyList(),
+    /** 전멸·항복 직후 뜨는 편입 선택 (직할/속국/자치령) */
+    val pendingConquest: ConquestOffer? = null,
+    /** 의회 전쟁 안건 */
+    val warAgendas: List<WarAgenda> = emptyList(),
+    /** 행정 단위 — 읍면동 → 시군구 → 도 → 국가 */
+    val adminTier: AdminTier = AdminTier.DONG,
+    val adminMessage: String? = null,
+    /** 도 원정 등 관리 메뉴로 얻은 원정 전투 보너스가 남은 절기 */
+    val adminCombatTurns: Int = 0,
+    /** 세부 통치 조작 결과 */
+    val governanceMessage: String? = null,
+    /** 의회 전쟁 안건 결과 */
+    val warAgendaMessage: String? = null,
+    /** 마지막으로 처리한 관리 메뉴 결과 */
+    val lastAdminAction: AdminActionResult? = null
 ) {
     /** 배치된 영웅이 주는 실제 보너스 */
     val heroBonus: HeroBonus
@@ -583,17 +623,25 @@ data class SlgGameState(
         val area = RegionCatalog.area(code)
         val generated = area?.let { AiLordGenerator.generate(it) }.orEmpty()
         val seeds = generated.map { profile ->
+            val record = conquests.firstOrNull { it.leaderId == profile.id }
             RegionLeaderSeed(
                 id = profile.id,
                 name = profile.name,
                 stronghold = profile.stronghold,
                 traitLabel = profile.trait.displayName,
                 traitIcon = profile.trait.icon,
-                troops = (profile.troops - (adjacentDamage[profile.id] ?: 0)).coerceAtLeast(0),
+                troops = if (record != null) 0
+                else (profile.troops - (adjacentDamage[profile.id] ?: 0)).coerceAtLeast(0),
                 gold = profile.gold,
                 food = profile.grain,
                 prestige = profile.prestige,
-                note = if (node?.isLocked == true) "미개방 구역" else "정찰 전 추정 명부"
+                /** 편입한 리더는 지도·세부맵에도 우리 연합으로 표시된다 */
+                federation = record?.status,
+                note = when {
+                    record != null -> "편입 경위 · ${record.status.label}"
+                    node?.isLocked == true -> "미개방 구역"
+                    else -> "정찰 전 추정 명부"
+                }
             )
         }
         return RegionBoardBuilder.build(code, regionName, seeds, live = false)
@@ -693,6 +741,50 @@ data class SlgGameState(
 
     /** 지금 바로 보낼 수 있는 지원 요청 하나 — 이미 처리했으면 null */
     val openAidCall: AidCall? get() = aidCall?.takeIf { !it.answered }
+
+    // ── v0.10.0: 행정 단위 · 전쟁 안건 · 편입 ───────────────
+
+    /** 행정 승격 조건 평가 */
+    val adminEvaluation: AdminEvaluation
+        get() = AdminTierEngine.evaluate(
+            current = adminTier,
+            territories = territories.size,
+            allied = alliedTerritories,
+            prestige = prestige,
+            authority = councilAuthorityBonus + promotionStage.councilAuthorityBonus,
+            gold = gold
+        )
+
+    /** 현재 행정 단위에서 쓸 수 있는 관리 메뉴 */
+    val adminMenus: List<AdminMenu> get() = AdminTierEngine.menusOf(adminTier)
+
+    /** 다음 단위에서 새로 열리는 메뉴 */
+    val nextAdminMenus: List<AdminMenu>
+        get() = adminTier.next?.let { AdminTierEngine.newlyOpenedAt(it) }.orEmpty()
+
+    /** 편입된 인접 리더 수 */
+    val conquestCount: Int get() = conquests.size
+
+    /** 전쟁 안건 대기 수 */
+    val pendingWarAgendas: Int get() = warAgendas.count { it.pending }
+
+    /** 인접 지역 1곳에 지금 붙는 의회 명분 */
+    fun casusBelliFor(regionCode: String): CasusBelli =
+        WarAgendaEngine.casusBelliFor(warAgendas, regionCode)
+
+    /** 관리 메뉴 실행에 쓰는 현재 값 */
+    fun adminContext(): AdminContext = AdminContext(
+        gold = gold,
+        food = food,
+        troops = totalTroops,
+        troopCap = troopCap,
+        morale = morale,
+        diplomacy = diplomacy,
+        prestige = prestige,
+        espionage = espionagePower,
+        authority = councilAuthorityBonus,
+        territories = territories
+    )
 
     companion object {
         const val NIGHT_MEETING_SUSPICION: Int = 50
@@ -898,6 +990,9 @@ class SlgGameViewModel(
                 val damage = raw.substringAfter('|', "0").toIntOrNull() ?: 0
                 if (damage <= 0) null else id to damage
             }.toMap(),
+            adminTier = AdminTier.byName(restore.adminTier),
+            conquests = restore.conquests.mapNotNull { ConquestRecord.decode(it) },
+            warAgendas = restore.warAgendas.mapNotNull { WarAgendaCodec.decode(it) },
             clock = SeasonClock(
                 seasonMinutes = restore.seasonMinutes.coerceIn(1, 1440),
                 lastTickMillis = if (restore.lastTickMillis > 0L) restore.lastTickMillis
@@ -957,7 +1052,10 @@ class SlgGameViewModel(
                 seasonMinutes = state.clock.seasonMinutes,
                 autoAdvance = state.clock.autoAdvance,
                 aiAutopilot = state.clock.aiAutopilot,
-                adjacentDamage = state.adjacentDamage.map { (id, damage) -> "$id|$damage" }
+                adjacentDamage = state.adjacentDamage.map { (id, damage) -> "$id|$damage" },
+                adminTier = state.adminTier.name,
+                conquests = state.conquests.map { it.encode() },
+                warAgendas = state.warAgendas.map { it.encode() }
             )
         )
     }
@@ -978,7 +1076,7 @@ class SlgGameViewModel(
         t.code, t.name, t.population.toString(), t.status.name, t.morale.toString(),
         t.development.toString(), t.troops.toString(), t.food.toString(), t.gold.toString(),
         t.defense.toString(), t.viceroyHeroId ?: "", t.viceroyName ?: "", t.viceroyRole ?: "",
-        t.tributePerSeason.toString(), t.absorbedBy
+        t.tributePerSeason.toString(), t.absorbedBy, t.policy.encode()
     ).joinToString("|")
 
     private fun decodeTerritory(raw: String): ManagedTerritory? {
@@ -1000,7 +1098,8 @@ class SlgGameViewModel(
             viceroyName = p.getOrNull(11)?.takeIf { it.isNotBlank() },
             viceroyRole = p.getOrNull(12)?.takeIf { it.isNotBlank() },
             tributePerSeason = p.getOrNull(13)?.toIntOrNull() ?: 0,
-            absorbedBy = p.getOrNull(14) ?: "인계"
+            absorbedBy = p.getOrNull(14) ?: "인계",
+            policy = GovernancePolicy.decode(p.getOrNull(15))
         )
     }
 
@@ -1442,6 +1541,8 @@ class SlgGameViewModel(
                 aidCall = aidNext,
                 defensePostureTurns = defenseTurns,
                 coalition = CoalitionCouncilEngine.prune(s.coalition),
+                warAgendas = WarAgendaEngine.prune(s.warAgendas),
+                adminCombatTurns = (s.adminCombatTurns - 1).coerceAtLeast(0),
                 boostUses = emptyMap(),
                 union = unionNext,
                 command = gained,
@@ -1711,19 +1812,48 @@ class SlgGameViewModel(
                         "${info.status.label}된 세력입니다 — 우두머리를 상대하세요."
                 )
             }
+            if (info.status.isOurs && info.status != LeaderStatus.PLAYER) {
+                return@update s.copy(
+                    statusMessage = "[전투] ${info.name} 리더는 이미 우리 연합(${info.status.label})입니다 — " +
+                        "영토 › 통치에서 운영하세요."
+                )
+            }
             val verdict = AdjacentRegionEngine.expeditionVerdict(s.union)
             if (!verdict.allowed) {
                 return@update s.copy(statusMessage = verdict.label)
             }
             val area = RegionCatalog.area(sheet.code) ?: (s.regionArea ?: RegionCatalog.defaultRegion())
+            val leadPopulation = (area.population / board.leaders.size.coerceAtLeast(1)).coerceAtLeast(800)
+            // 병력이 이미 전멸한 리더 — 교전 없이 편입 방식만 고른다
+            if (info.troops <= 0) {
+                val offer = ConquestEngine.offerForEmptyGarrison(
+                    leaderId = info.id,
+                    leaderName = info.name,
+                    stronghold = info.stronghold,
+                    regionCode = sheet.code,
+                    regionName = sheet.name,
+                    population = leadPopulation,
+                    gold = info.gold,
+                    food = info.food,
+                    ourTroops = s.totalTroops
+                )
+                return@update s.copy(
+                    pendingConquest = offer,
+                    adjacentMessage = offer.headline,
+                    statusMessage = "[편입] ${info.name} 리더의 병력이 없습니다 — 편입 방식을 고르세요."
+                )
+            }
+            val casusBelli = s.casusBelliFor(sheet.code)
             val own = ForceComposition.standard(
                 (s.totalTroops * (1.0 + s.heroBonus.combatPercent / 100.0)).toInt()
             )
             val enemy = ForceComposition.standard(info.troops.coerceAtLeast(60))
             val enemyStrategy = StrategyBattleEngine.enemyStrategyFor(area.terrain, info.name.hashCode())
             val opsBonus = (
-                s.heroBonus.combatPercent + s.coalition.battleBonusPercent + s.defensePostureBonusPercent
-                ).coerceAtMost(70)
+                s.heroBonus.combatPercent + s.coalition.battleBonusPercent +
+                    s.defensePostureBonusPercent + casusBelli.combatBonusPercent +
+                    (if (s.adminCombatTurns > 0) 10 else 0)
+                ).coerceAtMost(90)
             val strat = StrategyBattleEngine.resolve(
                 own = own,
                 enemy = enemy,
@@ -1736,19 +1866,48 @@ class SlgGameViewModel(
                 defending = false
             )
             val win = strat.ownWon
-            val ourLosses = strat.ownLosses
+            // 의회 전쟁 명분이 있으면 사상자를 깎고 전리품을 늘린다
+            val ourLosses = if (win) {
+                (strat.ownLosses * (100 - casusBelli.casualtyReductionPercent) / 100).coerceAtLeast(1)
+            } else strat.ownLosses
             val theirLosses = strat.enemyLosses
-            val loot = if (win) 60 + info.gold / 10 else 0
+            val loot = if (win) {
+                (60 + info.gold / 10) * (100 + casusBelli.lootBonusPercent) / 100
+            } else 0
+            val remaining = (info.troops - theirLosses).coerceAtLeast(0)
+            val offer = if (win) {
+                ConquestEngine.offerAfterBattle(
+                    leaderId = info.id,
+                    leaderName = info.name,
+                    stronghold = info.stronghold,
+                    regionCode = sheet.code,
+                    regionName = sheet.name,
+                    troopsBefore = info.troops,
+                    losses = theirLosses,
+                    ourTroops = s.totalTroops,
+                    won = true,
+                    population = leadPopulation,
+                    gold = info.gold,
+                    food = info.food
+                )
+            } else null
+            val bonusNote = buildList {
+                if (s.coalition.battleBonusPercent > 0) add("연합 공동 전투 +${s.coalition.battleBonusPercent}%")
+                if (!casusBelli.isEmpty) add("의회 명분 ${casusBelli.label}")
+                if (s.adminCombatTurns > 0) add("도 원정 +10%")
+            }.joinToString(" · ")
             val message = "[인접 원정] ${sheet.name} · ${info.name} 리더 — ${if (win) "압박 성공" else "공격 실패"} · " +
                 "적 사상자 ${theirLosses}, 아군 사상자 $ourLosses (교환비 ${strat.exchangeLabel})" +
-                if (s.coalition.battleBonusPercent > 0) " · 연합 공동 전투 +${s.coalition.battleBonusPercent}%" else ""
+                (if (bonusNote.isNotBlank()) " · $bonusNote" else "") +
+                (if (offer != null) " · 적 병력 ${offer.reasonLabel} — 편입 방식 선택" else "")
             val report = OperationReport(
                 operation = "인접 지역 원정",
                 defenderWon = !win,
                 attackerLosses = theirLosses,
                 defenderLosses = ourLosses,
                 message = message,
-                verdict = if (win) "${info.name} 거점 압박" else "원정 실패 — 재편성 필요",
+                verdict = if (offer != null) "${info.name} 리더 ${offer.reasonLabel}"
+                else if (win) "${info.name} 거점 압박" else "원정 실패 — 재편성 필요",
                 targetName = info.name,
                 composition = "아군 ${own.describe()} / 적 ${enemy.describe()}",
                 strategyLabel = "${s.battleStrategy.icon} ${s.battleStrategy.label} vs ${enemyStrategy.icon} ${enemyStrategy.label}",
@@ -1768,6 +1927,10 @@ class SlgGameViewModel(
                 prestige = (s.prestige + (if (win) 4 else -3)).coerceIn(0, 100),
                 morale = (s.morale + (if (win) 2 else -3)).coerceIn(0, 100),
                 coalition = s.coalition.consumeBattleBonus(),
+                // 가결된 전쟁 명분은 원정 1회에 쓰고 소모된다
+                warAgendas = if (casusBelli.isEmpty) s.warAgendas
+                else WarAgendaEngine.consume(s.warAgendas, sheet.code),
+                pendingConquest = offer,
                 lastReport = report,
                 adjacentMessage = message,
                 adjacentSheet = sheet.copy(result = null),
@@ -1776,6 +1939,69 @@ class SlgGameViewModel(
             )
         }
         persist()
+    }
+
+    /**
+     * 전멸·항복한 인접 리더를 고른 형태로 편입한다.
+     * 직할(DIRECT) / 속국(VASSAL) / 자치령(AUTONOMOUS) 중 하나.
+     */
+    fun resolveConquest(mode: TerritoryStatus) {
+        _uiState.update { s ->
+            val offer = s.pendingConquest
+                ?: return@update s.copy(statusMessage = "[편입] 지금은 편입할 대상이 없습니다.")
+            if (mode !in listOf(TerritoryStatus.DIRECT, TerritoryStatus.VASSAL, TerritoryStatus.AUTONOMOUS)) {
+                return@update s.copy(statusMessage = "[편입] 알 수 없는 편입 형태입니다.")
+            }
+            if (s.conquests.any { it.leaderId == offer.leaderId }) {
+                return@update s.copy(
+                    pendingConquest = null,
+                    statusMessage = "[편입] ${offer.leaderName} 리더는 이미 편입됐습니다."
+                )
+            }
+            val casusBelli = s.casusBelliFor(offer.regionCode)
+            val outcome = ConquestEngine.resolve(offer, mode, casusBelli)
+            val territory = outcome.territory
+            // 해당 리더 소속 영웅을 처분 대기로 이관한다
+            val captured = HeroDispositionEngine.heroesForLord(offer.leaderId)
+                .filterNot { id -> s.heroes.ownedHeroes.any { it.id == id } }
+                .map { id -> PendingDisposition(heroId = id, lordId = offer.leaderId, lordName = offer.leaderName) }
+            val record = ConquestRecord(
+                leaderId = offer.leaderId,
+                leaderName = offer.leaderName,
+                regionCode = offer.regionCode,
+                regionName = offer.regionName,
+                status = mode,
+                population = offer.population
+            )
+            val message = outcome.message +
+                (if (captured.isNotEmpty()) " · 소속 영웅 ${captured.size}명 처분 대기" else "") +
+                (if (!casusBelli.isEmpty) " · 명분 소모" else "")
+            s.copy(
+                gold = (s.gold + outcome.goldDelta).coerceAtLeast(0),
+                prestige = (s.prestige + outcome.prestigeDelta).coerceIn(0, 100),
+                morale = (s.morale + outcome.moraleDelta).coerceIn(0, 100),
+                territories = territory?.let { t ->
+                    if (s.territories.any { it.code == t.code }) s.territories else s.territories + t
+                } ?: s.territories,
+                selectedManagedCode = territory?.code ?: s.selectedManagedCode,
+                conquests = s.conquests + record,
+                pendingConquest = null,
+                warAgendas = if (casusBelli.isEmpty) s.warAgendas
+                else WarAgendaEngine.consume(s.warAgendas, offer.regionCode),
+                heroes = HeroDispositionEngine.markCaptured(s.heroes, captured),
+                pendingDisposition = (s.pendingDisposition + captured).distinctBy { it.heroId },
+                alliedTerritories = s.alliedTerritories + 1,
+                adjacentMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 편입 선택을 닫는다 */
+    fun dismissConquestOffer() {
+        _uiState.update { it.copy(pendingConquest = null) }
     }
 
     /** 인접 지역과 조약을 맺는다 — 통합 리더가 없으면 리더 연합 전체와 협상한다 */
@@ -1813,15 +2039,51 @@ class SlgGameViewModel(
                 benefit = AdjacentDiplomacyEngine.benefitOf(type)
             ) else null
             val message = res.oneLine()
+            // 속국 조공 조약이 성사되면 실제 속국 영지로 편입한다 (2026-11-26 요청)
+            val vassalTarget = if (type == TreatyType.VASSAL_TRIBUTARY && res.success) {
+                panel.ruler ?: panel.warTargets.maxByOrNull { it.troops }
+            } else null
+            val area = RegionCatalog.area(sheet.code)
+            val leadPopulation = ((area?.population ?: s.regionPopulation) /
+                panel.leaders.size.coerceAtLeast(1)).coerceAtLeast(800)
+            val alreadyConquered = vassalTarget != null &&
+                s.conquests.any { it.leaderId == vassalTarget.id }
+            val vassalTerritory = if (vassalTarget != null && !alreadyConquered) {
+                ConquestEngine.vassalFromTreaty(
+                    regionCode = sheet.code,
+                    regionName = sheet.name,
+                    leaderId = vassalTarget.id,
+                    leaderName = vassalTarget.name,
+                    population = leadPopulation
+                )
+            } else null
+            val vassalRecord = if (vassalTerritory != null && vassalTarget != null) {
+                ConquestRecord(
+                    leaderId = vassalTarget.id,
+                    leaderName = vassalTarget.name,
+                    regionCode = sheet.code,
+                    regionName = sheet.name,
+                    status = TerritoryStatus.VASSAL,
+                    population = leadPopulation
+                )
+            } else null
+            val fullMessage = message +
+                (if (vassalTerritory != null && vassalTarget != null)
+                    "\n[속국 편입] ${vassalTarget.name} 리더가 ${sheet.name} 속국 영지로 들어왔습니다 — " +
+                        "조공 ${vassalTerritory.tributePerSeason}G/절기"
+                else "")
             s.copy(
                 gold = (s.gold + res.goldDelta).coerceAtLeast(0),
                 diplomacy = (s.diplomacy + res.diplomacyDelta).coerceIn(0, 100),
                 prestige = (s.prestige + res.prestigeDelta).coerceIn(0, 100),
                 treaties = if (view != null) s.treaties + view else s.treaties,
-                adjacentMessage = message,
+                territories = if (vassalTerritory != null) s.territories + vassalTerritory
+                else s.territories,
+                conquests = if (vassalRecord != null) s.conquests + vassalRecord else s.conquests,
+                adjacentMessage = fullMessage,
                 adjacentSheet = sheet.copy(result = res),
-                log = (s.log + message).takeLast(8),
-                statusMessage = message
+                log = (s.log + fullMessage).takeLast(8),
+                statusMessage = fullMessage
             ).let { next -> next.copy(alliedTerritories = alliedTerritoryCount(next)) }
         }
         persist()
@@ -1863,6 +2125,269 @@ class SlgGameViewModel(
                 adjacentSheet = sheet.copy(result = res),
                 log = (s.log + message).takeLast(8),
                 statusMessage = message
+            )
+        }
+        persist()
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // v0.10.0 — 편입 영지 세부 통치 · 의회 전쟁 안건 · 행정 단위
+    // ──────────────────────────────────────────────────────────────
+
+    /** 영지의 통치 정책을 갱신하고 결과를 상태에 풀어 놓는다 */
+    private fun applyGovernance(
+        s: SlgGameState,
+        code: String,
+        target: ManagedTerritory,
+        result: GovernanceActionResult
+    ): SlgGameState {
+        if (!result.success) {
+            return s.copy(
+                governanceMessage = result.message,
+                empireMessage = result.message,
+                statusMessage = result.message
+            )
+        }
+        val armyRoom = (s.troopCap - s.troops).coerceAtLeast(0)
+        val armyGain = result.armyTroopDelta.coerceAtMost(armyRoom)
+        return s.copy(
+            gold = (s.gold + result.goldDelta).coerceAtLeast(0),
+            troops = (s.troops + armyGain).coerceAtLeast(0),
+            morale = (s.morale + result.moraleDelta).coerceIn(0, 100),
+            prestige = (s.prestige + result.prestigeDelta).coerceIn(0, 100),
+            territories = s.territories.map { territory ->
+                if (territory.code != code) territory
+                else territory.copy(
+                    policy = result.policy,
+                    troops = (territory.troops + result.territoryTroopDelta).coerceAtLeast(0)
+                )
+            },
+            selectedManagedCode = code,
+            governanceMessage = result.message,
+            empireMessage = result.message,
+            statusMessage = result.message,
+            log = (s.log + result.message).takeLast(8)
+        )
+    }
+
+    /** 편입 영지 세율 — 낮음/보통/높음 */
+    fun setTerritoryTax(code: String, level: TaxLevel) {
+        _uiState.update { s ->
+            val target = s.territories.firstOrNull { it.code == code }
+                ?: return@update s.copy(statusMessage = "[통치] 알 수 없는 영지입니다.")
+            applyGovernance(s, code, target, GovernanceEngine.setTax(target.policy, level))
+        }
+        persist()
+    }
+
+    /** 징병 할당량 조절 — 낮음/보통/높음 */
+    fun setTerritoryLevy(code: String, quota: LevyQuota) {
+        _uiState.update { s ->
+            val target = s.territories.firstOrNull { it.code == code }
+                ?: return@update s.copy(statusMessage = "[통치] 알 수 없는 영지입니다.")
+            applyGovernance(s, code, target, GovernanceEngine.setLevy(target.policy, quota))
+        }
+        persist()
+    }
+
+    /** 치안·반란 억제 — 자금을 써서 치안 +8 */
+    fun patrolTerritory(code: String) {
+        _uiState.update { s ->
+            val target = s.territories.firstOrNull { it.code == code }
+                ?: return@update s.copy(statusMessage = "[통치] 알 수 없는 영지입니다.")
+            applyGovernance(s, code, target, GovernanceEngine.patrol(target.policy, s.gold))
+        }
+        persist()
+    }
+
+    /** 지역 시설(관아·병영·성벽·상단) 투자 */
+    fun investTerritoryFacility(code: String, facilityId: String) {
+        _uiState.update { s ->
+            val target = s.territories.firstOrNull { it.code == code }
+                ?: return@update s.copy(statusMessage = "[통치] 알 수 없는 영지입니다.")
+            applyGovernance(
+                s, code, target,
+                GovernanceEngine.invest(target.policy, facilityId, s.gold)
+            )
+        }
+        persist()
+    }
+
+    /** 속국·자치령 조공률 조절 */
+    fun setTerritoryTribute(code: String, rate: Int) {
+        _uiState.update { s ->
+            val target = s.territories.firstOrNull { it.code == code }
+                ?: return@update s.copy(statusMessage = "[통치] 알 수 없는 영지입니다.")
+            applyGovernance(s, code, target, GovernanceEngine.setTributeRate(target.policy, rate))
+        }
+        persist()
+    }
+
+    /** 속국·자치령 지원군 차출 — 주둔 병력의 25%를 본군으로 */
+    fun callTerritorySupport(code: String) {
+        _uiState.update { s ->
+            val target = s.territories.firstOrNull { it.code == code }
+                ?: return@update s.copy(statusMessage = "[통치] 알 수 없는 영지입니다.")
+            applyGovernance(
+                s, code, target,
+                GovernanceEngine.callSupport(target.policy, target.troops)
+            )
+        }
+        persist()
+    }
+
+    /** 의회 전쟁 안건 상정 — 인접 지역 또는 상위 단위(시·군·구) 세력을 고른다 */
+    fun sponsorWarAgenda(kind: WarTargetKind) {
+        _uiState.update { s ->
+            val (code, name, targetName) = when (kind) {
+                WarTargetKind.ADJACENT -> {
+                    val sheet = s.adjacentSheet
+                    val node = sheet?.let { TerritoryMapLayout.node(s.mapNodes, it.code) }
+                        ?: s.selectedTerritory
+                    if (node == null || node.code == s.regionCode) {
+                        return@update s.copy(statusMessage = "[의회] 지도에서 인접 지역을 먼저 고르세요.")
+                    }
+                    val panel = AdjacentRegionEngine.panel(
+                        code = node.code,
+                        name = node.name,
+                        relationLabel = node.relationLabel,
+                        board = s.regionBoardFor(node.code),
+                        unionActive = s.union.active
+                    )
+                    Triple(node.code, node.name, panel.diplomacyPartner)
+                }
+                WarTargetKind.SUPERIOR -> {
+                    val group = s.regionGroupKey.ifBlank { s.regionName }
+                    Triple("superior:$group", WarAgendaEngine.superiorName(group), "$group 연합 의회")
+                }
+            }
+            if (WarAgendaEngine.hasPending(s.warAgendas, code, kind)) {
+                return@update s.copy(
+                    statusMessage = "[의회] 같은 대상의 전쟁 안건이 이미 표결 대기 중입니다."
+                )
+            }
+            val supporters = (
+                (if (s.union.active) s.aiLordCount else s.treaties.size + s.incorporatedLordCount) + 1
+                ).coerceAtMost(12)
+            val agenda = WarAgendaEngine.sponsor(
+                kind = kind,
+                regionCode = code,
+                regionName = name,
+                targetName = targetName,
+                seasonTurn = s.seasonTurn,
+                supporters = supporters,
+                sequence = s.warAgendas.count { it.regionCode == code }
+            )
+            val message = "[전쟁 안건 상정] ${agenda.title} — 참여 리더 ${supporters}명 · " +
+                "${s.councilVotingLabel}. 의회 › 전쟁 탭에서 표결하세요."
+            s.copy(
+                warAgendas = s.warAgendas + agenda,
+                warAgendaMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 전쟁 안건 표결 — 가결되면 정식 명분(전투력·사상자·전리품)이 붙는다 */
+    fun voteWarAgenda(agendaId: String) {
+        _uiState.update { s ->
+            val agenda = s.warAgendas.firstOrNull { it.id == agendaId }
+                ?: return@update s.copy(statusMessage = "[의회] 전쟁 안건을 찾을 수 없습니다.")
+            if (!agenda.pending) {
+                return@update s.copy(statusMessage = "[의회] 이미 표결이 끝난 안건입니다.")
+            }
+            val opponents = (agenda.favor / 3 + 1).coerceAtLeast(1)
+            val voted = WarAgendaEngine.vote(agenda, opponents, s.councilVotingPower)
+            val message = voted.message ?: ""
+            s.copy(
+                warAgendas = s.warAgendas.map { if (it.id == agendaId) voted else it },
+                morale = (s.morale + if (voted.passed == true) 2 else 0).coerceAtMost(100),
+                warAgendaMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 행정 단위 승격 — 조건을 채우면 시·군·구 → 도 → 국가로 올라간다 */
+    fun promoteAdminTier() {
+        _uiState.update { s ->
+            val eval = s.adminEvaluation
+            val result: AdminPromotionResult = AdminTierEngine.promote(
+                current = s.adminTier,
+                territories = s.territories.size,
+                allied = s.alliedTerritories,
+                prestige = s.prestige,
+                authority = s.councilAuthorityBonus + s.promotionStage.councilAuthorityBonus,
+                gold = s.gold
+            )
+            if (!result.success) {
+                return@update s.copy(
+                    adminMessage = result.message,
+                    statusMessage = result.message
+                )
+            }
+            val cost = eval.next?.promoteCost ?: 0
+            s.copy(
+                adminTier = result.tier,
+                gold = (s.gold - cost).coerceAtLeast(0),
+                councilAuthorityBonus = s.councilAuthorityBonus + result.authorityDelta,
+                prestige = (s.prestige + result.prestigeDelta).coerceIn(0, 100),
+                adminMessage = result.message,
+                statusMessage = result.message,
+                log = (s.log + result.message).takeLast(8)
+            )
+        }
+        persist()
+    }
+
+    /** 행정 단계 관리 메뉴 실행 — 각 단계에서 열린 메뉴만 작동한다 */
+    fun performAdminMenu(menuId: String) {
+        _uiState.update { s ->
+            val menu = AdminMenu.byId(menuId)
+                ?: return@update s.copy(adminMessage = "[관리] 알 수 없는 메뉴입니다.")
+            val result = AdminTierEngine.act(menu, s.adminTier, s.adminContext())
+            if (!result.success) {
+                return@update s.copy(adminMessage = result.message, statusMessage = result.message)
+            }
+            if (menu.kind == com.game.slg.core.region.AdminActionKind.NAVIGATE) {
+                return@update s.copy(lastAdminAction = result, adminMessage = result.message)
+            }
+            val armyRoom = (s.troopCap - s.troops).coerceAtLeast(0)
+            val armyGain = result.troopDelta.coerceAtMost(armyRoom)
+            s.copy(
+                gold = (s.gold + result.goldDelta).coerceAtLeast(0),
+                food = (s.food + result.foodDelta).coerceAtLeast(0),
+                troops = (s.troops + armyGain).coerceIn(0, s.troopCap),
+                morale = (s.morale + result.moraleDelta).coerceIn(0, 100),
+                diplomacy = (s.diplomacy + result.diplomacyDelta).coerceIn(0, 100),
+                prestige = (s.prestige + result.prestigeDelta).coerceIn(0, 100),
+                espionagePower = (s.espionagePower + result.espionageDelta).coerceIn(0, 100),
+                councilAuthorityBonus = s.councilAuthorityBonus + result.authorityDelta,
+                alliedTerritories = s.alliedTerritories + result.alliedDelta,
+                territories = s.territories.map { territory ->
+                    val policy = territory.policy
+                    val taxed = if (result.taxStep > 0) {
+                        var next = policy
+                        repeat(result.taxStep) { next = AdminTierEngine.raiseTax(next) }
+                        next
+                    } else policy
+                    territory.copy(
+                        policy = taxed.copy(
+                            security = (taxed.security + result.securityDelta).coerceIn(0, 100),
+                            tributeRate = (taxed.tributeRate + result.tributeStep * 10).coerceIn(10, 60)
+                        ),
+                        defense = (territory.defense + result.defenseDelta).coerceIn(0, 100)
+                    )
+                },
+                adminCombatTurns = if (result.combatBonusPercent > 0) 2 else s.adminCombatTurns,
+                lastAdminAction = result,
+                adminMessage = result.message,
+                statusMessage = result.message,
+                log = (s.log + result.message).takeLast(8)
             )
         }
         persist()

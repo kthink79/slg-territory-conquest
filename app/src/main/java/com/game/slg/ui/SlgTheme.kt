@@ -82,8 +82,11 @@ object SlgType {
     /** 본문 */
     val BODY = 16.sp
 
+    /** 섹션 제목 — 카드 헤더 */
+    val SECTION = 18.sp
+
     /** 화면 제목 */
-    val TITLE = 19.sp
+    val TITLE = 21.sp
 
     /** 히어로 숫자·대제목 */
     val HERO = 24.sp
@@ -144,9 +147,12 @@ fun SlgTabBar(
     modifier: Modifier = Modifier,
     accent: Color = SlgColors.Brass,
     badges: List<Int> = emptyList(),
+    icons: List<String> = emptyList(),
     onSelect: (Int) -> Unit
 ) {
     if (tabs.isEmpty()) return
+    // 탭이 9개를 넘으면 한 줄 5칸으로 묶어 줄 수를 늘리지 않는다(종스크롤 최소화)
+    val perRow = if (tabs.size > 8) 5 else 4
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -156,14 +162,14 @@ fun SlgTabBar(
             .padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        tabs.chunked(4).forEachIndexed { rowIndex, row ->
+        tabs.chunked(perRow).forEachIndexed { rowIndex, row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 row.forEachIndexed { columnIndex, label ->
-                    val index = rowIndex * 4 + columnIndex
+                    val index = rowIndex * perRow + columnIndex
                     val selected = index == selectedIndex
                     Box(
                         modifier = Modifier
@@ -185,11 +191,20 @@ fun SlgTabBar(
                         Text(
                             label,
                             color = if (selected) Color(0xFF10131A) else SlgColors.Muted,
-                            fontSize = SlgType.BODY_SMALL,
+                            fontSize = SlgType.LABEL,
                             fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
                             textAlign = TextAlign.Center,
                             maxLines = 1
                         )
+                        val icon = icons.getOrElse(index) { "" }
+                        if (icon.isNotBlank()) {
+                            // 아이콘 + 짧은 라벨 — 메뉴를 이름만으로 읽지 않아도 되게 한다
+                            Text(
+                                icon,
+                                fontSize = SlgType.BODY_SMALL,
+                                modifier = Modifier.align(Alignment.TopStart).padding(start = 5.dp, top = 3.dp)
+                            )
+                        }
                         // 상단 서브 메뉴 배지 — 하단 탭 숫자를 메뉴별로 나눠 보여 준다
                         val badge = badges.getOrElse(index) { 0 }
                         if (badge > 0) {
@@ -213,7 +228,7 @@ fun SlgTabBar(
                         }
                     }
                 }
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
@@ -316,7 +331,7 @@ fun SlgSectionCard(
                     .background(accent)
             )
             Spacer(Modifier.width(7.dp))
-            Text(title, color = SlgColors.Text, fontSize = SlgType.BODY, fontWeight = FontWeight.Bold)
+            Text(title, color = SlgColors.Text, fontSize = SlgType.SECTION, fontWeight = FontWeight.Bold)
             if (badge != null) {
                 Spacer(Modifier.width(7.dp))
                 SlgPill(badge, accent)
@@ -703,5 +718,134 @@ fun SlgBackButton(onBack: () -> Unit) {
             fontSize = SlgType.LABEL,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+/**
+ * 아이콘 메뉴 1칸 — 아이콘 + 1~2단어 라벨.
+ * 긴 설명문 없이 메뉴를 읽게 하는 v0.10.0 기본 단위다.
+ */
+data class SlgIconEntry(
+    val id: String,
+    val icon: String,
+    val label: String,
+    val badge: Int = 0,
+    val enabled: Boolean = true,
+    val tone: Color = SlgColors.Brass,
+    val footnote: String? = null
+)
+
+/** 아이콘 + 짧은 라벨 버튼 — 서브 액션 공통 */
+@Composable
+fun SlgIconAction(
+    icon: String,
+    label: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    enabled: Boolean = true,
+    badge: Int = 0,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(11.dp))
+            .background(if (selected) accent.copy(alpha = 0.24f) else accent.copy(alpha = 0.10f))
+            .border(
+                1.dp,
+                if (enabled) accent.copy(alpha = if (selected) 0.85f else 0.42f) else SlgColors.Line,
+                RoundedCornerShape(11.dp)
+            )
+            .clickable(enabled = enabled) { onClick() }
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(icon, fontSize = 18.sp)
+            Text(
+                label,
+                color = if (enabled) (if (selected) accent else SlgColors.Text) else SlgColors.Muted,
+                fontSize = SlgType.LABEL,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+        }
+        if (badge > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(3.dp)
+                    .size(15.dp)
+                    .clip(CircleShape)
+                    .background(SlgColors.Danger),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    if (badge > 9) "9+" else "$badge",
+                    color = Color(0xFF10131A),
+                    fontSize = SlgType.MICRO,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 아이콘 메뉴 그리드 — 섹션을 세로로 쌓지 않고 격자로 압축한다.
+ * [columns] 3~4칸이 폰 한 화면에 들어온다.
+ */
+@Composable
+fun SlgIconMenuGrid(
+    entries: List<SlgIconEntry>,
+    modifier: Modifier = Modifier,
+    columns: Int = 3,
+    onSelect: (SlgIconEntry) -> Unit
+) {
+    if (entries.isEmpty()) return
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        entries.chunked(columns.coerceAtLeast(1)).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                row.forEach { entry ->
+                    SlgIconAction(
+                        icon = entry.icon,
+                        label = entry.label,
+                        accent = entry.tone,
+                        enabled = entry.enabled,
+                        badge = entry.badge,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onSelect(entry) }
+                    )
+                }
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** 짧은 토글 3택 — 세율·징병처럼 단계가 셋인 값에 쓴다 */
+@Composable
+fun SlgTriToggle(
+    options: List<Pair<String, String>>,
+    selectedIndex: Int,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    onSelect: (Int) -> Unit
+) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        options.forEachIndexed { index, (icon, label) ->
+            SlgIconAction(
+                icon = icon,
+                label = label,
+                accent = accent,
+                selected = index == selectedIndex,
+                modifier = Modifier.weight(1f),
+                onClick = { onSelect(index) }
+            )
+        }
     }
 }

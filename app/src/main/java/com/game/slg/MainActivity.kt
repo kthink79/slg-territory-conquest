@@ -6,8 +6,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.darkColorScheme
@@ -107,11 +110,17 @@ fun SlgApp(viewModel: SlgGameViewModel) {
         viewModel.replayIntro()
     }
 
-    Scaffold(containerColor = SlgColors.Background) { innerPadding ->
+    // 시스템 바 안전 인셋 — 하단 내버게이션 바에 버튼이 가리지 않는다
+    Scaffold(
+        containerColor = SlgColors.Background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .statusBarsPadding()
+                .navigationBarsPadding()
         ) {
             when (state.stage) {
                 GameStage.INTRO -> SlgIntroScreen(
@@ -197,6 +206,7 @@ private fun PlaySurface(
                     onBoost = { viewModel.boostResource(it) },
                     onOpenRegionDetail = { viewModel.openRegionDetail() },
                     onAdjacentAction = { viewModel.openAdjacentAction(it) },
+                    onConquestMode = { viewModel.resolveConquest(it) },
                     onDismissOfflineReport = { viewModel.dismissOfflineReport() }
                 )
             } else {
@@ -227,7 +237,8 @@ private fun PlaySurface(
             onChallenge = { viewModel.challengeAdjacentLeader(it) },
             onDiplomacy = { viewModel.proposeAdjacentDiplomacy(it) },
             onStrategy = { viewModel.runAdjacentStrategy(it) },
-            onSponsor = { viewModel.sponsorCoalitionBill(it) }
+            onSponsor = { viewModel.sponsorCoalitionBill(it) },
+            onConquestMode = { viewModel.resolveConquest(it) }
         )
     }
 

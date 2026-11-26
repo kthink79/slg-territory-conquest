@@ -65,7 +65,9 @@ data class ManagedTerritory(
     /** 절기당 조공 (속국·자치령) */
     val tributePerSeason: Int = 0,
     /** 편입 경위 — 화면에 한 줄로 보인다 */
-    val absorbedBy: String = "인계"
+    val absorbedBy: String = "인계",
+    /** 세부 통치 정책 — 세율·치안·징병·시설·조공 (2026-11-26) */
+    val policy: GovernancePolicy = GovernancePolicy()
 ) {
     /** 이 영지가 낼 수 있는 정규 병력 상한 — 인구의 5% */
     val troopCap: Int get() = ManpowerEngine.capOf(population)
@@ -74,24 +76,41 @@ data class ManagedTerritory(
     val powerIndex: Int
         get() = (development * 4 + morale * 2 + troops / 10 + defense * 3)
 
-    /** 절기 세수 — 개발도와 민심, 운영 형태가 함께 작용한다 */
-    fun taxIncome(): Int =
-        ((population / 400.0) * (0.5 + development / 100.0) * status.taxRate).toInt() +
-            tributePerSeason
+    /** 절기 세수 — 개발도와 민심, 운영 형태, 통치 정책(세율)이 함께 작용한다 */
+    fun taxIncome(): Int {
+        val base = ((population / 400.0) * (0.5 + development / 100.0) * status.taxRate)
+            .toInt() * policy.taxMultiplier
+        val tribute = tributePerSeason.toDouble() * policy.tributeRate / 30.0
+        return base.toInt() + tribute.toInt()
+    }
 
-    /** 절기 징병 가능 수 — 인구 5% 상한 안에서 개발도만큼 채운다 */
+    /** 절기 징병 가능 수 — 인구 5% 상한 안에서 개발도·할당량만큼 채운다 */
     fun leviesPerSeason(): Int =
-        (population * 0.05 * (development / 120.0) * status.levyRate).toInt()
+        (population * 0.05 * (development / 120.0) * status.levyRate * policy.levyMultiplier).toInt()
 
     /** 절기 식량 생산 */
     fun foodIncome(): Int =
-        ((population / 90.0) * (0.6 + development / 150.0) * status.taxRate).toInt()
+        ((population / 90.0) * (0.6 + development / 150.0) * status.taxRate * policy.foodMultiplier).toInt()
+
+    /** 시설·세율을 반영한 실제 방어 태세 */
+    val effectiveDefense: Int get() = (defense + policy.defenseBonus).coerceIn(0, 100)
+
+    /** 통치 한 줄 — "보통 · 치안 50 · 징병 보통 · 안정 · 🏛🏪" */
+    fun governanceLine(): String =
+        policy.summaryLine() +
+            if (policy.facilities.isEmpty()) ""
+            else " · " + policy.facilities.joinToString(" ") { it.icon }
 
     val needsViceroy: Boolean get() = viceroyHeroId == null
 
     /** 화면용 한 줄 — "직할 · 민심 62 · 개발 48 · ⚔ 1,200" */
     fun summaryLine(): String =
         "$status · 민심 $morale · 개발 $development · ⚔ ${"%,d".format(troops)}"
+
+    /** 통치 요약 카드 한 줄 — 세수·징병·방어까지 */
+    fun compactLine(): String =
+        "${status.label} · ${policy.taxLevel.label}세 · 치안 ${policy.security} · " +
+            "⚔ ${"%,d".format(troops)} · 🛡 $effectiveDefense"
 }
 
 /** 세력과의 관계 — 유저/AI 구분 없이 같은 이름만 쓴다 */

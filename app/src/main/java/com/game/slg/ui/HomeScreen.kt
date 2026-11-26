@@ -83,6 +83,7 @@ fun SlgMainScreen(
     onBoost: (String) -> Unit = {},
     onOpenRegionDetail: () -> Unit = {},
     onAdjacentAction: (com.game.slg.core.region.AdjacentActionKind) -> Unit = {},
+    onConquestMode: (com.game.slg.core.empire.TerritoryStatus) -> Unit = {},
     onDismissOfflineReport: () -> Unit = {}
 ) {
     val alerts = StatusAlertBuilder.build(state)
@@ -129,7 +130,8 @@ fun SlgMainScreen(
                 onOpenTab = onOpenTab,
                 onAdvanceSeason = onAdvanceSeason,
                 onOpenRegionDetail = onOpenRegionDetail,
-                onAdjacentAction = onAdjacentAction
+                onAdjacentAction = onAdjacentAction,
+                onConquestMode = onConquestMode
             )
         }
 
@@ -333,12 +335,18 @@ private fun HomeStatusStrip(
     onOpenTab: (MainTab, Int) -> Unit,
     onAdvanceSeason: () -> Unit,
     onOpenRegionDetail: () -> Unit,
-    onAdjacentAction: (com.game.slg.core.region.AdjacentActionKind) -> Unit = {}
+    onAdjacentAction: (com.game.slg.core.region.AdjacentActionKind) -> Unit = {},
+    onConquestMode: (com.game.slg.core.empire.TerritoryStatus) -> Unit = {}
 ) {
     val selected = state.selectedTerritory
     val adjacent = state.selectedAdjacentPanel
+    val conquest = state.pendingConquest
     // 인접 지역을 고르면 하단 패널이 전투·외교·전략 메뉴만큼 높아진다
-    val stripHeight = if (adjacent != null) 198 else HomeLayout.STATUS_STRIP
+    val stripHeight = when {
+        conquest != null -> 214
+        adjacent != null -> 198
+        else -> HomeLayout.STATUS_STRIP
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -495,9 +503,43 @@ private fun HomeStatusStrip(
             }
         }
 
+        // ── 전멸·항복 편입 선택 (v0.10.0) — 아이콘 3택으로 바로 고른다 ──
+        if (conquest != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SlgPill(conquest.reasonLabel, SlgColors.Danger, filled = true)
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        conquest.headline,
+                        color = SlgColors.Text,
+                        fontSize = SlgType.LABEL,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(conquest.populationLabel, color = SlgColors.Muted, fontSize = SlgType.MICRO)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    com.game.slg.core.empire.TerritoryStatus.entries.forEach { mode ->
+                        SlgIconAction(
+                            icon = mode.icon,
+                            label = conquest.optionLabel(mode),
+                            accent = when (mode) {
+                                com.game.slg.core.empire.TerritoryStatus.DIRECT -> SlgColors.Brass
+                                com.game.slg.core.empire.TerritoryStatus.VASSAL -> SlgColors.Success
+                                else -> SlgColors.Steel
+                            },
+                            modifier = Modifier.weight(1f),
+                            onClick = { onConquestMode(mode) }
+                        )
+                    }
+                }
+            }
+        }
+
         if (alerts.isEmpty()) {
             Text(
-                "✅ 미결 사건 없음 · 인접 지역을 누르면 전투·외교·전략",
+                "✅ 미결 없음",
                 color = SlgColors.Success,
                 fontSize = SlgType.MICRO
             )

@@ -27,6 +27,7 @@ import com.game.slg.core.model.BillType
 import com.game.slg.core.region.AdjacentActionKind
 import com.game.slg.core.region.AidDirection
 import com.game.slg.core.region.CoalitionBill
+import com.game.slg.core.region.WarTargetKind
 
 /**
  * 서브 메뉴 「리더 의회」 — 탭 4개: 안건 / 연합 / 긴급 / 리더.
@@ -45,16 +46,166 @@ fun CouncilScreen(
     onVoteEmergency: () -> Unit = {},
     onRequestAid: () -> Unit = {},
     onAnswerAidCall: () -> Unit = {},
+    onSponsorWar: (WarTargetKind) -> Unit = {},
+    onVoteWar: (String) -> Unit = {},
     tabIndex: Int = 0
 ) {
     SlgScreenFrame {
         when (CouncilTab.entries[tabIndex.coerceIn(0, CouncilTab.entries.lastIndex)]) {
             CouncilTab.BILLS -> CouncilBills(state, onVoteBill)
             CouncilTab.COALITION -> CouncilCoalition(state, onSponsorCoalition, onVoteCoalition)
+            CouncilTab.WAR -> CouncilWarAgenda(state, onSponsorWar, onVoteWar)
             CouncilTab.EMERGENCY -> CouncilEmergency(state, onVoteEmergency, onRequestAid, onAnswerAidCall)
             CouncilTab.LORDS -> CouncilLords(state)
         }
     }
+}
+
+/**
+ * 의회 전쟁 안건 — 인접 지역·상위 단위를 골라 전쟁 선포·원정을 상정하고 표결한다.
+ * 가결되면 전투력·사상자·전리품에 정식 명분 보너스가 붙는다 (2026-11-26 요청).
+ */
+@Composable
+private fun CouncilWarAgenda(
+    state: SlgGameState,
+    onSponsor: (WarTargetKind) -> Unit,
+    onVote: (String) -> Unit
+) {
+    SlgArtHeader(
+        image = R.drawable.slg_war_field,
+        title = "의회 전쟁 안건",
+        badges = listOf(
+            "🗳 ${state.councilVotingPower}표" to SlgColors.Brass,
+            "대기 ${state.pendingWarAgendas}건" to
+                if (state.pendingWarAgendas > 0) SlgColors.Danger else SlgColors.Muted
+        ),
+        height = 118
+    )
+
+    // ① 대상 선택 — 아이콘 두 칸
+    val adjacent = state.selectedAdjacentPanel
+    SlgSectionCard(
+        title = "안건 상정",
+        badge = state.adminTier.label,
+        accent = SlgColors.Danger
+    ) {
+        SlgIconMenuGrid(
+            entries = listOf(
+                SlgIconEntry(
+                    id = WarTargetKind.ADJACENT.name,
+                    icon = WarTargetKind.ADJACENT.icon,
+                    label = WarTargetKind.ADJACENT.label,
+                    tone = SlgColors.Danger,
+                    enabled = adjacent != null,
+                    footnote = adjacent?.name
+                ),
+                SlgIconEntry(
+                    id = WarTargetKind.SUPERIOR.name,
+                    icon = WarTargetKind.SUPERIOR.icon,
+                    label = WarTargetKind.SUPERIOR.label,
+                    tone = SlgColors.Brass
+                )
+            ),
+            columns = 2,
+            onSelect = { entry ->
+                val kind = WarTargetKind.entries.firstOrNull { it.name == entry.id }
+                if (kind != null) onSponsor(kind)
+            }
+        )
+        Text(
+            if (adjacent != null) "대상 · ${adjacent.name} (${adjacent.headline})"
+            else "지도에서 인접 지역을 고르면 그 지역에 전쟁을 선포합니다.",
+            color = SlgColors.Muted,
+            fontSize = SlgType.LABEL,
+            maxLines = 1
+        )
+    }
+
+    // ② 대기·진행 안건
+    if (state.warAgendas.isEmpty()) {
+        SlgSectionCard(title = "안건 기록", badge = "없음", accent = SlgColors.Stone) {
+            Text(
+                "상정한 전쟁 안건이 없습니다.",
+                color = SlgColors.Muted,
+                fontSize = SlgType.LABEL
+            )
+        }
+    }
+    state.warAgendas.reversed().forEach { agenda ->
+        val accent = when {
+            agenda.pending -> SlgColors.Brass
+            agenda.passed == true -> SlgColors.Success
+            else -> SlgColors.Danger
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(13.dp))
+                .background(SlgColors.Surface)
+                .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(13.dp))
+                .padding(11.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(agenda.kind.icon, fontSize = SlgType.BODY)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    agenda.title,
+                    color = SlgColors.Text,
+                    fontSize = SlgType.BODY_SMALL,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2
+                )
+                SlgPill(agenda.statusLabel, accent, filled = agenda.passed == true)
+            }
+            SlgVoteSplit(
+                favor = agenda.favor,
+                against = agenda.against,
+                modifier = Modifier.fillMaxWidth().height(24.dp)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (agenda.active) {
+                    SlgPill("명분 ${agenda.casusBelli.label}", SlgColors.Success)
+                } else {
+                    Text(
+                        "찬성 ${agenda.favor} · 반대 ${agenda.against} · 내 표 ${agenda.ourVotes}",
+                        color = SlgColors.Muted,
+                        fontSize = SlgType.MICRO
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                if (agenda.pending) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(SlgColors.Brass)
+                            .clickable { onVote(agenda.id) }
+                            .padding(horizontal = 12.dp, vertical = 7.dp)
+                    ) {
+                        Text(
+                            "🗳 표결",
+                            color = androidx.compose.ui.graphics.Color(0xFF10131A),
+                            fontSize = SlgType.LABEL,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            }
+            agenda.message?.let { ResultBox(it, accent) }
+        }
+    }
+
+    state.warAgendaMessage?.let { ResultBox(it, SlgColors.Brass) }
+
+    SlgExpand(
+        summary = "전쟁 안건 규칙",
+        detail = "① 지도에서 인접 지역을 고르거나 상위 단위(시·군·구)를 대상으로 안건을 상정합니다.\n" +
+            "② 표결에서 내 의결권이 찬성으로 더해지고, 과반이면 가결됩니다.\n" +
+            "③ 가결되면 전투 +6~20% · 사상자 -8~25% · 전리품 +12~40%의 정식 명분이 붙습니다.\n" +
+            "④ 명분은 그 지역 원정·병합 1회에 적용된 뒤 소모됩니다.",
+        accent = SlgColors.Danger
+    )
 }
 
 @Composable

@@ -27,6 +27,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.game.slg.core.empire.AbsorptionMethod
 import com.game.slg.core.empire.EmpireEngine
+import com.game.slg.core.empire.TaxLevel
+import com.game.slg.core.empire.LevyQuota
+import com.game.slg.core.empire.TerritoryFacility
+import com.game.slg.core.empire.GovernanceEngine
 import com.game.slg.core.empire.ManpowerEngine
 import com.game.slg.core.empire.MercenaryEngine
 import com.game.slg.core.empire.TerritoryStatus
@@ -59,6 +63,12 @@ fun EmpireScreen(
     onDeclareIndependence: () -> Unit,
     onRecruitPending: (String) -> Unit = {},
     onReleasePending: (String) -> Unit = {},
+    onSetTax: (String, TaxLevel) -> Unit = { _, _ -> },
+    onSetLevy: (String, LevyQuota) -> Unit = { _, _ -> },
+    onPatrol: (String) -> Unit = {},
+    onInvestFacility: (String, String) -> Unit = { _, _ -> },
+    onSetTribute: (String, Int) -> Unit = { _, _ -> },
+    onCallSupport: (String) -> Unit = {},
     tabIndex: Int = 0
 ) {
     SlgScreenFrame {
@@ -80,7 +90,13 @@ fun EmpireScreen(
                 onDevelopTerritory = onDevelopTerritory,
                 onGatherPrivateTroops = onGatherPrivateTroops,
                 onReportMerit = onReportMerit,
-                onDeclareIndependence = onDeclareIndependence
+                onDeclareIndependence = onDeclareIndependence,
+                onSetTax = onSetTax,
+                onSetLevy = onSetLevy,
+                onPatrol = onPatrol,
+                onInvestFacility = onInvestFacility,
+                onSetTribute = onSetTribute,
+                onCallSupport = onCallSupport
             )
 
             EmpireTab.MANPOWER -> ManpowerPanel(state, onRecruitRegular, onHireMercenary, onDismissMercenary)
@@ -354,7 +370,13 @@ private fun GovernancePanel(
     onDevelopTerritory: (String) -> Unit,
     onGatherPrivateTroops: () -> Unit,
     onReportMerit: () -> Unit,
-    onDeclareIndependence: () -> Unit
+    onDeclareIndependence: () -> Unit,
+    onSetTax: (String, TaxLevel) -> Unit,
+    onSetLevy: (String, LevyQuota) -> Unit,
+    onPatrol: (String) -> Unit,
+    onInvestFacility: (String, String) -> Unit,
+    onSetTribute: (String, Int) -> Unit,
+    onCallSupport: (String) -> Unit
 ) {
     // 영웅으로 시작한 유저의 경력 패널
     state.heroCareer?.let { career ->
@@ -454,24 +476,116 @@ private fun GovernancePanel(
     }
 
     state.selectedManaged?.let { territory ->
+        val policy = territory.policy
         SlgSectionCard(
             title = "${territory.name} 통치",
             badge = territory.status.label,
             accent = SlgColors.Steel
         ) {
-            Text(territory.summaryLine(), color = SlgColors.Text, fontSize = SlgType.BODY_SMALL)
-            Text(
-                "절기 세수 ${"%,d".format(territory.taxIncome())}G · 식량 ${"%,d".format(territory.foodIncome())}석 · " +
-                    "징병 ${"%,d".format(territory.leviesPerSeason())}명 · 정규 상한 ${"%,d".format(territory.troopCap)}명",
-                color = SlgColors.Muted,
-                fontSize = SlgType.MICRO,
-                lineHeight = SlgLine.MICRO
+            // ① 요약 카드 — 숫자만
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                SlgPill("💰 ${"%,d".format(territory.taxIncome())}G", SlgColors.Brass)
+                SlgPill("🌾 ${"%,d".format(territory.foodIncome())}", SlgColors.Success)
+                SlgPill("⚔ ${"%,d".format(territory.leviesPerSeason())}", SlgColors.Steel)
+                SlgPill("🛡 ${territory.effectiveDefense}", SlgColors.Stone)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                SlgPill(policy.riskLabel, if (policy.rebellionRisk >= 60) SlgColors.Danger else SlgColors.Success)
+                SlgPill("반란 ${policy.rebellionRisk}", SlgColors.Muted)
+                SlgPill("편입 · ${territory.absorbedBy}", SlgColors.Brass)
+            }
+
+            // ② 세율 — 아이콘 3택
+            Text("세율", color = SlgColors.Text, fontSize = SlgType.BODY_SMALL, fontWeight = FontWeight.Bold)
+            SlgTriToggle(
+                options = TaxLevel.entries.map { it.icon to it.label },
+                selectedIndex = policy.taxLevel.order,
+                accent = SlgColors.Brass
+            ) { index -> onSetTax(territory.code, TaxLevel.ofOrder(index)) }
+
+            // ③ 징병 할당량
+            Text("징병 할당", color = SlgColors.Text, fontSize = SlgType.BODY_SMALL, fontWeight = FontWeight.Bold)
+            SlgTriToggle(
+                options = LevyQuota.entries.map { it.icon to it.label },
+                selectedIndex = policy.levyQuota.ordinal,
+                accent = SlgColors.Steel
+            ) { index -> onSetLevy(territory.code, LevyQuota.entries[index]) }
+
+            // ④ 치안 유지
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "치안 ${policy.security}",
+                    color = SlgColors.Text,
+                    fontSize = SlgType.BODY_SMALL,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                SlgIconAction(
+                    icon = "🛡",
+                    label = "순찰",
+                    accent = SlgColors.Success,
+                    modifier = Modifier.width(88.dp),
+                    enabled = policy.security < 100 && state.gold >= GovernanceEngine.PATROL_COST,
+                    onClick = { onPatrol(territory.code) }
+                )
+            }
+
+            // ⑤ 지역 시설 — 아이콘 그리드 4칸
+            Text("지역 시설", color = SlgColors.Text, fontSize = SlgType.BODY_SMALL, fontWeight = FontWeight.Bold)
+            SlgIconMenuGrid(
+                entries = TerritoryFacility.entries.map { facility ->
+                    SlgIconEntry(
+                        id = facility.id,
+                        icon = facility.icon,
+                        label = facility.label,
+                        enabled = !policy.facilities.contains(facility) && state.gold >= facility.cost,
+                        tone = if (policy.facilities.contains(facility)) SlgColors.Success else SlgColors.Stone,
+                        footnote = "${facility.cost}G"
+                    )
+                },
+                columns = 4,
+                onSelect = { entry -> onInvestFacility(territory.code, entry.id) }
             )
-            Text(
-                "편입 경위 · ${territory.absorbedBy}",
-                color = SlgColors.Brass,
-                fontSize = SlgType.MICRO
-            )
+
+            // ⑥ 속국·자치령 — 조공률·지원군
+            if (territory.status != TerritoryStatus.DIRECT) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "조공 ${policy.tributeRate}%",
+                        color = SlgColors.Brass,
+                        fontSize = SlgType.BODY_SMALL,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    SlgIconAction(
+                        icon = "➖",
+                        label = "조공",
+                        accent = SlgColors.Muted,
+                        modifier = Modifier.weight(1f),
+                        enabled = policy.tributeRate > 10,
+                        onClick = { onSetTribute(territory.code, policy.tributeRate - GovernanceEngine.TRIBUTE_STEP) }
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    SlgIconAction(
+                        icon = "➕",
+                        label = "조공",
+                        accent = SlgColors.Brass,
+                        modifier = Modifier.weight(1f),
+                        enabled = policy.tributeRate < 60,
+                        onClick = { onSetTribute(territory.code, policy.tributeRate + GovernanceEngine.TRIBUTE_STEP) }
+                    )
+                }
+                SlgIconAction(
+                    icon = "🚚",
+                    label = "지원군 차출 (${policy.supportTroops}명)",
+                    accent = SlgColors.Steel,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = territory.troops >= 40,
+                    onClick = { onCallSupport(territory.code) }
+                )
+            }
+
+            // ⑦ 개발·태수
             SlgChoiceCard(
                 title = "직접 개발",
                 icon = "🏗",
@@ -481,13 +595,14 @@ private fun GovernancePanel(
             )
             if (territory.viceroyHeroId != null) {
                 SlgChoiceCard(
-                    title = "태수 해임 — 직접 통치",
+                    title = "태수 해임",
                     icon = "✋",
                     effects = listOf(Effect("👤", territory.viceroyName ?: "", SlgColors.Violet)),
                     accent = SlgColors.Muted,
                     onClick = { onUnassignViceroy(territory.code) }
                 )
             }
+            state.governanceMessage?.let { ResultBox(it, SlgColors.Steel) }
         }
     }
 

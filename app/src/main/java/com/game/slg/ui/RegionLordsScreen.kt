@@ -46,15 +46,11 @@ fun RegionLordsScreen(
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
-                if (state.union.active) {
-                    "${state.regionFullName}의 리더 ${state.unionPartnerCount}명과 자동 연합 중입니다. " +
-                        "서로 공격할 수 없고, 외부 구역의 침공도 보호막이 막습니다. 절기를 진행하면 1턴씩 줄어듭니다."
-                } else {
-                    "보호 기간이 끝났습니다. 같은 지역 리더와 교전해 주도권을 잡을 수 있습니다."
-                },
+                if (state.union.active) "리더 ${state.unionPartnerCount}명과 자동 연합 · 절기마다 -1턴"
+                else "보호 종료 — 같은 지역 리더와 교전 가능",
                 color = SlgColors.Muted,
-                fontSize = SlgType.MICRO,
-                lineHeight = SlgLine.MICRO
+                fontSize = SlgType.LABEL,
+                maxLines = 1
             )
         }
 
@@ -65,11 +61,9 @@ fun RegionLordsScreen(
         ) {
             if (state.aiNews.isEmpty()) {
                 Text(
-                    "절기를 넘기면 같은 지역 리더들이 성장·모병·병합·종속으로 세력을 넓힙니다. " +
-                        "결과는 여기와 지도 「확대」 세부맵에 남습니다.",
+                    "절기를 넘기면 동향이 여기에 쌓입니다.",
                     color = SlgColors.Muted,
-                    fontSize = SlgType.MICRO,
-                    lineHeight = SlgLine.MICRO
+                    fontSize = SlgType.LABEL
                 )
             } else {
                 state.aiNews.forEach { line ->

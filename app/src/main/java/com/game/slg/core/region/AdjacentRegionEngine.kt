@@ -38,11 +38,17 @@ data class AdjacentLeaderTarget(
     val statusLabel: String,
     /** 다른 리더에게 병합·종속된 상태인지 — 개별 전투 대상에서 뺀다 */
     val bound: Boolean = false,
+    /** 우리 연방(직할·속국·자치령)으로 이미 편입된 리더인지 — 전투 대상이 아니다 */
+    val ours: Boolean = false,
     val masterName: String? = null
 ) {
     val troopLabel: String get() = "⚔ %,d".format(troops)
     val relationLabel: String get() =
-        if (bound) "${masterName ?: "우두머리"} ${statusLabel}" else statusLabel
+        when {
+            ours -> "우리 연방 · ${statusLabel}"
+            bound -> "${masterName ?: "우두머리"} ${statusLabel}"
+            else -> statusLabel
+        }
 }
 
 /** 하단 패널 데이터 — 지역 1곳 */
@@ -61,10 +67,16 @@ data class AdjacentRegionPanel(
 
     /** 전투 대상 — 통합 리더면 그 한 명, 아니면 병합·종속되지 않은 개별 리더 */
     val warTargets: List<AdjacentLeaderTarget>
-        get() = if (unified) listOfNotNull(ruler) else leaders.filterNot { it.bound }
+        get() = if (unified) listOfNotNull(ruler).filterNot { it.ours }
+        else leaders.filterNot { it.bound || it.ours }
 
     val headcountLabel: String
-        get() = if (unified) "통합 리더 1명" else "개별 리더 ${warTargets.size}명"
+        get() = if (unified) "통합 리더 1명"
+        else "개별 리더 ${warTargets.size}명" +
+            if (absorbedLeaders.isNotEmpty()) " · 편입 ${absorbedLeaders.size}" else ""
+
+    /** 이미 우리 연합으로 편입된 리더 */
+    val absorbedLeaders: List<AdjacentLeaderTarget> get() = leaders.filter { it.ours }
 
     val headline: String
         get() = if (unified) {
@@ -125,6 +137,7 @@ object AdjacentRegionEngine {
                 prestige = info.prestige,
                 statusLabel = info.status.label,
                 bound = info.status.isBound,
+                ours = info.status.isOurs && info.status != LeaderStatus.PLAYER,
                 masterName = info.masterName
             )
         }
