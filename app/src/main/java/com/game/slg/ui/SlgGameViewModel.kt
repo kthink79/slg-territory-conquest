@@ -58,6 +58,7 @@ import com.game.slg.core.hero.HeroRoster
 import com.game.slg.core.hero.HeroRosterState
 import com.game.slg.core.hero.HeroStage
 import com.game.slg.core.map.MapNode
+import com.game.slg.core.map.MapExpansionEngine
 import com.game.slg.core.map.TerritoryMapLayout
 import com.game.slg.core.model.BillType
 import com.game.slg.core.model.CombatArm
@@ -100,6 +101,8 @@ import com.game.slg.core.region.AdminPromotionResult
 import com.game.slg.core.region.AdminTier
 import com.game.slg.core.region.AdminTierEngine
 import com.game.slg.core.region.CasusBelli
+import com.game.slg.core.region.CoalitionWarEngine
+import com.game.slg.core.region.CoalitionWarPlan
 import com.game.slg.core.region.ConquestEngine
 import com.game.slg.core.region.ConquestOffer
 import com.game.slg.core.region.ConquestRecord
@@ -343,6 +346,11 @@ data class SlgGameState(
     // ── 지휘 성장·해금 ──
     val command: CommandProgress = CommandProgress(),
     val unlockedHop: Int = 0,
+    /**
+     * 통치 지역 확장으로 자동으로 넓어진 작전 반경 (v0.11.0).
+     * 지도 노드를 마지막으로 그린 hop — [effectiveUnlockedHop] 과 다르면 다시 그린다.
+     */
+    val expandedHop: Int = 0,
     val levelUpMessage: String? = null,
     // ── 시설 ──
     val facilities: Set<FacilityType> = emptySet(),
@@ -465,10 +473,30 @@ data class SlgGameState(
     val governanceMessage: String? = null,
     /** 의회 전쟁 안건 결과 */
     val warAgendaMessage: String? = null,
+
+    /** 의회 전쟁 안건을 연합 출진으로 실행하기 전 확인 카드 (v0.11.0) */
+    val coalitionWarPlan: CoalitionWarPlan? = null,
     /** 마지막으로 처리한 관리 메뉴 결과 */
     val lastAdminAction: AdminActionResult? = null
 ) {
     /** 배치된 영웅이 주는 실제 보너스 */
+    /** 지휘 레벨과 통치 지역을 함께 반영한 실제 작전 반경 */
+    val effectiveUnlockedHop: Int
+        get() = MapExpansionEngine.effectiveUnlockedHop(
+            commandHop = unlockedHop,
+            governedCount = territories.size,
+            farthestGovernedHop = MapExpansionEngine.farthestHop(
+                regionCode,
+                (conquests.map { it.regionCode } + territories.map { it.code.substringBefore(':') })
+                    .filter { it.isNotBlank() && !it.startsWith("superior:") }
+                    .distinct()
+            )
+        )
+
+    /** 자동 확장이 붙었을 때 화면에 보여 줄 배지 (없으면 null) */
+    val mapExpansionLabel: String?
+        get() = MapExpansionEngine.expansionLabel(unlockedHop, effectiveUnlockedHop, territories.size)
+
     val heroBonus: HeroBonus
         get() = heroes.activeBonus()
 
@@ -1002,7 +1030,7 @@ class SlgGameViewModel(
             ),
             statusMessage = "[이어서] ${startRegion.fullName} · Lv.${command.level} ${command.tier.label} — 저장된 진행을 불러왔습니다.",
             log = listOf("[이어서] ${startRegion.fullName}에서 플레이를 재개했습니다.")
-        )
+        ).let { restoredState -> expandedMap(restoredState) }
     }
 
     /** 재개에 필요한 최소값만 저장한다 */
@@ -1547,18 +1575,10 @@ class SlgGameViewModel(
                 union = unionNext,
                 command = gained,
                 unlockedHop = gained.unlockedHop,
-                mapNodes = if (gained.level != before.level) {
-                    TerritoryMapLayout.build(
-                        start = s.regionArea ?: RegionCatalog.defaultRegion(),
-                        unlockedHop = gained.unlockedHop,
-                        playerName = playerName,
-                        homeTroops = newTroopsAfterAi
-                    )
-                } else s.mapNodes,
                 levelUpMessage = if (gained.level != before.level) levelUpText(gained) else s.levelUpMessage,
                 log = (s.log + message + pendingNote + listOfNotNull(unionMessage) + aiOutcome.lines).takeLast(8),
                 statusMessage = message + pendingNote + aiNote
-            )
+            ).let { expandedMap(it) }
     }
 
     /** 이벤트 A — 인접 물류 상인회의 야간 보급 협약 */
@@ -1961,10 +1981,13 @@ class SlgGameViewModel(
             val casusBelli = s.casusBelliFor(offer.regionCode)
             val outcome = ConquestEngine.resolve(offer, mode, casusBelli)
             val territory = outcome.territory
-            // 해당 리더 소속 영웅을 처분 대기로 이관한다
+            // 해당 리더 소속 영웅 — 첫 1명은 무비용 자동 귀속, 나머지는 처분 대기 (v0.11.0)
             val captured = HeroDispositionEngine.heroesForLord(offer.leaderId)
                 .filterNot { id -> s.heroes.ownedHeroes.any { it.id == id } }
                 .map { id -> PendingDisposition(heroId = id, lordId = offer.leaderId, lordName = offer.leaderName) }
+            val (rosterAfter, pendingAfter, autoHireNote) =
+                captureAndAttribute(s.heroes, s.pendingDisposition, captured)
+            val pendingAdded = (pendingAfter.size - s.pendingDisposition.size).coerceAtLeast(0)
             val record = ConquestRecord(
                 leaderId = offer.leaderId,
                 leaderName = offer.leaderName,
@@ -1974,7 +1997,8 @@ class SlgGameViewModel(
                 population = offer.population
             )
             val message = outcome.message +
-                (if (captured.isNotEmpty()) " · 소속 영웅 ${captured.size}명 처분 대기" else "") +
+                (if (autoHireNote.isNotBlank()) " · $autoHireNote" else "") +
+                (if (pendingAdded > 0) " · 처분 대기 ${pendingAdded}명" else "") +
                 (if (!casusBelli.isEmpty) " · 명분 소모" else "")
             s.copy(
                 gold = (s.gold + outcome.goldDelta).coerceAtLeast(0),
@@ -1988,13 +2012,13 @@ class SlgGameViewModel(
                 pendingConquest = null,
                 warAgendas = if (casusBelli.isEmpty) s.warAgendas
                 else WarAgendaEngine.consume(s.warAgendas, offer.regionCode),
-                heroes = HeroDispositionEngine.markCaptured(s.heroes, captured),
-                pendingDisposition = (s.pendingDisposition + captured).distinctBy { it.heroId },
+                heroes = rosterAfter,
+                pendingDisposition = pendingAfter,
                 alliedTerritories = s.alliedTerritories + 1,
                 adjacentMessage = message,
                 statusMessage = message,
                 log = (s.log + message).takeLast(8)
-            )
+            ).let { expandedMap(it) }
         }
         persist()
     }
@@ -2072,6 +2096,16 @@ class SlgGameViewModel(
                     "\n[속국 편입] ${vassalTarget.name} 리더가 ${sheet.name} 속국 영지로 들어왔습니다 — " +
                         "조공 ${vassalTerritory.tributePerSeason}G/절기"
                 else "")
+            // 속국으로 들어온 세력의 소속 영웅도 같이 귀속한다 — 첫 1명 무비용 (v0.11.0)
+            val vassalCaptured = if (vassalTerritory != null && vassalTarget != null) {
+                HeroDispositionEngine.heroesForLord(vassalTarget.id)
+                    .filterNot { id -> s.heroes.ownedHeroes.any { it.id == id } }
+                    .map { id -> PendingDisposition(heroId = id, lordId = vassalTarget.id, lordName = vassalTarget.name) }
+            } else emptyList()
+            val (rosterAfter, pendingAfter, autoHireNote) =
+                captureAndAttribute(s.heroes, s.pendingDisposition, vassalCaptured)
+            val finalMessage = fullMessage +
+                (if (autoHireNote.isNotBlank()) "\n$autoHireNote" else "")
             s.copy(
                 gold = (s.gold + res.goldDelta).coerceAtLeast(0),
                 diplomacy = (s.diplomacy + res.diplomacyDelta).coerceIn(0, 100),
@@ -2080,11 +2114,13 @@ class SlgGameViewModel(
                 territories = if (vassalTerritory != null) s.territories + vassalTerritory
                 else s.territories,
                 conquests = if (vassalRecord != null) s.conquests + vassalRecord else s.conquests,
-                adjacentMessage = fullMessage,
+                heroes = rosterAfter,
+                pendingDisposition = pendingAfter,
+                adjacentMessage = finalMessage,
                 adjacentSheet = sheet.copy(result = res),
-                log = (s.log + fullMessage).takeLast(8),
-                statusMessage = fullMessage
-            ).let { next -> next.copy(alliedTerritories = alliedTerritoryCount(next)) }
+                log = (s.log + finalMessage).takeLast(8),
+                statusMessage = finalMessage
+            ).let { next -> expandedMap(next.copy(alliedTerritories = alliedTerritoryCount(next))) }
         }
         persist()
     }
@@ -2312,9 +2348,213 @@ class SlgGameViewModel(
         persist()
     }
 
-    /** 행정 단위 승격 — 조건을 채우면 시·군·구 → 도 → 국가로 올라간다 */
-    fun promoteAdminTier() {
+    // ──────────────────────────────────────────────────────────────
+    // 리더 연합 출진 (v0.11.0) — 가결된 전쟁 안건을 바로 전투로
+    // ──────────────────────────────────────────────────────────────
+
+    /**
+     * 가결된 전쟁 안건의 연합 출진을 준비한다 — 확인 카드에 병력 합산·명분을 보여 준다.
+     * 실제 전투는 [launchCoalitionWar] 에서 일어난다.
+     */
+    fun prepareCoalitionWar(agendaId: String) {
         _uiState.update { s ->
+            val agenda = s.warAgendas.firstOrNull { it.id == agendaId }
+                ?: return@update s.copy(statusMessage = "[연합 출진] 전쟁 안건을 찾을 수 없습니다.")
+            if (!agenda.active) {
+                val message = "[연합 출진] ${agenda.title} — ${agenda.statusLabel} 상태입니다. " +
+                    "가결되고 명분이 남은 안건만 출진할 수 있습니다."
+                return@update s.copy(warAgendaMessage = message, statusMessage = message)
+            }
+            val plan = coalitionPlanOf(s, agenda)
+            s.copy(coalitionWarPlan = plan, statusMessage = plan.headline)
+        }
+    }
+
+    /** 출진 확인 카드를 닫는다 */
+    fun dismissCoalitionWarPlan() {
+        _uiState.update { it.copy(coalitionWarPlan = null) }
+    }
+
+    /**
+     * 리더 연합 출진 실행 — 연합 병력을 합쳐 대상과 교전하고 결과를 보고한다.
+     * 사상자는 출진 병력 비율대로 나뉘고, 가결된 명분은 이 출진 1회로 소모된다.
+     */
+    fun launchCoalitionWar() {
+        _uiState.update { s ->
+            val plan = s.coalitionWarPlan
+                ?: return@update s.copy(statusMessage = "[연합 출진] 먼저 안건 카드에서 출진을 준비하세요.")
+            val agenda = s.warAgendas.firstOrNull { it.id == plan.agendaId }
+                ?: return@update s.copy(
+                    coalitionWarPlan = null,
+                    statusMessage = "[연합 출진] 안건이 사라졌습니다 — 다시 상정하세요."
+                )
+            if (!agenda.active) {
+                return@update s.copy(
+                    coalitionWarPlan = null,
+                    statusMessage = "[연합 출진] 이미 명분을 쓴 안건입니다."
+                )
+            }
+            val verdict = AdjacentRegionEngine.expeditionVerdict(s.union)
+            if (!verdict.allowed) {
+                return@update s.copy(coalitionWarPlan = null, statusMessage = verdict.label)
+            }
+
+            val adjacentTarget = if (agenda.kind == WarTargetKind.ADJACENT)
+                adjacentWarTarget(s, plan.regionCode) else null
+            val area = (if (agenda.kind == WarTargetKind.ADJACENT)
+                RegionCatalog.area(plan.regionCode) else null)
+                ?: s.regionArea ?: RegionCatalog.defaultRegion()
+            val enemyTroops = adjacentTarget?.troops ?: plan.enemyTroops
+
+            // 저항하는 병력이 없으면 무혈 입성 — 그 자리에서 편입 방식을 고르게 한다
+            if (agenda.kind == WarTargetKind.ADJACENT && enemyTroops <= 0) {
+                val target = adjacentTarget
+                if (target == null) {
+                    val message = "[연합 출진] ${plan.targetLabel} — 상대할 리더가 없습니다."
+                    return@update s.copy(
+                        coalitionWarPlan = null,
+                        warAgendaMessage = message,
+                        statusMessage = message
+                    )
+                }
+                val board = s.regionBoardFor(plan.regionCode)
+                val population = (area.population / board.leaders.size.coerceAtLeast(1)).coerceAtLeast(800)
+                val offer = ConquestEngine.offerForEmptyGarrison(
+                    leaderId = target.id,
+                    leaderName = target.name,
+                    stronghold = target.stronghold,
+                    regionCode = plan.regionCode,
+                    regionName = plan.regionName.ifBlank { target.name },
+                    population = population,
+                    gold = target.gold,
+                    food = target.food,
+                    ourTroops = plan.totalTroops
+                )
+                val message = "[연합 출진] ${plan.targetLabel} — 저항 병력 없음. " +
+                    "연합 ${comma(plan.totalTroops)}명이 무혈 입성했습니다. 편입 방식을 고르세요."
+                return@update s.copy(
+                    pendingConquest = offer,
+                    warAgendas = WarAgendaEngine.consume(s.warAgendas, agenda.regionCode),
+                    coalitionWarPlan = null,
+                    warAgendaMessage = message,
+                    statusMessage = message,
+                    log = (s.log + message).takeLast(8)
+                )
+            }
+
+            val own = ForceComposition.standard(
+                (plan.totalTroops * (1.0 + s.heroBonus.combatPercent / 100.0)).toInt()
+            )
+            val enemy = ForceComposition.standard(enemyTroops.coerceAtLeast(60))
+            val enemyStrategy = StrategyBattleEngine.enemyStrategyFor(area.terrain, plan.enemyName.hashCode())
+            val opsBonus = (
+                s.heroBonus.combatPercent + s.coalition.battleBonusPercent +
+                    s.defensePostureBonusPercent + plan.casusBelli.combatBonusPercent +
+                    (if (s.adminCombatTurns > 0) 10 else 0)
+                ).coerceAtMost(90)
+            val strat = StrategyBattleEngine.resolve(
+                own = own,
+                enemy = enemy,
+                terrain = area.terrain,
+                ownStrategy = s.battleStrategy,
+                enemyStrategy = enemyStrategy,
+                ownTech = s.weaponTech,
+                enemyTechLevel = StrategyBattleEngine.enemyTechLevel(s.effectiveUnlockedHop, plan.enemyName.hashCode()),
+                ownOpsBonusPercent = opsBonus,
+                defending = false
+            )
+            val win = strat.ownWon
+            val theirLosses = strat.enemyLosses
+            val (myShare, leaderShares) = CoalitionWarEngine.splitLosses(
+                losses = strat.ownLosses,
+                ownTroops = plan.ownTroops,
+                musters = plan.musters
+            )
+            val loot = if (win) {
+                (60 + enemyTroops / 10) * (100 + plan.casusBelli.lootBonusPercent) / 100
+            } else 0
+            val lostByLeader = plan.musters.mapIndexed { index, muster ->
+                muster.leaderName to leaderShares.getOrElse(index) { 0 }
+            }.toMap()
+            val (regularLeft, mercsLeft) = applyLosses(s.troops, s.mercenaries, myShare)
+            val remainingEnemy = (enemyTroops - theirLosses).coerceAtLeast(0)
+            val offer = if (win && adjacentTarget != null) {
+                val board = s.regionBoardFor(plan.regionCode)
+                val population = (area.population / board.leaders.size.coerceAtLeast(1)).coerceAtLeast(800)
+                ConquestEngine.offerAfterBattle(
+                    leaderId = adjacentTarget.id,
+                    leaderName = adjacentTarget.name,
+                    stronghold = adjacentTarget.stronghold,
+                    regionCode = plan.regionCode,
+                    regionName = plan.regionName.ifBlank { adjacentTarget.name },
+                    troopsBefore = enemyTroops,
+                    losses = theirLosses,
+                    ourTroops = plan.totalTroops,
+                    won = true,
+                    population = population,
+                    gold = adjacentTarget.gold,
+                    food = adjacentTarget.food
+                )
+            } else null
+            val message = CoalitionWarEngine.resultMessage(
+                plan = plan,
+                won = win,
+                enemyLosses = theirLosses,
+                ownLosses = myShare,
+                loot = loot
+            ) + (
+                if (offer != null) " · 적 병력 ${offer.reasonLabel} — 편입 방식 선택"
+                else if (win && remainingEnemy > 0) " · 적 잔여 ${comma(remainingEnemy)}명" else ""
+                )
+            val report = OperationReport(
+                operation = "리더 연합 출진",
+                defenderWon = !win,
+                attackerLosses = theirLosses,
+                defenderLosses = myShare,
+                message = message,
+                verdict = if (offer != null) "${adjacentTarget?.name} 리더 ${offer.reasonLabel}"
+                else if (win) "${plan.targetLabel} 압박" else "연합 출진 패퇴 — 재편성 필요",
+                targetName = plan.enemyName,
+                composition = "연합 ${own.describe()} / 적 ${enemy.describe()}",
+                strategyLabel = "${s.battleStrategy.icon} ${s.battleStrategy.label} vs ${enemyStrategy.icon} ${enemyStrategy.label}",
+                exchangeLabel = strat.exchangeLabel,
+                breakdown = strat.lines + plan.breakdown(),
+                ownLossPercent = (strat.ownLossRatio * 100).toInt(),
+                enemyLossPercent = (strat.enemyLossRatio * 100).toInt()
+            )
+            s.copy(
+                troops = regularLeft,
+                mercenaries = mercsLeft,
+                lords = s.lords.map { lord ->
+                    val lost = lostByLeader[lord.name] ?: 0
+                    if (lost <= 0) lord else lord.copy(troops = (lord.troops - lost).coerceAtLeast(0))
+                },
+                factions = s.factions.map { faction ->
+                    val lost = lostByLeader[faction.name] ?: 0
+                    if (lost <= 0) faction else faction.copy(troops = (faction.troops - lost).coerceAtLeast(0))
+                },
+                adjacentDamage = if (adjacentTarget != null) {
+                    s.adjacentDamage + (adjacentTarget.id to
+                        ((s.adjacentDamage[adjacentTarget.id] ?: 0) + theirLosses))
+                } else s.adjacentDamage,
+                gold = (s.gold + loot).coerceAtLeast(0),
+                prestige = (s.prestige + (if (win) 5 else -3)).coerceIn(0, 100),
+                morale = (s.morale + (if (win) 2 else -3)).coerceIn(0, 100),
+                coalition = s.coalition.consumeBattleBonus(),
+                warAgendas = WarAgendaEngine.consume(s.warAgendas, agenda.regionCode),
+                pendingConquest = offer ?: s.pendingConquest,
+                lastReport = report,
+                coalitionWarPlan = null,
+                warAgendaMessage = message,
+                statusMessage = message,
+                log = (s.log + message).takeLast(8)
+            ).let { expandedMap(it) }
+        }
+        persist()
+    }
+
+    /** 행정 단위 승격 — 조건을 채우면 시·군·구 → 도 → 국가로 올라간다 */
+    fun promoteAdminTier() {        _uiState.update { s ->
             val eval = s.adminEvaluation
             val result: AdminPromotionResult = AdminTierEngine.promote(
                 current = s.adminTier,
@@ -2725,19 +2965,11 @@ class SlgGameViewModel(
                     prestige = (s.prestige + 1).coerceIn(0, 100),
                     command = gained,
                     unlockedHop = gained.unlockedHop,
-                    mapNodes = if (gained.level != before.level) {
-                        TerritoryMapLayout.build(
-                            start = s.regionArea ?: RegionCatalog.defaultRegion(),
-                            unlockedHop = gained.unlockedHop,
-                            playerName = s.playerLord?.name ?: "이광수",
-                            homeTroops = s.troops
-                        )
-                    } else s.mapNodes,
                     levelUpMessage = if (gained.level != before.level) levelUpText(gained) else s.levelUpMessage,
                     lastReport = report,
                     log = (s.log + shieldMessage).takeLast(8),
                     statusMessage = shieldMessage
-                )
+                ).let { expandedMap(it) }
             }
 
             val target = when (operationId) {
@@ -2860,20 +3092,12 @@ class SlgGameViewModel(
                 prestige = (s.prestige + if (ourWin) 3 else -4).coerceIn(0, 100),
                 command = gained,
                 unlockedHop = gained.unlockedHop,
-                mapNodes = if (gained.level != before.level) {
-                    TerritoryMapLayout.build(
-                        start = s.regionArea ?: RegionCatalog.defaultRegion(),
-                        unlockedHop = gained.unlockedHop,
-                        playerName = s.playerLord?.name ?: "이광수",
-                        homeTroops = s.troops
-                    )
-                } else s.mapNodes,
                 levelUpMessage = if (gained.level != before.level) levelUpText(gained) else s.levelUpMessage,
                 lastReport = report,
                 lastStrategy = strat,
                 log = (s.log + line + strategyMemo).takeLast(8),
                 statusMessage = line
-            )
+            ).let { expandedMap(it) }
         }
         persist()
     }
@@ -3362,6 +3586,10 @@ class SlgGameViewModel(
             val (regularLeft, mercsLeft) = applyLosses(s.troops, s.mercenaries, outcome.troopLoss)
             val captured = if (outcome.capturedHeroes.isEmpty()) emptyList()
             else HeroDispositionEngine.capturesOf(faction)
+            val (rosterAfter, pendingAfter, autoHireNote) =
+                captureAndAttribute(s.heroes, s.pendingDisposition, captured)
+            val empireMessage = outcome.message +
+                (if (autoHireNote.isNotBlank()) "\n$autoHireNote" else "")
             s.copy(
                 gold = (s.gold + outcome.goldDelta).coerceAtLeast(0),
                 food = (s.food + outcome.foodDelta).coerceAtLeast(0),
@@ -3373,7 +3601,7 @@ class SlgGameViewModel(
                 territories = territories,
                 selectedManagedCode = outcome.territory?.code ?: s.selectedManagedCode,
                 lastAbsorption = outcome,
-                empireMessage = outcome.message,
+                empireMessage = empireMessage,
                 alliedTerritories = s.alliedTerritories + 1,
                 lords = s.lords.map { lord ->
                     if (faction.id == "faction_${lord.id}") lord.copy(
@@ -3382,11 +3610,11 @@ class SlgGameViewModel(
                     )
                     else lord
                 },
-                heroes = HeroDispositionEngine.markCaptured(s.heroes, captured),
-                pendingDisposition = s.pendingDisposition + captured,
-                log = (s.log + outcome.message).takeLast(8),
-                statusMessage = outcome.message
-            )
+                heroes = rosterAfter,
+                pendingDisposition = pendingAfter,
+                log = (s.log + empireMessage).takeLast(8),
+                statusMessage = empireMessage
+            ).let { expandedMap(it) }
         }
         persist()
     }
@@ -3495,7 +3723,7 @@ class SlgGameViewModel(
                 },
                 mapNodes = TerritoryMapLayout.build(
                     start = s.regionArea ?: RegionCatalog.defaultRegion(),
-                    unlockedHop = s.unlockedHop,
+                    unlockedHop = s.effectiveUnlockedHop,
                     playerName = s.playerLord?.name ?: "이광수",
                     homeTroops = s.troops + actual
                 ),
@@ -3880,7 +4108,7 @@ class SlgGameViewModel(
                             mapNodes = if (troopDelta == 0) st.mapNodes else {
                                 TerritoryMapLayout.build(
                                     start = st.regionArea ?: RegionCatalog.defaultRegion(),
-                                    unlockedHop = st.unlockedHop,
+                                    unlockedHop = st.effectiveUnlockedHop,
                                     playerName = st.playerLord?.name ?: "이광수",
                                     homeTroops = (st.troops + troopDelta).coerceAtLeast(0)
                                 )
@@ -3909,6 +4137,77 @@ class SlgGameViewModel(
 
     /** 재원 시트 숫자 표기 */
     private fun comma(value: Int): String = "%,d".format(value)
+
+    // ──────────────────────────────────────────────────────────────
+    // v0.11.0 — 통치 범위 자동 확장 · 자동 영웅 귀속 · 리더 연합 출진
+    // ──────────────────────────────────────────────────────────────
+
+    /**
+     * 지휘 레벨 + 통치 영지 수·거리에 맞춰 지도 노드를 다시 그린다.
+     * 작전 범위가 실제로 넓어졌을 때만 노드를 새로 만들고, 그대로면 상태를 유지한다.
+     */
+    private fun expandedMap(s: SlgGameState): SlgGameState {
+        val hop = s.effectiveUnlockedHop
+        if (hop == s.expandedHop && s.mapNodes.isNotEmpty()) return s
+        val start = s.regionArea ?: RegionCatalog.defaultRegion()
+        return s.copy(
+            expandedHop = hop,
+            mapNodes = TerritoryMapLayout.build(
+                start = start,
+                unlockedHop = hop,
+                playerName = s.playerLord?.name ?: "이광수",
+                homeTroops = s.troops
+            )
+        )
+    }
+
+    /**
+     * 편입한 세력의 소속 영웅 처리 — 첫 1명은 등용비 0G 로 자동 귀속(빈 슬롯이면 즉시 배치),
+     * 나머지는 예전처럼 처분 대기로 넘긴다.
+     * @return (로스터, 처분 대기 목록, 자동 귀속 안내 문자열)
+     */
+    private fun captureAndAttribute(
+        roster: HeroRosterState,
+        existing: List<PendingDisposition>,
+        captured: List<PendingDisposition>
+    ): Triple<HeroRosterState, List<PendingDisposition>, String> {
+        if (captured.isEmpty()) return Triple(roster, existing, "")
+        val marked = HeroDispositionEngine.markCaptured(roster, captured)
+        val outcome = HeroDispositionEngine.autoHireOnConquest(marked, captured)
+        val pending = (existing + outcome.pending).distinctBy { it.heroId }
+        return Triple(outcome.roster, pending, outcome.describe())
+    }
+
+    /** 연합 출진의 상대 — 인접 지역은 그 지역에서 가장 강한 리더 */
+    private fun adjacentWarTarget(s: SlgGameState, regionCode: String) =
+        s.regionBoardFor(regionCode).leaders
+            .filterNot { it.status.isOurs && it.status != LeaderStatus.PLAYER }
+            .filterNot { it.status.isBound }
+            .maxByOrNull { it.troops }
+
+    /** 연합 출진의 상대 — 상위 단위는 그 연합의 본대(가장 큰 리더의 2배) */
+    private fun superiorWarTroops(s: SlgGameState): Int =
+        (s.lords.filterNot { it.isPlayer || it.incorporated }.maxOfOrNull { it.troops } ?: 0) * 2
+
+    /** 연합 출진 계획 편성 — 내 병력 + 편입 리더 병력 + 가결 명분 */
+    private fun coalitionPlanOf(s: SlgGameState, agenda: WarAgenda): CoalitionWarPlan {
+        val musters = s.lords.filterNot { it.isPlayer || !it.incorporated }
+            .map { it.name to it.troops }
+        val (enemyName, enemyTroops) = when (agenda.kind) {
+            WarTargetKind.ADJACENT -> {
+                val target = adjacentWarTarget(s, agenda.regionCode)
+                (target?.name ?: agenda.targetName) to (target?.troops ?: 0)
+            }
+            WarTargetKind.SUPERIOR -> agenda.targetName to superiorWarTroops(s)
+        }
+        return CoalitionWarEngine.plan(
+            agenda = agenda,
+            ownTroops = s.totalTroops,
+            leaders = musters,
+            enemyName = enemyName,
+            enemyTroops = enemyTroops
+        )
+    }
 
     /** 영웅 탭에서 빈 슬롯을 대기 영웅으로 채운다 */
     fun autoFillHeroSlots() {
@@ -4002,8 +4301,11 @@ class SlgGameViewModel(
             val captured = if (annexed) {
                 HeroDispositionEngine.capturesOf(faction!!)
             } else emptyList()
+            val (rosterAfter, pendingAfter, autoHireNote) =
+                captureAndAttribute(s.heroes, s.pendingDisposition, captured)
             val finalMessage = if (annexed) {
-                message + "\n" + forced!!.message
+                message + "\n" + forced!!.message +
+                    (if (autoHireNote.isNotBlank()) "\n$autoHireNote" else "")
             } else message
             val territories = if (annexed) {
                 val newTerritory = forced!!.territory
@@ -4037,13 +4339,13 @@ class SlgGameViewModel(
                 territories = territories,
                 selectedManagedCode = if (annexed) forced!!.territory?.code ?: s.selectedManagedCode
                 else s.selectedManagedCode,
-                heroes = HeroDispositionEngine.markCaptured(s.heroes, captured),
-                pendingDisposition = s.pendingDisposition + captured,
+                heroes = rosterAfter,
+                pendingDisposition = pendingAfter,
                 lastAbsorption = if (annexed) forced else s.lastAbsorption,
                 lastReport = report,
                 log = (s.log + finalMessage).takeLast(8),
                 statusMessage = finalMessage
-            )
+            ).let { expandedMap(it) }
         }
         persist()
     }

@@ -101,7 +101,7 @@ fun TerritoryMapPane(
                 nodes = nodes,
                 selectedCode = selectedCode,
                 homeTroops = state.troops,
-                unlockedHop = state.unlockedHop,
+                unlockedHop = state.effectiveUnlockedHop,
                 enemyPressure = state.eventBChoice == null
             )
         }
@@ -122,6 +122,15 @@ fun TerritoryMapPane(
                     "다음 Lv.${state.nextTier!!.level} · ${state.nextTier!!.label}",
                     color = SlgColors.Text.copy(alpha = 0.70f),
                     fontSize = SlgType.MICRO
+                )
+            }
+            // 통치 지역이 넓어져 작전 범위가 자동으로 늘었을 때 (v0.11.0)
+            state.mapExpansionLabel?.let { label ->
+                Text(
+                    "🗺 $label",
+                    color = SlgColors.Success,
+                    fontSize = SlgType.MICRO,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -185,7 +194,7 @@ fun TerritoryMapPane(
 
         // ── 우하단: 배율 · 범위 밖 ──
         val area = state.regionArea
-        val outside = area?.let { TerritoryMapLayout.outOfRangeCount(it, state.unlockedHop) } ?: 0
+        val outside = area?.let { TerritoryMapLayout.outOfRangeCount(it, state.effectiveUnlockedHop) } ?: 0
         Text(
             "${"%.1f".format(viewport.scale)}× · 잠김 ${state.lockedNodeCount} · 밖 ${outside}곳",
             color = SlgColors.Muted,
@@ -256,16 +265,16 @@ private fun DrawScope.drawTerritoryMap(
 
     // 좌표 격자
     val gridStep = 0.25f
-    var gx = -TerritoryMapLayout.WORLD_HALF_EXTENT
-    while (gx <= TerritoryMapLayout.WORLD_HALF_EXTENT) {
+    var gx = -viewport.worldHalfExtent
+    while (gx <= viewport.worldHalfExtent) {
         val x = sx(gx)
         if (x in 0f..width) {
             drawLine(Color(0xFF1B2A38), Offset(x, 0f), Offset(x, height), strokeWidth = 1f)
         }
         gx += gridStep
     }
-    var gy = -TerritoryMapLayout.WORLD_HALF_EXTENT
-    while (gy <= TerritoryMapLayout.WORLD_HALF_EXTENT) {
+    var gy = -viewport.worldHalfExtent
+    while (gy <= viewport.worldHalfExtent) {
         val y = sy(gy)
         if (y in 0f..height) {
             drawLine(Color(0xFF1B2A38), Offset(0f, y), Offset(width, y), strokeWidth = 1f)

@@ -58,6 +58,75 @@ object HeroDispositionEngine {
     /** 붙잡힌 영웅의 첫 호감도 — 방출되면 40 이 되어 다시 설득할 수 있다 */
     const val CAPTURED_AFFINITY = 55
 
+    /**
+     * 편입 1회에 등용비 없이 자동으로 우리 로스터에 귀속되는 영웅 수 (v0.11.0).
+     * 나머지는 예전처럼 처분 대기(20% 할인 등용 · 방출)로 넘긴다.
+     */
+    const val AUTO_HIRE_PER_CONQUEST = 1
+
+    /** 자동 귀속 결과 — 남은 처분 대기는 호출한 쪽이 이어서 관리한다 */
+    data class AutoHireOutcome(
+        val roster: HeroRosterState,
+        val hired: List<Hero>,
+        val pending: List<PendingDisposition>
+    ) {
+        val hiredIds: Set<String> get() = hired.map { it.id }.toSet()
+
+        val isEmpty: Boolean get() = hired.isEmpty()
+
+        /** 화면·로그에 남기는 한 줄 — 비어 있으면 빈 문자열 */
+        fun describe(roster: HeroRosterState = this.roster): String {
+            if (hired.isEmpty()) return ""
+            val parts = hired.joinToString(", ") { hero ->
+                val role = roster.recordOf(hero.id).assignedRole
+                if (role != null) "${hero.name}(${role.label} 즉시 배치)" else "${hero.name}(슬롯 대기)"
+            }
+            return "[자동 귀속] $parts — 등용비 0G"
+        }
+    }
+
+    /**
+     * 편입한 세력의 소속 영웅 중 일부를 등용비 없이 우리 로스터로 데려온다.
+     * 빈 역할 슬롯이 있는 영웅을 먼저 고르고, 그 영웅의 역할 슬롯이 비어 있으면 즉시 배치한다.
+     *
+     * @param roster [markCaptured] 를 거친 로스터 (호감도·소속 리더 기록이 있어야 한다)
+     * @param captured 이번에 편입한 세력의 소속 영웅 (처분 대기 후보)
+     */
+    fun autoHireOnConquest(
+        roster: HeroRosterState,
+        captured: List<PendingDisposition>,
+        limit: Int = AUTO_HIRE_PER_CONQUEST
+    ): AutoHireOutcome {
+        if (captured.isEmpty() || limit <= 0) return AutoHireOutcome(roster, emptyList(), captured)
+        val candidates = captured.mapNotNull { entry ->
+            HeroRoster.byId(entry.heroId)?.let { entry to it }
+        }.filter { (entry, _) -> !roster.recordOf(entry.heroId).owned }
+        if (candidates.isEmpty()) return AutoHireOutcome(roster, emptyList(), captured)
+
+        // 빈 역할 슬롯이 있는 영웅을 먼저 (같은 조건이면 먼저 배정된 영웅)
+        val ordered = candidates.sortedBy { (_, hero) -> if (roster.heroIn(hero.role) == null) 0 else 1 }
+        val picked = ordered.take(limit)
+        var next = roster
+        picked.forEach { (_, hero) ->
+            val record = next.recordOf(hero.id)
+            val slotFree = next.heroIn(hero.role) == null
+            next = next.withRecord(
+                record.copy(
+                    stage = HeroStage.HIRED,
+                    affinity = record.affinity.coerceAtLeast(CAPTURED_AFFINITY),
+                    assignedRole = if (slotFree) hero.role else null,
+                    allegianceLordId = null
+                )
+            )
+        }
+        val pickedIds = picked.map { it.second.id }.toSet()
+        return AutoHireOutcome(
+            roster = next,
+            hired = picked.map { it.second },
+            pending = captured.filterNot { it.heroId in pickedIds }
+        )
+    }
+
     /** 시드 기반 2~4명 배정 후보 — 시작 영웅 001~003 은 제외한다 */
     private val POOL: List<Hero> by lazy {
         HeroRoster.ALL

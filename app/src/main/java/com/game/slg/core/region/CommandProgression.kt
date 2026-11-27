@@ -1,5 +1,7 @@
 package com.game.slg.core.region
 
+import com.game.slg.core.map.MapExpansionEngine
+
 /**
  * 지휘 단계별 작전 반경 — 사용자 확정 사항.
  *
@@ -87,6 +89,13 @@ data class CommandProgress(
 
     /** 지금 열린 최대 hop 거리 */
     val unlockedHop: Int get() = tier.maxHop
+
+    /**
+     * 통치 지역까지 반영한 실제 작전 반경 (v0.11.0).
+     * 지휘 레벨이 여는 hop 에 영지 수 보너스와 편입 거리를 더한 값이다.
+     */
+    fun effectiveHop(governedCount: Int, farthestGovernedHop: Int): Int =
+        MapExpansionEngine.effectiveUnlockedHop(unlockedHop, governedCount, farthestGovernedHop)
 
     /** 이번 레벨에서 다음 레벨로 가는 데 필요한 경험치 */
     val xpToNextLevel: Int get() = xpForLevel(level)

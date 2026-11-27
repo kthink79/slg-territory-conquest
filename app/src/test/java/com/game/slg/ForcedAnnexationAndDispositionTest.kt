@@ -216,12 +216,15 @@ class ForcedAnnexationAndDispositionTest {
     }
 
     @Test
-    fun `편입한 세력의 소속 영웅은 처분 대기 목록으로 넘어온다`() {
+    fun `편입한 세력의 소속 영웅은 자동 귀속 1명과 처분 대기로 나뉜다`() {
         val vm = playingVm()
         val (lordId, _, after) = annexWeakestLord(vm)
         val faction = after.factions.first { it.id == "faction_$lordId" }
 
-        assertEquals(faction.heroIds.size, after.pendingDisposition.size)
+        // v0.11.0 — 첫 1명은 등용비 없이 우리 로스터로 자동 귀속된다
+        val autoHired = faction.heroIds.filter { id -> after.heroes.recordOf(id).owned }
+        assertEquals(1, autoHired.size)
+        assertEquals(faction.heroIds.size, after.pendingDisposition.size + autoHired.size)
         after.pendingDisposition.forEach { entry ->
             assertEquals(lordId, entry.lordId)
             assertTrue(faction.heroIds.contains(entry.heroId))

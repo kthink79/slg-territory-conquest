@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.game.slg.core.map.MapViewport
+import com.game.slg.core.map.TerritoryMapLayout
 import com.game.slg.ui.AdjacentActionSheetOverlay
 import com.game.slg.ui.AndroidCampaignStore
 import com.game.slg.ui.GameStage
@@ -85,6 +86,15 @@ fun SlgApp(viewModel: SlgGameViewModel) {
     // 인트로로 돌아올 때(다시보기)는 항상 첫 장면부터
     LaunchedEffect(state.stage) {
         if (state.stage == GameStage.INTRO) introIndex = 0
+    }
+
+    // 통치 지역이 넓어져 작전 범위가 늘면 지도의 경계·배율을 그에 맞춰 보정한다 (v0.11.0)
+    LaunchedEffect(state.effectiveUnlockedHop, state.stage) {
+        if (state.stage != GameStage.PLAY) return@LaunchedEffect
+        val previewHop = TerritoryMapLayout.previewHopOf(state.effectiveUnlockedHop)
+        val extent = TerritoryMapLayout.worldHalfExtentFor(previewHop)
+        val fitted = mapViewport.withWorldExtent(extent).fitPreview(previewHop)
+        if (fitted != mapViewport) mapViewport = fitted
     }
 
     // 📊 정보 모달이 열려 있으면 뒤로가기는 모달만 닫는다

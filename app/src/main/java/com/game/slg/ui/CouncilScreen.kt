@@ -48,13 +48,23 @@ fun CouncilScreen(
     onAnswerAidCall: () -> Unit = {},
     onSponsorWar: (WarTargetKind) -> Unit = {},
     onVoteWar: (String) -> Unit = {},
+    onPrepareCoalitionWar: (String) -> Unit = {},
+    onLaunchCoalitionWar: () -> Unit = {},
+    onCancelCoalitionWar: () -> Unit = {},
     tabIndex: Int = 0
 ) {
     SlgScreenFrame {
         when (CouncilTab.entries[tabIndex.coerceIn(0, CouncilTab.entries.lastIndex)]) {
             CouncilTab.BILLS -> CouncilBills(state, onVoteBill)
             CouncilTab.COALITION -> CouncilCoalition(state, onSponsorCoalition, onVoteCoalition)
-            CouncilTab.WAR -> CouncilWarAgenda(state, onSponsorWar, onVoteWar)
+            CouncilTab.WAR -> CouncilWarAgenda(
+                state = state,
+                onSponsor = onSponsorWar,
+                onVote = onVoteWar,
+                onPrepareCoalitionWar = onPrepareCoalitionWar,
+                onLaunchCoalitionWar = onLaunchCoalitionWar,
+                onCancelCoalitionWar = onCancelCoalitionWar
+            )
             CouncilTab.EMERGENCY -> CouncilEmergency(state, onVoteEmergency, onRequestAid, onAnswerAidCall)
             CouncilTab.LORDS -> CouncilLords(state)
         }
@@ -69,7 +79,10 @@ fun CouncilScreen(
 private fun CouncilWarAgenda(
     state: SlgGameState,
     onSponsor: (WarTargetKind) -> Unit,
-    onVote: (String) -> Unit
+    onVote: (String) -> Unit,
+    onPrepareCoalitionWar: (String) -> Unit = {},
+    onLaunchCoalitionWar: () -> Unit = {},
+    onCancelCoalitionWar: () -> Unit = {}
 ) {
     SlgArtHeader(
         image = R.drawable.slg_war_field,
@@ -192,7 +205,90 @@ private fun CouncilWarAgenda(
                     }
                 }
             }
+            // 가결된 안건 — 바로 리더 연합 출진으로 이어진다 (v0.11.0)
+            if (agenda.active) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SlgColors.Danger.copy(alpha = 0.92f))
+                        .clickable { onPrepareCoalitionWar(agenda.id) }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "⚔️ 리더 연합 출진",
+                        color = androidx.compose.ui.graphics.Color(0xFF10131A),
+                        fontSize = SlgType.LABEL,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
             agenda.message?.let { ResultBox(it, accent) }
+        }
+    }
+
+    // 출진 확인 카드 — 연합 병력 합산과 가결 명분을 한 눈에 보고 실행한다
+    val plan = state.coalitionWarPlan
+    if (plan != null) {
+        SlgSectionCard(
+            title = "리더 연합 출진",
+            badge = if (plan.leaderCount > 0) "리더 ${plan.leaderCount}명 합류" else "단독 출진",
+            accent = if (plan.leaderCount > 0) SlgColors.Danger else SlgColors.Brass
+        ) {
+            Text(
+                plan.headline,
+                color = SlgColors.Text,
+                fontSize = SlgType.BODY_SMALL,
+                fontWeight = FontWeight.Bold,
+                lineHeight = SlgLine.BODY
+            )
+            plan.breakdown().forEach { line ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("·", color = SlgColors.Brass, fontSize = SlgType.MICRO)
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        line,
+                        color = SlgColors.Muted,
+                        fontSize = SlgType.MICRO,
+                        lineHeight = SlgLine.MICRO
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SlgColors.Danger)
+                        .clickable { onLaunchCoalitionWar() }
+                        .padding(vertical = 11.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "⚔️ 출진 실행",
+                        color = androidx.compose.ui.graphics.Color(0xFF10131A),
+                        fontSize = SlgType.LABEL,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SlgColors.SurfaceAlt)
+                        .border(1.dp, SlgColors.Line, RoundedCornerShape(10.dp))
+                        .clickable { onCancelCoalitionWar() }
+                        .padding(horizontal = 16.dp, vertical = 11.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "취소",
+                        color = SlgColors.Muted,
+                        fontSize = SlgType.LABEL,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 
@@ -203,7 +299,8 @@ private fun CouncilWarAgenda(
         detail = "① 지도에서 인접 지역을 고르거나 상위 단위(시·군·구)를 대상으로 안건을 상정합니다.\n" +
             "② 표결에서 내 의결권이 찬성으로 더해지고, 과반이면 가결됩니다.\n" +
             "③ 가결되면 전투 +6~20% · 사상자 -8~25% · 전리품 +12~40%의 정식 명분이 붙습니다.\n" +
-            "④ 명분은 그 지역 원정·병합 1회에 적용된 뒤 소모됩니다.",
+            "④ 가결된 안건 카드의 「⚔️ 리더 연합 출진」을 누르면 편입 리더 병력 35%씩(최대 6명)이 " +
+            "합류해 바로 전투로 이어집니다. 사상자는 출진 병력 비율대로 나뉘고, 명분은 그 1회로 소모됩니다.",
         accent = SlgColors.Danger
     )
 }

@@ -102,15 +102,39 @@ object TerritoryMapLayout {
         1.25f to 0.58f
     )
 
-    /** hop → 고리 반경 (2026-11-21 이전 값의 70% — 영지 간 간격 30% 압축) */
+    /**
+     * hop → 고리 반경 (2026-11-21 이전 값의 70% — 영지 간 간격 30% 압축).
+     *
+     * 2026-11-27(v0.11.0): 통치 지역이 넓어지면 지도가 hop 6~8까지 그려지므로
+     * 5고리부터는 0.14씩 넓혀 겹치지 않게 한다. 기존 1~4고리 값은 그대로 둔다.
+     */
     fun ringRadius(hop: Int): Float = when (hop) {
         0 -> 0f
         1 -> 0.36f
         2 -> 0.56f
         3 -> 0.73f
         4 -> 0.88f
-        else -> 1.02f
+        5 -> 1.00f
+        6 -> 1.09f
+        else -> 1.02f + (hop - 5) * 0.14f
     }
+
+    /** 지도에 미리 보여 줄 수 있는 가장 바깥 고리 — 통치 범위가 넓어지면 여기까지 그린다 */
+    const val MAX_PREVIEW_HOP = 8
+
+    /**
+     * 이번 해금 범위에서 안개로 미리 보여 줄 바깥 고리.
+     * 해금 hop + 1(다음 단계 미리보기)을 상한 [MAX_PREVIEW_HOP] 까지 연다.
+     */
+    fun previewHopOf(unlockedHop: Int): Int =
+        (unlockedHop.coerceAtLeast(0) + 1).coerceAtMost(MAX_PREVIEW_HOP)
+
+    /**
+     * 세계 좌표 경계 — 바깥 미리보기 고리까지 화면을 옮길 수 있게 넓힌다.
+     * 기본값([WORLD_HALF_EXTENT])보다 좁아지지는 않는다.
+     */
+    fun worldHalfExtentFor(previewHop: Int): Float =
+        (ringRadius(previewHop) + 0.10f).coerceAtLeast(WORLD_HALF_EXTENT)
 
     /**
      * 시작 지역 + 지휘 레벨(해금 hop)으로 지도 노드 생성.
@@ -127,7 +151,7 @@ object TerritoryMapLayout {
         homeTroops: Int = 0
     ): List<MapNode> {
         val distances = RegionCatalog.hopDistances(start.code, limit = 30)
-        val previewHop = (unlockedHop + 1).coerceAtMost(6)
+        val previewHop = previewHopOf(unlockedHop)
         val included = distances.filterValues { it <= previewHop }
 
         // hop 별로 모아 고리 위에 균등 배치
@@ -183,7 +207,7 @@ object TerritoryMapLayout {
     /** 시작 지역 묶음 안에서 지도에 아직 그리지 않은 거점 수 */
     fun outOfRangeCount(start: RegionArea, unlockedHop: Int): Int {
         val distances = RegionCatalog.hopDistances(start.code, limit = 30)
-        val previewHop = (unlockedHop + 1).coerceAtMost(6)
+        val previewHop = previewHopOf(unlockedHop)
         return distances.count { it.value > previewHop }
     }
 
@@ -208,12 +232,69 @@ object TerritoryMapLayout {
 }
 
 /**
+ * 통치 범위 자동 확장 — 지휘 레벨만이 아니라 실제로 운영하는 영지 수와
+ * 편입 영지까지의 거리에 따라 작전 해금 범위가 저절로 넓어진다.
+ *
+ * 사용자 요청(2026-11-27, v0.11.0): *"통치 지역 확장 비례 맵 범위 자동 확대"*
+ *
+ * · 지휘 레벨이 여는 hop 은 기본값이다.
+ * · 영지를 3곳 · 6곳 · 12곳 이상 편입하면 각각 +1 · +2 · +3 hop 이 더 열린다.
+ * · 편입한 영지가 더 먼 고리에 있어도 그 거리까지는 열어 둔다(그 지역을 계속 운영해야 하므로).
+ */
+object MapExpansionEngine {
+
+    /** 자동 확장을 포함한 최대 작전 반경 */
+    const val MAX_EFFECTIVE_HOP = 7
+
+    /** 통치 영지 수가 주는 hop 보너스 */
+    fun territoryBonusHop(governedCount: Int): Int = when {
+        governedCount >= 12 -> 3
+        governedCount >= 6 -> 2
+        governedCount >= 3 -> 1
+        else -> 0
+    }
+
+    /** 지휘 레벨 · 영지 수 · 편입 거리 중 가장 넓은 값이 실제 작전 범위다 */
+    fun effectiveUnlockedHop(
+        commandHop: Int,
+        governedCount: Int,
+        farthestGovernedHop: Int
+    ): Int = maxOf(
+        commandHop.coerceAtLeast(0),
+        commandHop.coerceAtLeast(0) + territoryBonusHop(governedCount),
+        farthestGovernedHop.coerceAtLeast(0)
+    ).coerceIn(0, MAX_EFFECTIVE_HOP)
+
+    /** 편입 영지 코드들 중 시작 지역에서 가장 먼 hop */
+    fun farthestHop(startCode: String, governedCodes: List<String>): Int {
+        if (governedCodes.isEmpty()) return 0
+        val distances = RegionCatalog.hopDistances(startCode, limit = MAX_EFFECTIVE_HOP)
+        return governedCodes.mapNotNull { code ->
+            distances[code.substringBefore(':')]
+        }.maxOrNull() ?: 0
+    }
+
+    /** 화면 배지 한 줄 — 자동 확장이 붙었을 때만 보여 준다 */
+    fun expansionLabel(commandHop: Int, effectiveHop: Int, governedCount: Int): String? {
+        if (effectiveHop <= commandHop) return null
+        val bonus = territoryBonusHop(governedCount)
+        return if (bonus > 0) "통치 ${governedCount}곳 · 자동 +${effectiveHop - commandHop}hop"
+        else "편입 거리 반영 · ${effectiveHop}hop"
+    }
+}
+
+/**
  * 상단 지도의 확대/축소·이동 상태.
  */
 data class MapViewport(
     val scale: Float = TerritoryMapLayout.DEFAULT_SCALE,
     val centerX: Float = 0f,
-    val centerY: Float = 0f
+    val centerY: Float = 0f,
+    /**
+     * 화면을 옮길 수 있는 세계 반경 — 통치 지역이 넓어져 바깥 고리가 생기면 넓힌다.
+     * 기본값은 지도 기본 경계라 예전 동작과 같다.
+     */
+    val worldHalfExtent: Float = TerritoryMapLayout.WORLD_HALF_EXTENT
 ) {
 
     /** 화면 절반이 덮는 세계 거리 — 배율이 클수록 작아진다 */
@@ -243,13 +324,37 @@ data class MapViewport(
     fun pannedBy(dxWorld: Float, dyWorld: Float): MapViewport =
         copy(centerX = centerX + dxWorld, centerY = centerY + dyWorld).clampedToWorld()
 
-    /** 내 구역 중심(초기 배율·본진 중앙)으로 복귀 */
-    fun reset(): MapViewport = MapViewport()
+    /** 내 구역 중심(초기 배율·본진 중앙)으로 복귀 — 넓어진 경계는 유지한다 */
+    fun reset(): MapViewport = MapViewport(worldHalfExtent = worldHalfExtent)
 
-    fun centeredOnHome(): MapViewport = MapViewport(scale = scale)
+    fun centeredOnHome(): MapViewport = MapViewport(scale = scale, worldHalfExtent = worldHalfExtent)
+
+    /**
+     * 세계 경계를 새 반경으로 맞춘다. 좁아지면 중심을 경계 안으로 당긴다.
+     * 통치 지역이 늘어 미리보기 고리가 바깥에 생겼을 때 이동 여지를 확보한다.
+     */
+    fun withWorldExtent(extent: Float): MapViewport {
+        if (extent.isNaN() || extent.isInfinite()) return this
+        val safe = extent.coerceAtLeast(TerritoryMapLayout.WORLD_HALF_EXTENT)
+        if (safe == worldHalfExtent) return this
+        return copy(worldHalfExtent = safe).clampedToWorld()
+    }
+
+    /**
+     * 해금 범위가 넓어졌을 때 바깥 고리까지 한 화면에 담도록 배율을 낮춘다.
+     * 이미 더 넓게 보고 있으면 그대로 둔다 — 사용자가 정한 배율을 되돌리지 않는다.
+     */
+    fun fitPreview(previewHop: Int): MapViewport {
+        val ring = TerritoryMapLayout.ringRadius(previewHop)
+        if (ring <= 0f) return this
+        val required = TerritoryMapLayout.BASE_VIEW_RADIUS / (ring * 1.06f)
+        if (scale <= required) return this
+        val next = required.coerceIn(TerritoryMapLayout.MIN_SCALE, TerritoryMapLayout.MAX_SCALE)
+        return copy(scale = next).clampedToWorld()
+    }
 
     val panLimit: Float
-        get() = (TerritoryMapLayout.WORLD_HALF_EXTENT - viewHalfExtent).coerceAtLeast(0f)
+        get() = (worldHalfExtent - viewHalfExtent).coerceAtLeast(0f)
 
     fun clampedToWorld(): MapViewport {
         val limit = panLimit

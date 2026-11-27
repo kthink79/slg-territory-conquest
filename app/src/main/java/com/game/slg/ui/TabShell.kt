@@ -336,6 +336,9 @@ private fun DomainSurface(
                         onAnswerAidCall = { viewModel.answerAidCall() },
                         onSponsorWar = { viewModel.sponsorWarAgenda(it) },
                         onVoteWar = { viewModel.voteWarAgenda(it) },
+                        onPrepareCoalitionWar = { viewModel.prepareCoalitionWar(it) },
+                        onLaunchCoalitionWar = { viewModel.launchCoalitionWar() },
+                        onCancelCoalitionWar = { viewModel.dismissCoalitionWarPlan() },
                         tabIndex = inner
                     )
                 }
